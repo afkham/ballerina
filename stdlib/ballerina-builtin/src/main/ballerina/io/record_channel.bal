@@ -38,12 +38,12 @@ public type DelimitedTextRecordChannel object {
     documentation {
         Initializes delimited record channel.
 
-        P{{channel}} Character channel which will be used for reading/writing records
-        P{{fs}} Field separator which will separate between fields
-        P{{rs}} Record separator which will separate between records
+        P{{characterChannel}} Character channel which will be used for reading/writing records
+        P{{fieldSeparator}} Field separator which will separate between fields
+        P{{recordSeparator}} Record separator which will separate between records
         P{{fmt}} Format which will be used to represent the type of record i.e csv
     }
-    native function init(CharacterChannel channel, string fs, string rs, string fmt);
+    native function init(CharacterChannel characterChannel, string fieldSeparator, string recordSeparator, string fmt);
 
     documentation {
         Checks whether there's a record left to be read.
@@ -62,10 +62,10 @@ public type DelimitedTextRecordChannel object {
     documentation {
         Writes records to a given input/output resource.
 
-        P{{record}} list of fields which should be written
+        P{{textRecord}} List of fields to be written
         R{{}} An error if the records could not be written properly
     }
-    public native function write(string[] record) returns error?;
+    public native function write(string[] textRecord) returns error?;
 
     documentation {
         Closes a given record channel.

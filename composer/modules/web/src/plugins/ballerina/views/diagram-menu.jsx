@@ -22,6 +22,7 @@ import { Icon, Input, Button, Menu, Dropdown } from 'semantic-ui-react';
 import CompilationUnitNode from '../model/tree/compilation-unit-node';
 import AddDefinitionMenu from './add-definition-menu';
 import DefinitionViewMenu from './definition-view-menu';
+import { RESPOSIVE_MENU_TRIGGER } from '../constants';
 
 class DiagramMenu extends React.Component {
 
@@ -31,21 +32,15 @@ class DiagramMenu extends React.Component {
 
     render() {
         return (
-            <Menu className='top-menu' style={{ width: this.props.width }}>
+            <Menu className={'top-menu ' + (this.props.width > RESPOSIVE_MENU_TRIGGER.HIDDEN_MODE ? '' : 'hidden' )} style={{ width: this.props.width }}>
                 { !this.props.fitToWidth &&
                 <Menu.Menu position='left'>
                     <Menu.Item>
-                        <Input className='package-input' icon='fw fw-package' iconPosition='left' placeholder='Package...' />
                         <AddDefinitionMenu model={this.props.model} />
                     </Menu.Item>
                     <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'action', fitToWidth: true }); }}>
                         <Icon name='fw fw-uneditable menu-icon' />
                     </Menu.Item>
-                </Menu.Menu>
-                }
-                { !this.props.fitToWidth &&
-                <Menu.Menu position='right'>
-                    <DefinitionViewMenu model={this.props.model} />
                     { this.props.mode === 'action' &&
                     <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'default', fitToWidth: false }); }}>
                         <Icon name='fw fw-zoom-in menu-icon-right' />
@@ -54,6 +49,11 @@ class DiagramMenu extends React.Component {
                     <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'action', fitToWidth: false }); }}>
                         <Icon name='fw fw-zoom-out menu-icon-right' />
                     </Menu.Item>}
+                </Menu.Menu>
+                }
+                { !this.props.fitToWidth &&
+                <Menu.Menu position='right'>
+                    <DefinitionViewMenu on model={this.props.model} width={this.props.width} />
                 </Menu.Menu>
                 }
                 { this.props.fitToWidth &&
@@ -87,3 +87,4 @@ DiagramMenu.childContextTypes = {
 };
 
 export default DiagramMenu;
+

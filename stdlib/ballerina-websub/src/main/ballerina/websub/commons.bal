@@ -16,6 +16,7 @@
 
 import ballerina/crypto;
 import ballerina/http;
+import ballerina/io;
 import ballerina/log;
 import ballerina/mime;
 import ballerina/reflect;
@@ -97,7 +98,7 @@ documentation {
 @final string MD5 = "MD5";
 
 @final string ANN_NAME_WEBSUB_SUBSCRIBER_SERVICE_CONFIG = "SubscriberServiceConfig";
-@final string WEBSUB_PACKAGE_NAME = "ballerina.websub";
+@final string WEBSUB_PACKAGE_NAME = "ballerina/websub";
 
 //TODO: Make public once extension story is finalized.
 documentation {
@@ -147,35 +148,31 @@ public type IntentVerificationRequest object {
     documentation {
         Builds the response for the request, verifying intention to subscribe, if the topic matches that expected.
 
-        P{{topic}} The topic for which subscription should be accepted, if not specified the annotated topic will be
-                    used
+        P{{t}} The topic for which subscription should be accepted
         R{{}} `http:Response` The response to the hub verifying/denying intent to subscribe
     }
-    public function buildSubscriptionVerificationResponse(string? topic = ()) returns http:Response;
+    public function buildSubscriptionVerificationResponse(string t) returns http:Response;
 
     documentation {
         Builds the response for the request, verifying intention to unsubscribe, if the topic matches that expected.
 
-        P{{topic}} The topic for which unsubscription should be accepted, if not specified the annotated topic will be
-                    used
+        P{{t}} The topic for which unsubscription should be accepted
         R{{}} `http:Response` The response to the hub verifying/denying intent to unsubscribe
     }
-    public function buildUnsubscriptionVerificationResponse(string? topic = ()) returns http:Response;
+    public function buildUnsubscriptionVerificationResponse(string t) returns http:Response;
 
 };
 
-public function IntentVerificationRequest::buildSubscriptionVerificationResponse(string? topic = ())
+public function IntentVerificationRequest::buildSubscriptionVerificationResponse(string t)
     returns http:Response {
 
-    string intendedTopic = topic but {() => retrieveIntendedTopic()};
-    return buildIntentVerificationResponse(self, MODE_SUBSCRIBE, intendedTopic);
+    return buildIntentVerificationResponse(self, MODE_SUBSCRIBE, t);
 }
 
-public function IntentVerificationRequest::buildUnsubscriptionVerificationResponse(string? topic = ())
+public function IntentVerificationRequest::buildUnsubscriptionVerificationResponse(string t)
     returns http:Response {
 
-    string intendedTopic = topic but {() => retrieveIntendedTopic()};
-    return buildIntentVerificationResponse(self, MODE_UNSUBSCRIBE, intendedTopic);
+    return buildIntentVerificationResponse(self, MODE_UNSUBSCRIBE, t);
 }
 
 documentation {
@@ -242,21 +239,22 @@ function processWebSubNotification(http:Request request, typedesc serviceType) r
         return;
     }
 
-    json payload;
-    var reqJsonPayload = request.getJsonPayload(); //TODO: fix for all types
-    match (reqJsonPayload) {
-        json jsonPayload => { payload = jsonPayload; }
-        error entityError => {
-            error webSubError = {message:"Error extracting notification payload", cause:entityError};
-            return webSubError;
-        }
-    }
-
     if (secret == "" && xHubSignature != "") {
         log:printWarn("Ignoring " + X_HUB_SIGNATURE + " value since secret is not specified.");
         return;
     }
-    return validateSignature(xHubSignature, payload.toString(), secret);
+
+    string stringPayload;
+    match (request.getPayloadAsString()) {
+        string payloadAsString => { stringPayload = payloadAsString; }
+        error entityError => {
+            error webSubError = {message:"Error extracting notification payload as string for signature validation: "
+                                            + entityError.message, cause: entityError};
+            return webSubError;
+        }
+    }
+
+    return validateSignature(xHubSignature, stringPayload, secret);
 }
 
 documentation {
@@ -293,14 +291,150 @@ function validateSignature(string xHubSignature, string stringPayload, string se
 }
 
 documentation {
-    Record representing the WebSub Content Delivery Request received.
+    Object representing the WebSub Content Delivery Request received.
 
-    F{{payload}} The JSON payload of the notification received
     F{{request}} The HTTP POST request received as the notification
 }
-public type Notification {
-    json payload,
-    http:Request request,
+public type Notification object {
+
+    private {
+        http:Request request;
+    }
+
+    documentation {
+        Retrieves the query parameters of the content delivery request, as a map.
+
+        R{{}} String constrained map of query params
+    }
+    public function getQueryParams() returns map<string> {
+        return request.getQueryParams();
+    }
+
+    documentation {
+        Retrieves the `Entity` associated with the content delivery request.
+
+        R{{}} The `Entity` of the request. An `error` is returned, if entity construction fails
+    }
+    public function getEntity() returns mime:Entity|error {
+        return request.getEntity();
+    }
+
+    documentation {
+        Returns whether the requested header key exists in the header map of the content delivery request.
+
+        P{{headerName}} The header name
+        R{{}} Returns true if the specified header key exists
+    }
+    public function hasHeader(string headerName) returns boolean {
+        return request.hasHeader(headerName);
+    }
+
+    documentation {
+        Returns the value of the specified header. If the specified header key maps to multiple values, the first of
+        these values is returned.
+
+        P{{headerName}} The header name
+        R{{}} The first header value for the specified header name. An exception is thrown if no header is found.
+                Ideally `hasHeader()` needs to be used to check the existence of header initially.
+    }
+    public function getHeader(string headerName) returns string {
+        return request.getHeader(headerName);
+    }
+
+    documentation {
+        Retrieves all the header values to which the specified header key maps to.
+
+        P{{headerName}} The header name
+        R{{}} The header values the specified header key maps to. An exception is thrown if no header is found.
+                Ideally `hasHeader()` needs to be used to check the existence of header initially.
+    }
+    public function getHeaders(string headerName) returns string[] {
+        return request.getHeaders(headerName);
+    }
+
+    documentation {
+        Retrieves all the names of the headers present in the content delivery request.
+
+        R{{}} An array of all the header names
+    }
+    public function getHeaderNames() returns string[] {
+        return request.getHeaderNames();
+    }
+
+    documentation {
+        Retrieves the type of the payload of the content delivery request (i.e: the `content-type` header value).
+
+        R{{}} Returns the `content-type` header value as a string
+    }
+    public function getContentType() returns string {
+        return request.getContentType();
+    }
+
+    documentation {
+        Extracts `json` payload from the content delivery request.
+
+        R{{}} The `json` payload or `error` in case of errors. If the content type is not JSON, an `error` is returned.
+    }
+    public function getJsonPayload() returns json|error {
+        return request.getJsonPayload();
+    }
+
+    documentation {
+        Extracts `xml` payload from the content delivery request.
+
+        R{{}} The `xml` payload or `error` in case of errors. If the content type is not XML, an `error` is returned.
+    }
+    public function getXmlPayload() returns xml|error {
+        return request.getXmlPayload();
+    }
+
+    documentation {
+        Extracts `text` payload from the content delivery request.
+
+        R{{}} The `text` payload or `error` in case of errors.
+                If the content type is not of type text, an `error` is returned.
+    }
+    public function getTextPayload() returns string|error {
+        return request.getTextPayload();
+    }
+
+    documentation {
+        Retrieves the content delivery request payload as a `string`. Content type is not checked during payload
+        construction which makes this different from `getTextPayload()` function.
+
+        R{{}} The string representation of the message payload or `error` in case of errors
+    }
+    public function getPayloadAsString() returns string|error {
+        return request.getPayloadAsString();
+    }
+
+    documentation {
+        Retrieves the request payload as a `ByteChannel` except in the case of multiparts.
+
+        R{{}} A byte channel from which the message payload can be read or `error` in case of errors
+    }
+    public function getByteChannel() returns io:ByteChannel|error {
+        return request.getByteChannel();
+    }
+
+    documentation {
+        Retrieves the request payload as a `blob`.
+
+        R{{}} The blob representation of the message payload or `error` in case of errors
+    }
+    public function getBinaryPayload() returns blob|error {
+        return request.getBinaryPayload();
+    }
+
+    documentation {
+        Retrieves the form parameters from the content delivery request as a `map`.
+
+        R{{}} The map of form params or `error` in case of errors
+    }
+    public function getFormParams() returns map<string>|error {
+        return request.getFormParams();
+    }
+
 };
 
 documentation {
@@ -338,14 +472,39 @@ public type SubscriptionChangeResponse {
 documentation {
     Starts up the Ballerina Hub.
 
-    P{{port}} The port to start up the hub on
-    R{{}} `WebSubHub` The WebSubHub object representing the started up hub
+    P{{port}}                       The port to start up the hub on
+    P{{leaseSeconds}}               The default lease seconds value to honour if not specified in subscription requests
+    P{{signatureMethod}}            The signature method to use for authenticated content delivery (`SHA1`|`SHA256`)
+    P{{remotePublishingEnabled}}    Whether remote publishers should be allowed to publish to this hub (HTTP requests)
+    P{{remotePublishingMode}}       If remote publishing is allowed, the mode to use, `direct` (default) - fat ping with
+                                        the notification payload specified or `fetch` - the hub fetches the topic URL
+                                        specified in the "publish" request to identify the payload
+    P{{topicRegistrationRequired}}  Whether a topic needs to be registered at the hub prior to publishing/subscribing
+                                        to the topic
+    P{{publicUrl}}                  The URL for the hub to be included in content delivery requests, defaults to
+                                        `http(s)://localhost:{port}/websub/hub` if unspecified
+    P{{sslEnabled}}                 Whether SSL needs to be enabled for the hub, enabled by default
+    R{{}} `WebSubHub` The WebSubHub object representing the newly started up hub, or `HubStartedUpError` indicating
+                        that the hub is already started, and including the WebSubHub object representing the
+                        already started up hub
 }
-public function startUpBallerinaHub(int? port = ()) returns WebSubHub {
-    int websubHubPort = port but { () => hubPort };
-    string hubUrl = startUpHubService(websubHubPort);
-    WebSubHub ballerinaWebSubHub = new WebSubHub(hubUrl);
-    return ballerinaWebSubHub;
+public function startUpBallerinaHub(int? port = (), int? leaseSeconds = (), string? signatureMethod = (),
+                                    boolean? remotePublishingEnabled = (), string? remotePublishingMode = (),
+                                    boolean? topicRegistrationRequired = (), string? publicUrl = (),
+                                    boolean? sslEnabled = ()) returns WebSubHub|HubStartedUpError {
+    hubPort = port but { () => hubPort };
+    hubLeaseSeconds = leaseSeconds but { () => hubLeaseSeconds };
+    hubSignatureMethod = signatureMethod but { () => hubSignatureMethod };
+    hubRemotePublishingEnabled = remotePublishingEnabled but { () => hubRemotePublishingEnabled };
+    hubRemotePublishingMode = remotePublishingMode but { () => hubRemotePublishingMode };
+    hubTopicRegistrationRequired = topicRegistrationRequired but { () => hubTopicRegistrationRequired };
+    hubSslEnabled = sslEnabled but { () => hubSslEnabled };
+    //reset serviceSecureSocket and secureSocket after hubSslEnabled is set
+    serviceSecureSocket = getServiceSecureSocketConfig();
+    httpSecureSocket = getSecureSocketConfig();
+    //reset the hubUrl once the other parameters are set
+    hubPublicUrl = publicUrl but { () => getHubUrl() };
+    return startUpHubService(hubTopicRegistrationRequired, hubPublicUrl);
 }
 
 documentation {
@@ -373,9 +532,11 @@ public type WebSubHub object {
         
         P{{topic}} The topic for which the update should happen
         P{{payload}} The update payload
+        P{{contentType}} The content type header to set for the request delivering the payload
         R{{}} `error` if the hub is not initialized or does not represent the internal hub
     }
-    public function publishUpdate(string topic, json payload) returns error?;
+    public function publishUpdate(string topic, string|xml|json|blob|io:ByteChannel payload,
+                                  string? contentType = ()) returns error?;
 
     documentation {
         Registers a topic in the Ballerina Hub.
@@ -399,12 +560,34 @@ public function WebSubHub::stop() returns (boolean) {
     return stopHubService(self.hubUrl);
 }
 
-public function WebSubHub::publishUpdate(string topic, json payload) returns error? {
+public function WebSubHub::publishUpdate(string topic, string|xml|json|blob|io:ByteChannel payload,
+                                         string? contentType = ()) returns error? {
+
     if (self.hubUrl == "") {
-        error webSubError = {message:"Internal Ballerina Hub not initialized or incorrectly referenced"};
+        error webSubError = {message: "Internal Ballerina Hub not initialized or incorrectly referenced"};
         return webSubError;
     }
-    return validateAndPublishToInternalHub(self.hubUrl, topic, payload);
+
+    WebSubContent content = {};
+
+    match(payload) {
+        io:ByteChannel byteChannel => content.payload = constructBlob(byteChannel);
+        string|xml|json|blob => content.payload = payload;
+    }
+
+    match(contentType) {
+        string stringContentType => content.contentType = stringContentType;
+        () => {
+            match(payload) {
+                string => content.contentType = mime:TEXT_PLAIN;
+                xml => content.contentType = mime:APPLICATION_XML;
+                json => content.contentType = mime:APPLICATION_JSON;
+                blob|io:ByteChannel => content.contentType = mime:APPLICATION_OCTET_STREAM;
+            }
+        }
+    }
+
+    return validateAndPublishToInternalHub(self.hubUrl, topic, content);
 }
 
 public function WebSubHub::registerTopic(string topic) returns error? {
@@ -463,3 +646,29 @@ function retrieveSubscriberServiceAnnotations(typedesc serviceType) returns Subs
     }
     return;
 }
+
+documentation {
+    Record to represent a WebSub content delivery.
+
+    F{{payload}} The payload to be sent
+    F{{contentType}} The content-type of the payload
+}
+type WebSubContent {
+    string|xml|json|blob|io:ByteChannel payload,
+    string contentType,
+};
+
+function isSuccessStatusCode(int statusCode) returns boolean {
+    return (200 <= statusCode && statusCode < 300);
+}
+
+documentation {
+    Error to represent that a WebSubHub is already started up, encapsulating the started up Hub.
+
+    F{{message}}        The error message
+    F{{startedUpHub}}   The `WebSubHub` object representing the started up Hub
+}
+public type HubStartedUpError record {
+    string message;
+    WebSubHub startedUpHub;
+};

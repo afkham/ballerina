@@ -13,16 +13,7 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-
-///////////////////////////////////////////////////////////////////
-//////////////////// WebSub Subscriber Natives ////////////////////
-///////////////////////////////////////////////////////////////////
-documentation {
-    Function to retrieve the topic specified as an annotation.
-    
-    R{{}} `string` representing the annotation
-}
-native function retrieveIntendedTopic() returns string;
+import ballerina/http;
 
 ///////////////////////////////////////////////////////////////////
 //////////////////// WebSub Hub Natives ///////////////////////////
@@ -30,10 +21,16 @@ native function retrieveIntendedTopic() returns string;
 documentation {
     Starts up the internal Ballerina Hub.
 
-    P{{port}} The port to start up the Hub service on
-    R{{}} `string` The URL of the Hub service
+    P{{topicRegistrationRequired}}  Whether a topic needs to be registered at the hub prior to publishing/subscribing
+                                        to the topic
+    P{{publicUrl}}                  The URL for the hub to be included in content delivery requests, defaults to
+                                        `http(s)://localhost:{port}/websub/hub` if unspecified
+    R{{}} `WebSubHub` The WebSubHub object representing the newly started up hub, or `HubStartedUpError` indicating
+                        that the hub is already started, and including the WebSubHub object representing the
+                        already started up hub
 }
-native function startUpHubService(int port) returns string;
+native function startUpHubService(boolean topicRegistrationRequired, string publicUrl)
+                                                                            returns WebSubHub|HubStartedUpError;
 
 documentation {
     Stop the Ballerina Hub, if started.
@@ -55,10 +52,10 @@ documentation {
     Publishes an update against the topic in the Ballerina Hub.
 
     P{{topic}} The topic for which the update should happen
-    P{{payload}} The update payload
+    P{{content}} The content to send to subscribers, with the payload and content-type specified
     R{{}} `error` if an error occurred during publishing
 }
-native function publishToInternalHub(string topic, json payload) returns error?;
+native function publishToInternalHub(string topic, WebSubContent content) returns error?;
 
 documentation {
     Removes a subscription added for the specified topic in the Ballerina Hub.
@@ -111,7 +108,9 @@ documentation {
 
     P{{hubUrl}} The URL of the Ballerina WebSub Hub as included in the WebSubHub struct
     P{{topic}} The topic for which the update should happen
-    P{{payload}} The update payload
+    P{{content}} The content to send to subscribers, with the payload and content-type specified
     R{{}} `error` if an error occurred during publishing
 }
-native function validateAndPublishToInternalHub(string hubUrl, string topic, json payload) returns error?;
+native function validateAndPublishToInternalHub(string hubUrl, string topic, WebSubContent content) returns error?;
+
+native function constructBlob(io:ByteChannel byteChannel) returns blob;

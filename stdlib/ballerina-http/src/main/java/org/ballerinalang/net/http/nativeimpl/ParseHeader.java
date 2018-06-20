@@ -49,7 +49,7 @@ import static org.ballerinalang.mime.util.Constants.SEMICOLON;
         args = {@Argument(name = "headerValue", type = TypeKind.STRING)},
         returnType = {@ReturnType(type = TypeKind.STRING),
                 @ReturnType(type = TypeKind.MAP, elementType = TypeKind.STRING),
-                @ReturnType(type = TypeKind.STRUCT, structType = "Error")},
+                @ReturnType(type = TypeKind.RECORD, structType = "Error")},
         isPublic = true
 )
 public class ParseHeader extends BlockingNativeCallableUnit {
@@ -84,6 +84,6 @@ public class ParseHeader extends BlockingNativeCallableUnit {
         }
 
         // set parse error
-        context.setReturnValues(MimeUtil.getParserError(context, errMsg));
+        context.setReturnValues(MimeUtil.createError(context, errMsg));
     }
 }

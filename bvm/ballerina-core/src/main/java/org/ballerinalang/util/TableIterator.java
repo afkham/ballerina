@@ -19,7 +19,8 @@ package org.ballerinalang.util;
 
 import org.ballerinalang.model.ColumnDefinition;
 import org.ballerinalang.model.DataIterator;
-import org.ballerinalang.model.types.BStructType;
+import org.ballerinalang.model.types.BField;
+import org.ballerinalang.model.types.BStructureType;
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.model.types.BTypes;
 import org.ballerinalang.model.types.BUnionType;
@@ -41,6 +42,7 @@ import org.ballerinalang.model.values.BStruct;
 import org.ballerinalang.model.values.BXMLItem;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
+import java.math.BigDecimal;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.ResultSet;
@@ -58,17 +60,18 @@ public class TableIterator implements DataIterator {
 
     protected ResultSet rs;
     protected TableResourceManager resourceManager;
-    protected BStructType type;
+    protected BStructureType type;
     protected List<ColumnDefinition> columnDefs;
 
-    public TableIterator(TableResourceManager rm, ResultSet rs, BStructType type, List<ColumnDefinition> columnDefs) {
+    public TableIterator(TableResourceManager rm, ResultSet rs, BStructureType type,
+                         List<ColumnDefinition> columnDefs) {
         this.resourceManager = rm;
         this.rs = rs;
         this.type = type;
         this.columnDefs = columnDefs;
     }
 
-    public TableIterator(TableResourceManager rm, ResultSet rs, BStructType type) {
+    public TableIterator(TableResourceManager rm, ResultSet rs, BStructureType type) {
         this.resourceManager = rm;
         this.rs = rs;
         this.type = type;
@@ -192,8 +195,8 @@ public class TableIterator implements DataIterator {
         int blobRegIndex = -1;
         int index = 0;
         try {
-            BStructType.StructField[] structFields = type.getStructFields();
-            for (BStructType.StructField sf : structFields) {
+            BField[] structFields = type.getFields();
+            for (BField sf : structFields) {
                 BType type = sf.getFieldType();
                 ++index;
                 switch (type.getTag()) {
@@ -244,7 +247,7 @@ public class TableIterator implements DataIterator {
     }
 
     @Override
-    public BStructType getStructType() {
+    public BStructureType getStructType() {
         return this.type;
     }
 
@@ -309,6 +312,12 @@ public class TableIterator implements DataIterator {
                 doubleDataArray.add(i, (Double) dataArray[i]);
             }
             return doubleDataArray;
+        } else if ((firstNonNullElement instanceof BigDecimal)) {
+            BFloatArray doubleDataArray = new BFloatArray();
+            for (int i = 0; i < dataArray.length; i++) {
+                doubleDataArray.add(i, ((BigDecimal) dataArray[i]).doubleValue());
+            }
+            return doubleDataArray;
         } else {
             return null;
         }
@@ -346,6 +355,12 @@ public class TableIterator implements DataIterator {
             refValueArray = createEmptyRefValueArray(BTypes.typeFloat, length);
             for (int i = 0; i < length; i++) {
                 refValueArray.add(i, dataArray[i] != null ? new BFloat((Double) dataArray[i]) : null);
+            }
+        } else if (firstNonNullElement instanceof BigDecimal) {
+            refValueArray = createEmptyRefValueArray(BTypes.typeFloat, length);
+            for (int i = 0; i < length; i++) {
+                refValueArray
+                        .add(i, dataArray[i] != null ? new BFloat(((BigDecimal) dataArray[i]).doubleValue()) : null);
             }
         }
         return refValueArray;
@@ -389,9 +404,9 @@ public class TableIterator implements DataIterator {
     }
 
     private void generateColumnDefinitions() {
-        BStructType.StructField[] structFields = this.type.getStructFields();
+        BField[] structFields = this.type.getFields();
         columnDefs = new ArrayList<>(structFields.length);
-        for (BStructType.StructField sf : structFields) {
+        for (BField sf : structFields) {
             BType type = sf.getFieldType();
             TypeKind typeKind = TypeKind.ANY;
             switch (type.getTag()) {

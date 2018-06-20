@@ -20,6 +20,7 @@ package org.ballerinalang.net.grpc.proto;
 import org.ballerinalang.compiler.plugins.AbstractCompilerPlugin;
 import org.ballerinalang.compiler.plugins.SupportEndpointTypes;
 import org.ballerinalang.model.TreeBuilder;
+import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.model.tree.AnnotationAttachmentNode;
 import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.ServiceNode;
@@ -32,7 +33,7 @@ import org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolResolver;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolEnv;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolTable;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BAnnotationSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BStructSymbol;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BStructureTypeSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.SymTag;
@@ -102,7 +103,7 @@ public class ServiceProtoBuilder extends AbstractCompilerPlugin {
     }
 
     @Override
-    public void codeGenerated(Path binaryPath) {
+    public void codeGenerated(PackageID packageID, Path binaryPath) {
 
         Map<String, File> definitionMap = FileDefinitionHolder.getInstance().getDefinitionMap();
         if (definitionMap.size() == 0) {
@@ -155,11 +156,11 @@ public class ServiceProtoBuilder extends AbstractCompilerPlugin {
         annoAttachment.expr = literalNode;
         literalNode.pos = pos;
 
-        BStructSymbol bStructSymbol = null;
+        BStructureTypeSymbol bStructSymbol = null;
         BSymbol annTypeSymbol = symResolver.lookupSymbolInPackage(service.pos, pkgEnv,
                 names.fromString("grpc"), names.fromString("ServiceDescriptorData"), SymTag.STRUCT);
-        if (annTypeSymbol instanceof BStructSymbol) {
-            bStructSymbol = (BStructSymbol) annTypeSymbol;
+        if (annTypeSymbol instanceof BStructureTypeSymbol) {
+            bStructSymbol = (BStructureTypeSymbol) annTypeSymbol;
             literalNode.type = bStructSymbol.type;
         }
 

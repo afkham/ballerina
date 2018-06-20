@@ -42,18 +42,18 @@ import java.util.Locale;
 @BallerinaFunction(
         orgName = "ballerina", packageName = "http",
         functionName = "forward",
-        receiver = @Receiver(type = TypeKind.STRUCT, structType = HttpConstants.CALLER_ACTIONS,
-                structPackage = "ballerina.http"),
+        receiver = @Receiver(type = TypeKind.OBJECT, structType = HttpConstants.CALLER_ACTIONS,
+                structPackage = "ballerina/http"),
         args = {
-                @Argument(name = "client", type = TypeKind.STRUCT),
+                @Argument(name = "client", type = TypeKind.OBJECT),
                 @Argument(name = "path", type = TypeKind.STRING),
-                @Argument(name = "req", type = TypeKind.STRUCT, structType = "Request",
-                        structPackage = "ballerina.http")
+                @Argument(name = "req", type = TypeKind.OBJECT, structType = "Request",
+                        structPackage = "ballerina/http")
         },
         returnType = {
-                @ReturnType(type = TypeKind.STRUCT, structType = "Response", structPackage = "ballerina.http"),
-                @ReturnType(type = TypeKind.STRUCT, structType = "HttpConnectorError",
-                        structPackage = "ballerina.http"),
+                @ReturnType(type = TypeKind.OBJECT, structType = "Response", structPackage = "ballerina/http"),
+                @ReturnType(type = TypeKind.RECORD, structType = "HttpConnectorError",
+                        structPackage = "ballerina/http"),
         }
 )
 public class Forward extends AbstractHTTPAction {

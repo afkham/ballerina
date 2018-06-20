@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+@final string HTTP_SCHEME = "http://";
+@final string HTTPS_SCHEME = "https://";
 
 documentation {Represents multipart primary type}
 @final public string MULTIPART_AS_PRIMARY_TYPE = "multipart/";
@@ -65,21 +67,21 @@ documentation {
 public function invokeEndpoint (string path, Request outRequest,
                                 HttpOperation requestAction, CallerActions httpClient) returns Response|error {
     if (HTTP_GET == requestAction) {
-        return httpClient.get(path, request = outRequest);
+        return httpClient.get(path, message = outRequest);
     } else if (HTTP_POST == requestAction) {
-        return httpClient.post(path, request = outRequest);
+        return httpClient.post(path, outRequest);
     } else if (HTTP_OPTIONS == requestAction) {
-        return httpClient.options(path, request = outRequest);
+        return httpClient.options(path, message = outRequest);
     } else if (HTTP_PUT == requestAction) {
-        return httpClient.put(path, request = outRequest);
+        return httpClient.put(path, outRequest);
     } else if (HTTP_DELETE == requestAction) {
-        return httpClient.delete(path, request = outRequest);
+        return httpClient.delete(path, outRequest);
     } else if (HTTP_PATCH == requestAction) {
-        return httpClient.patch(path, request = outRequest);
+        return httpClient.patch(path, outRequest);
     } else if (HTTP_FORWARD == requestAction) {
         return httpClient.forward(path, outRequest);
     } else if (HTTP_HEAD == requestAction) {
-        return httpClient.head(path, request = outRequest);
+        return httpClient.head(path, message = outRequest);
     } else {
         return getError();
     }
@@ -174,3 +176,6 @@ function createFailoverRequest(Request request, mime:Entity requestEntity) retur
         return newOutRequest;
     }
 }
+
+//Resolve a given path against a given URI.
+native function resolve(string baseUrl, string path) returns string|error;

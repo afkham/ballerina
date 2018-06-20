@@ -32,7 +32,7 @@ import java.net.URLDecoder;
 
 /**
  * Native function to decode URLs.
- * ballerina.http:decode
+ * ballerina/http:decode
  */
 
 @BallerinaFunction(
@@ -40,7 +40,7 @@ import java.net.URLDecoder;
         functionName = "decode",
         args = {@Argument(name = "url", type = TypeKind.STRING)},
         returnType = {@ReturnType(type = TypeKind.STRING),
-                      @ReturnType(type = TypeKind.STRUCT, structType = "Error")},
+                      @ReturnType(type = TypeKind.RECORD, structType = "Error")},
         isPublic = true
 )
 public class Decode extends BlockingNativeCallableUnit {

@@ -18,6 +18,7 @@
 
 package org.ballerinalang.net.http.nativeimpl.connection;
 
+import io.netty.handler.codec.EncoderException;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import org.ballerinalang.bre.Context;
@@ -26,7 +27,6 @@ import org.ballerinalang.model.types.TypeKind;
 import org.ballerinalang.model.values.BStruct;
 import org.ballerinalang.natives.annotations.Argument;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
 import org.ballerinalang.natives.annotations.ReturnType;
 import org.ballerinalang.net.http.DataContext;
 import org.ballerinalang.net.http.HttpUtil;
@@ -34,6 +34,8 @@ import org.ballerinalang.net.http.caching.ResponseCacheControlStruct;
 import org.ballerinalang.net.http.util.CacheUtils;
 import org.ballerinalang.util.observability.ObservabilityUtils;
 import org.ballerinalang.util.observability.ObserverContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.wso2.transport.http.netty.message.HTTPCarbonMessage;
 
 import java.util.Optional;
@@ -50,16 +52,17 @@ import static org.ballerinalang.util.observability.ObservabilityConstants.TAG_KE
  */
 @BallerinaFunction(
         orgName = "ballerina", packageName = "http",
-        functionName = "respond",
-        receiver = @Receiver(type = TypeKind.STRUCT, structType = "Connection",
-                structPackage = "ballerina.http"),
-        args = {@Argument(name = "res", type = TypeKind.STRUCT, structType = "Response",
-                structPackage = "ballerina.http")},
-        returnType = @ReturnType(type = TypeKind.STRUCT, structType = "HttpConnectorError",
-                structPackage = "ballerina.http"),
+        functionName = "nativeRespond",
+        args = { @Argument(name = "connection", type = TypeKind.OBJECT),
+                @Argument(name = "res", type = TypeKind.OBJECT, structType = "Response",
+                structPackage = "ballerina/http")},
+        returnType = @ReturnType(type = TypeKind.RECORD, structType = "HttpConnectorError",
+                structPackage = "ballerina/http"),
         isPublic = true
 )
 public class Respond extends ConnectionAction {
+
+    private static final Logger log = LoggerFactory.getLogger(Respond.class);
 
     @Override
     public void execute(Context context, CallableUnitCallback callback) {
@@ -87,7 +90,12 @@ public class Respond extends ConnectionAction {
         observerContext.ifPresent(ctx -> ctx.addTag(TAG_KEY_HTTP_STATUS_CODE,
                 String.valueOf(outboundResponseStruct.getIntField(RESPONSE_STATUS_CODE_INDEX))));
 
-        sendOutboundResponseRobust(dataContext, inboundRequestMsg, outboundResponseStruct, outboundResponseMsg);
+        try {
+            sendOutboundResponseRobust(dataContext, inboundRequestMsg, outboundResponseStruct, outboundResponseMsg);
+        } catch (EncoderException e) {
+            //Exception is already notified by http transport.
+            log.debug("Couldn't complete outbound response", e);
+        }
     }
 
     private void setCacheControlHeader(BStruct outboundRespStruct, HTTPCarbonMessage outboundResponse) {

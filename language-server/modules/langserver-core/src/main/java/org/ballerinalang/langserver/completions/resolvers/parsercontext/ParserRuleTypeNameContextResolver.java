@@ -29,15 +29,18 @@ import org.ballerinalang.langserver.completions.SymbolInfo;
 import org.ballerinalang.langserver.completions.resolvers.AbstractItemResolver;
 import org.ballerinalang.langserver.completions.util.filters.PackageActionFunctionAndTypesFilter;
 import org.ballerinalang.langserver.completions.util.filters.StatementTemplateFilter;
+import org.ballerinalang.langserver.completions.util.filters.SymbolFilters;
 import org.ballerinalang.langserver.completions.util.sorters.CompletionItemSorter;
 import org.ballerinalang.langserver.completions.util.sorters.DefaultItemSorter;
 import org.ballerinalang.langserver.completions.util.sorters.ItemSorters;
 import org.eclipse.lsp4j.CompletionItem;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.wso2.ballerinalang.compiler.parser.antlr4.BallerinaParser;
 import org.wso2.ballerinalang.compiler.semantics.model.Scope;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BPackageSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BStructType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BField;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BRecordType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -74,7 +77,9 @@ public class ParserRuleTypeNameContextResolver extends AbstractItemResolver {
         } else {
             StatementTemplateFilter statementTemplateFilter = new StatementTemplateFilter();
             // Add the statement templates
-            completionItems.addAll(statementTemplateFilter.filterItems(completionContext));
+            Either<List<CompletionItem>, List<SymbolInfo>> filteredList =
+                    statementTemplateFilter.filterItems(completionContext);
+            this.populateCompletionItemList(filteredList, completionItems);
             this.populateBasicTypes(completionItems, completionContext.get(CompletionKeys.VISIBLE_SYMBOLS_KEY));
             itemSorter = 
                     ItemSorters.getSorterByClass(completionContext.get(CompletionKeys.SYMBOL_ENV_NODE_KEY).getClass());
@@ -93,8 +98,11 @@ public class ParserRuleTypeNameContextResolver extends AbstractItemResolver {
         List<SymbolInfo> returnList = new ArrayList<>();
         
         if (!(constraintStart.getText().equals("<") || constraintStart.getText().equals("create"))) {
-            PackageActionFunctionAndTypesFilter filter = new PackageActionFunctionAndTypesFilter();
-            returnList.addAll(filter.filterItems(context));
+            Either<List<CompletionItem>, List<SymbolInfo>> filteredItems =
+                    SymbolFilters.getFilterByClass(PackageActionFunctionAndTypesFilter.class).filterItems(context);
+            if (filteredItems.isRight()) {
+                returnList.addAll(filteredItems.getRight());
+            }
         } else {
             SymbolInfo packageSymbolInfo = symbolInfos.stream().filter(item -> {
                 Scope.ScopeEntry scopeEntry = item.getScopeEntry();
@@ -119,20 +127,20 @@ public class ParserRuleTypeNameContextResolver extends AbstractItemResolver {
 
         return symbolInfos.stream().filter(symbolInfo -> {
             BSymbol bSymbol = symbolInfo.getScopeEntry().symbol;
-            return bSymbol.getType() instanceof BStructType
-                    && checkErrorStructEquivalence((BStructType) bSymbol.getType());
+            return bSymbol.getType() instanceof BRecordType
+                    && checkErrorStructEquivalence((BRecordType) bSymbol.getType());
         }).collect(Collectors.toList());
     }
     
-    private static boolean checkErrorStructEquivalence(BStructType bStructType) {
-        List<BStructType.BStructField> fields = bStructType.getFields();
+    private static boolean checkErrorStructEquivalence(BRecordType bStructType) {
+        List<BField> fields = bStructType.getFields();
         String errorField = "cause";
         String errorType = "error";
         String msgField = "message";
         String msgType = "string";
         int fieldCounter = 0;
 
-        for (BStructType.BStructField field : fields) {
+        for (BField field : fields) {
             if ((field.getName().getValue().equals(errorField) && field.getType().toString().equals(errorType))
                     || (field.getName().getValue().equals(msgField) && field.getType().toString().equals(msgType))) {
                 fieldCounter++;

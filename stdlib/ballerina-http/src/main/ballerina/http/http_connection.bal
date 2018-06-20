@@ -19,14 +19,35 @@ documentation {
     The caller actions for responding to client requests.
 }
 public type Connection object {
-
+    private {
+        ServiceEndpointConfiguration config;
+        FilterContext? filterContext;
+    }
     documentation {
         Sends the outbound response to the caller.
 
-        P{{response}} The outbound response
+        P{{message}} The outbound response or any payload of type `string`, `xml`, `json`, `blob`, `io:ByteChannel`
+                     or `mime:Entity[]`
         R{{}} Returns an `error` if failed to respond
     }
-    public native function respond(Response response) returns error?;
+    public function respond(Response|string|xml|json|blob|io:ByteChannel|mime:Entity[]|() message) returns error? {
+        Response response = buildResponse(message);
+        match filterContext {
+            FilterContext filterCtx => {
+                foreach filter in config.filters {
+                    if (!filter.filterResponse(response, filterCtx)){
+                        Response res;
+                        res.statusCode = 500;
+                        res.setTextPayload("Failure when invoking response filter/s");
+                        return nativeRespond(self, res);
+                    }
+                }
+            }
+            () => {}
+        }
+
+        return nativeRespond(self, response);
+    }
 
     documentation {
         Pushes a promise to the caller.
@@ -79,6 +100,8 @@ public type Connection object {
     }
     public function redirect(Response response, RedirectCode code, string[] locations) returns error?;
 };
+
+native function nativeRespond(Connection connection, Response response) returns error?;
 
 /////////////////////////////////
 /// Ballerina Implementations ///
