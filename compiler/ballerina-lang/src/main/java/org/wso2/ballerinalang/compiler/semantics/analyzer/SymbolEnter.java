@@ -56,6 +56,7 @@ import org.wso2.ballerinalang.compiler.semantics.model.types.BAnnotationType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BEnumType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BField;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BInvokableType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BRecordType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BServiceType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BStructureType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
@@ -111,7 +112,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import javax.xml.XMLConstants;
 
 import static org.ballerinalang.model.tree.NodeKind.IMPORT;
@@ -199,15 +199,15 @@ public class SymbolEnter extends BLangNodeVisitor {
 
         pkgNode.globalVars.forEach(var -> defineNode(var, pkgEnv));
 
+        // Enabled logging errors after type def visit.
+        // TODO: Do this in a cleaner way
+        pkgEnv.logErrors = true;
+
         // Define type def fields (if any)
         defineFields(pkgNode.typeDefinitions, pkgEnv);
 
         // Define type def members (if any)
         defineMembers(pkgNode.typeDefinitions, pkgEnv);
-
-        // Enabled logging errors after type def visit.
-        // TODO: Do this in a cleaner way
-        pkgEnv.logErrors = true;
 
         // Define service and resource nodes.
         pkgNode.services.forEach(service -> defineNode(service, pkgEnv));
@@ -433,6 +433,12 @@ public class SymbolEnter extends BLangNodeVisitor {
     public void visit(BLangFunction funcNode) {
         boolean validAttachedFunc = validateFuncReceiver(funcNode);
         if (funcNode.attachedOuterFunction) {
+            if (Symbols.isFlagOn(Flags.asMask(funcNode.flagSet), Flags.PUBLIC)) { //no visibility modifiers allowed
+                dlog.error(funcNode.pos, DiagnosticCode.ATTACHED_FUNC_CANT_HAVE_VISIBILITY_MODIFIERS, funcNode.name);
+            }
+            if (funcNode.body == null) { //object outer attached function must have a body
+                dlog.error(funcNode.pos, DiagnosticCode.ATTACHED_FUNCTIONS_MUST_HAVE_BODY, funcNode.name);
+            }
             if (funcNode.receiver.type.tsymbol.kind == SymbolKind.RECORD) {
                 dlog.error(funcNode.pos, DiagnosticCode.CANNOT_ATTACH_FUNCTIONS_TO_RECORDS, funcNode.name,
                         funcNode.receiver.type.tsymbol.name);
@@ -517,12 +523,14 @@ public class SymbolEnter extends BLangNodeVisitor {
         }
 
         BInvokableType sourceType = (BInvokableType) funcNode.symbol.type;
-        int flags = Flags.asMask(funcNode.flagSet);
-        if (((flags & Flags.NATIVE) != (funcNode.symbol.flags & Flags.NATIVE))
-                || ((flags & Flags.PUBLIC) != (funcNode.symbol.flags & Flags.PUBLIC))) {
-            dlog.error(funcNode.pos, DiagnosticCode.CANNOT_FIND_MATCHING_INTERFACE, funcNode.name, objName);
-            return;
-        }
+        //this was used earlier to one to one match object declaration with definitions for attached functions
+        // keeping this commented as we may need uncomment this later.
+//        int flags = Flags.asMask(funcNode.flagSet);
+//        if (((flags & Flags.NATIVE) != (funcNode.symbol.flags & Flags.NATIVE))
+//                || ((flags & Flags.PUBLIC) != (funcNode.symbol.flags & Flags.PUBLIC))) {
+//            dlog.error(funcNode.pos, DiagnosticCode.CANNOT_FIND_MATCHING_INTERFACE, funcNode.name, objName);
+//            return;
+//        }
 
         if (typesMissMatch(paramTypes, sourceType.paramTypes)
                 || namesMissMatch(funcNode.requiredParams, funcNode.symbol.params)
@@ -847,20 +855,44 @@ public class SymbolEnter extends BLangNodeVisitor {
 
     private void defineFields(List<BLangTypeDefinition> typeDefNodes, SymbolEnv pkgEnv) {
         for (BLangTypeDefinition typeDef : typeDefNodes) {
-            if (typeDef.typeNode.getKind() == NodeKind.USER_DEFINED_TYPE) {
+            if (typeDef.typeNode.getKind() == NodeKind.USER_DEFINED_TYPE ||
+                    (typeDef.symbol.kind != SymbolKind.OBJECT && typeDef.symbol.kind != SymbolKind.RECORD)) {
                 continue;
             }
-            if (typeDef.symbol.kind == SymbolKind.OBJECT || typeDef.symbol.kind == SymbolKind.RECORD) {
-                // Create typeDef type
-                BStructureType structureType = (BStructureType) typeDef.symbol.type;
-                BLangStructureTypeNode structureTypeNode = (BLangStructureTypeNode) typeDef.typeNode;
-                SymbolEnv typeDefEnv = SymbolEnv.createTypeDefEnv(typeDef, typeDef.symbol.scope, pkgEnv);
-                structureType.fields = structureTypeNode.fields.stream()
-                        .peek(field -> defineNode(field, typeDefEnv))
-                        .map(field -> new BField(names.fromIdNode(field.name),
-                                field.symbol, field.expr != null))
-                        .collect(Collectors.toList());
+
+            // Create typeDef type
+            BStructureType structureType = (BStructureType) typeDef.symbol.type;
+            BLangStructureTypeNode structureTypeNode = (BLangStructureTypeNode) typeDef.typeNode;
+            SymbolEnv typeDefEnv = SymbolEnv.createTypeDefEnv(typeDef, typeDef.symbol.scope, pkgEnv);
+            structureType.fields = structureTypeNode.fields.stream()
+                    .peek(field -> defineNode(field, typeDefEnv))
+                    .map(field -> new BField(names.fromIdNode(field.name),
+                                             field.symbol, field.expr != null))
+                    .collect(Collectors.toList());
+
+            if (typeDef.symbol.kind != SymbolKind.RECORD) {
+                continue;
             }
+
+            BLangRecordTypeNode recordTypeNode = (BLangRecordTypeNode) structureTypeNode;
+            BRecordType recordType = (BRecordType) structureType;
+            recordType.sealed = recordTypeNode.sealed;
+
+            if (recordTypeNode.sealed && recordTypeNode.restFieldType != null) {
+                dlog.error(recordTypeNode.restFieldType.pos, DiagnosticCode.REST_FIELD_NOT_ALLOWED_IN_SEALED_RECORDS);
+                continue;
+            }
+
+            if (recordTypeNode.restFieldType == null) {
+                if (recordTypeNode.sealed) {
+                    recordType.restFieldType = symTable.noType;
+                    continue;
+                }
+                recordType.restFieldType = symTable.anyType;
+                continue;
+            }
+
+            recordType.restFieldType = symResolver.resolveTypeNode(recordTypeNode.restFieldType, typeDefEnv);
         }
     }
 
@@ -1029,17 +1061,6 @@ public class SymbolEnter extends BLangNodeVisitor {
         defineNode(object.initFunction, conEnv);
     }
 
-    private BLangVariable createReceiver(DiagnosticPos pos, BType type) {
-        BLangVariable receiver = (BLangVariable) TreeBuilder.createVariableNode();
-        receiver.pos = pos;
-        IdentifierNode identifier = createIdentifier(Names.SELF.getValue());
-        receiver.setName(identifier);
-        receiver.docTag = DocTag.RECEIVER;
-
-        receiver.type = type;
-        return receiver;
-    }
-
     private void defineRecordInitFunction(BLangTypeDefinition typeDef, SymbolEnv conEnv) {
         BLangRecordTypeNode recordTypeNode = (BLangRecordTypeNode) typeDef.typeNode;
         recordTypeNode.initFunction = createInitFunction(typeDef.pos, "", Names.INIT_FUNCTION_SUFFIX);
@@ -1051,6 +1072,17 @@ public class SymbolEnter extends BLangNodeVisitor {
         // Adding record level variables to the init function is done at desugar phase
 
         defineNode(recordTypeNode.initFunction, conEnv);
+    }
+
+    private BLangVariable createReceiver(DiagnosticPos pos, BType type) {
+        BLangVariable receiver = (BLangVariable) TreeBuilder.createVariableNode();
+        receiver.pos = pos;
+        IdentifierNode identifier = createIdentifier(Names.SELF.getValue());
+        receiver.setName(identifier);
+        receiver.docTag = DocTag.RECEIVER;
+
+        receiver.type = type;
+        return receiver;
     }
 
     private void defineServiceInitFunction(BLangService service, SymbolEnv conEnv) {
@@ -1086,7 +1118,7 @@ public class SymbolEnter extends BLangNodeVisitor {
                 names.fromIdNode(funcNode.name), SymTag.VARIABLE);
         if (symbol != symTable.notFoundSymbol) {
             dlog.error(funcNode.pos, DiagnosticCode.STRUCT_FIELD_AND_FUNC_WITH_SAME_NAME,
-                    funcNode.name.value, funcNode.receiver.type.toString());
+                       funcNode.name.value, funcNode.receiver.type.toString());
             return;
         }
 
@@ -1096,13 +1128,13 @@ public class SymbolEnter extends BLangNodeVisitor {
         // Check whether this attached function is a struct initializer.
         if (!Names.INIT_FUNCTION_SUFFIX.value.equals(funcNode.name.value)) {
             dlog.error(funcNode.pos, DiagnosticCode.INVALID_STRUCT_INITIALIZER_FUNCTION,
-                    funcNode.name.value, funcNode.receiver.type.toString());
+                       funcNode.name.value, funcNode.receiver.type.toString());
             return;
         }
 
         if (!funcNode.requiredParams.isEmpty() || funcNode.returnTypeNode.type != symTable.nilType) {
             dlog.error(funcNode.pos, DiagnosticCode.INVALID_STRUCT_INITIALIZER_FUNCTION,
-                    funcNode.name.value, funcNode.receiver.type.toString());
+                       funcNode.name.value, funcNode.receiver.type.toString());
         }
         recordSymbol.initializerFunc = attachedFunc;
     }
@@ -1260,7 +1292,6 @@ public class SymbolEnter extends BLangNodeVisitor {
                 && funcNode.receiver.type.tag != TypeTags.STRING
                 && funcNode.receiver.type.tag != TypeTags.INT
                 && funcNode.receiver.type.tag != TypeTags.FLOAT
-                && funcNode.receiver.type.tag != TypeTags.BLOB
                 && funcNode.receiver.type.tag != TypeTags.JSON
                 && funcNode.receiver.type.tag != TypeTags.XML
                 && funcNode.receiver.type.tag != TypeTags.MAP
