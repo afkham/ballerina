@@ -39,7 +39,7 @@ import java.util.Arrays;
  * synchronous.
  * </p>
  */
-public class DelimitedRecordChannel {
+public class DelimitedRecordChannel implements IOChannel {
 
     /**
      * Distinguishes the Record.
@@ -108,6 +108,15 @@ public class DelimitedRecordChannel {
         this.persistentCharSequence = new StringBuilder();
     }
 
+    @Override
+    public boolean hasReachedEnd() {
+        return !remaining && channel.hasReachedEnd();
+    }
+
+    public Channel getChannel() {
+        return channel.getChannel();
+    }
+
     /**
      * Retrieves the record separator for reading records.
      *
@@ -166,7 +175,6 @@ public class DelimitedRecordChannel {
      */
     private String readRecord() throws BallerinaIOException, IOException {
         String record = null;
-        String readCharacters = "";
         final int minimumRecordCount = 1;
         final int numberOfSplits = 2;
         do {
@@ -183,9 +191,9 @@ public class DelimitedRecordChannel {
                     recordCharacterCount = record.length();
                 }
             } else {
-                readCharacters = readRecordFromChannel();
+                readRecordFromChannel();
             }
-        } while (record == null && !readCharacters.isEmpty());
+        } while (record == null && !channel.hasReachedEnd());
 
         if (null == record) {
             record = readFinalRecord();
@@ -422,12 +430,38 @@ public class DelimitedRecordChannel {
     }
 
     /**
+     * Specified whether the channel is selectable.
+     *
+     * @return true if the channel is selectable.
+     */
+    @Override
+    public boolean isSelectable() {
+        return channel.isSelectable();
+    }
+
+    /**
+     * Provides the id of the channel.
+     *
+     * @return the id of the channel.
+     */
+    @Override
+    public int id() {
+        return channel.id();
+    }
+
+    /**
      * Closes the record channel.
      *
      * @throws IOException error occur while closing the connection.
      */
+    @Override
     public void close() throws IOException {
         channel.close();
+    }
+
+    @Override
+    public boolean remaining() {
+        return persistentCharSequence.length() > 0;
     }
 
     /**

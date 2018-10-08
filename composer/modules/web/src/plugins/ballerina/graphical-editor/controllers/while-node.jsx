@@ -20,7 +20,7 @@ import React from 'react';
 import { Menu } from 'semantic-ui-react';
 import PropTypes from 'prop-types';
 import WorkerTools from 'plugins/ballerina/tool-palette/item-provider/worker-tools';
-import ControllerUtil from 'plugins/ballerina/diagram/views/default/components/controllers/controller-util';
+import ControllerUtil from '../controller-utils/controller-util';
 import HoverButton from '../controller-utils/hover-button';
 import Toolbox from 'plugins/ballerina/diagram/views/default/components/decorators/action-box';
 
@@ -63,8 +63,8 @@ class ActionBox extends React.Component {
         const left = viewState.components['statement-box'].x;
         const onDelete = () => { model.remove(); };
         const onJumptoCodeLine = () => {
-            const { editor } = this.context;
-            editor.goToSource(model);
+            const { goToSource } = this.context;
+            goToSource(model);
         };
         return (
             <Toolbox
@@ -81,13 +81,7 @@ class ActionBox extends React.Component {
 }
 
 ActionBox.contextTypes = {
-    editor: PropTypes.shape({
-        isFileOpenedInEditor: PropTypes.func,
-        getEditorByID: PropTypes.func,
-        setActiveEditor: PropTypes.func,
-        getActiveEditor: PropTypes.func,
-        getDefaultContent: PropTypes.func,
-    }).isRequired,
+    goToSource: PropTypes.func.isRequired,
     designer: PropTypes.instanceOf(Object),
 };
 

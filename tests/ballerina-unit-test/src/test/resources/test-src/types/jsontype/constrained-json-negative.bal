@@ -1,14 +1,16 @@
-type Person sealed record {
+type Person record {
     string name;
     int age;
     string address;
+    !...
 };
 
-type Student sealed record {
+type Student record {
     string name;
     int age;
     string address;
     string class;
+    !...
 };
 
 function testJsonInitializationWithStructConstraintInvalid() returns (json, json, json){
@@ -34,23 +36,26 @@ function testConstraintJSONIndexing() returns (json){
     return j["bus"];
 }
 
-type Employee sealed record {
+type Employee record {
     string first_name;
     string last_name;
     int age;
     Address address;
+    !...
 };
 
-type Address sealed record {
+type Address record {
     string number;
     string street;
     string city;
     PhoneNumber phoneNumber;
+    !...
 };
 
-type PhoneNumber sealed record {
+type PhoneNumber record {
     string areaCode;
     string number;
+    !...
 };
 
 function tesInvalidNestedStructFieldAccess() {
@@ -77,4 +82,14 @@ function testBooleanArrayToJsonAssignment() returns (json) {
     byte[] b = [];
     json j = b;
     return j;
+}
+
+function testInvalidIndexBasedAccessOfRecordConstrainedJSON() {
+    json<Person> j = {name:"John Doe", age:30, address:"London"};
+    string name = <string>j[0];
+}
+
+function testInvalidIndexBasedAccessOfConstrainedJSON() {
+    json j = 12;
+    string name = j[0.0];
 }

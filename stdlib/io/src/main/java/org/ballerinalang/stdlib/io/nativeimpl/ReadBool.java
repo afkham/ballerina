@@ -30,23 +30,23 @@ import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.natives.annotations.Receiver;
 import org.ballerinalang.stdlib.io.channels.base.DataChannel;
 import org.ballerinalang.stdlib.io.events.EventContext;
-import org.ballerinalang.stdlib.io.events.EventManager;
+import org.ballerinalang.stdlib.io.events.EventRegister;
 import org.ballerinalang.stdlib.io.events.EventResult;
+import org.ballerinalang.stdlib.io.events.Register;
 import org.ballerinalang.stdlib.io.events.data.ReadBoolEvent;
 import org.ballerinalang.stdlib.io.utils.IOConstants;
 import org.ballerinalang.stdlib.io.utils.IOUtils;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
- * Native function ballerina/io#readBool.
+ * Extern function ballerina/io#readBool.
  *
  * @since 0.973.1
  */
 @BallerinaFunction(
         orgName = "ballerina", packageName = "io",
         functionName = "readBool",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = "DataChannel", structPackage = "ballerina/io"),
+        receiver = @Receiver(type = TypeKind.OBJECT, structType = "ReadableDataChannel",
+                structPackage = "ballerina/io"),
         isPublic = true
 )
 public class ReadBool implements NativeCallableUnit {
@@ -83,8 +83,9 @@ public class ReadBool implements NativeCallableUnit {
         DataChannel channel = (DataChannel) dataChannelStruct.getNativeData(IOConstants.DATA_CHANNEL_NAME);
         EventContext eventContext = new EventContext(context, callback);
         ReadBoolEvent event = new ReadBoolEvent(channel, eventContext);
-        CompletableFuture<EventResult> publish = EventManager.getInstance().publish(event);
-        publish.thenApply(ReadBool::readResponse);
+        Register register = EventRegister.getFactory().register(event, ReadBool::readResponse);
+        eventContext.setRegister(register);
+        register.submit();
     }
 
     @Override

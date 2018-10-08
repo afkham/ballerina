@@ -30,6 +30,8 @@ import java.text.DecimalFormat;
 
 /**
  * Tests for summary metric.
+ *
+ * @since 0.980.0
  */
 public class SummaryTest extends MetricTest {
     private CompileResult compileResult;
@@ -65,7 +67,7 @@ public class SummaryTest extends MetricTest {
         Assert.assertEquals(round(((BFloat) returns[0]).floatValue()), 2.0);
     }
 
-    @Test
+    @Test(groups = "SummaryTest.testRegisteredGauge")
     public void testRegisteredGauge() {
         BValue[] returns = null;
         for (int i = 0; i < 3; i++) {

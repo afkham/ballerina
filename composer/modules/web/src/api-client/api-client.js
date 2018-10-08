@@ -100,11 +100,11 @@ export function parseFile(file) {
  */
 export function parseContent(content) {
     const payload = {
-        fileName: 'untitle',
-        filePath: '/temp',
-        packageName: 'test.package',
+        fileName: 'untitled.bal',
+        filePath: 'temp',
         includeTree: true,
         includePackageInfo: true,
+        includeProgramDir: true,
         content,
     };
     const endpoint = getServiceEndpoint('ballerina-parser') + '/file/validate-and-parse';
@@ -127,6 +127,31 @@ export function getPackages() {
         axios.get(endpoint, { headers: CONTENT_TYPE_JSON_HEADER })
             .then((response) => {
                 resolve(response.data);
+            }).catch(error => reject(error));
+    });
+}
+
+export function getEndpoints() {
+    const endpoint = getServiceEndpoint('ballerina-parser') + '/endpoints';
+
+    return new Promise((resolve, reject) => {
+        axios.get(endpoint, { headers: CONTENT_TYPE_JSON_HEADER })
+            .then((response) => {
+                resolve(response.data.packages);
+            }).catch(error => reject(error));
+    });
+}
+
+export function getActions(packageName, typeName) {
+    const endpoint = getServiceEndpoint('ballerina-parser') + '/actions';
+    const data = {
+        pkgName: packageName,
+        typeName,
+    };
+    return new Promise((resolve, reject) => {
+        axios.get(endpoint, { params: data }, { headers: CONTENT_TYPE_JSON_HEADER })
+            .then((response) => {
+                resolve(response.data.packages);
             }).catch(error => reject(error));
     });
 }
@@ -195,6 +220,22 @@ export function getSwaggerDefinition(ballerinaSource, serviceName) {
     });
 }
 
+export function getServiceDefinition(swagger, serviceName) {
+    const endpoint = `${getServiceEndpoint('ballerina-to-swagger')}/swagger-to-ballerina?serviceName=${serviceName}`;
+    const payload = {
+        swaggerDefinition: JSON.stringify(swagger),
+    };
+
+    return new Promise((resolve, reject) => {
+        axios.post(endpoint, payload, { headers: CONTENT_TYPE_JSON_HEADER })
+            .then((response) => {
+                parseContent(response.data.ballerinaDefinition).then(( data = {})=>{
+                    resolve(data);
+                });
+            }).catch(error => reject(error));
+    });
+}
+
 /**
  * Get the type lattice
  * @export
@@ -246,28 +287,19 @@ export function getOperatorLattice() {
  * parse fragment.
  *
  * @param {string} fragment - source fragment.
- * @return {object} fragment details to be sent to fragment parser.
+ * @return {Promise} fragment parser response.
  * */
-
-// TODO: Use axios and Promises for api call
 export function parseFragment(fragment) {
-    let data = {};
-    $.ajax({
-        type: 'POST',
-        context: this,
-        url: getServiceEndpoint('ballerina-parser') + '/model/parse-fragment',
-        data: JSON.stringify(fragment),
-        contentType: 'application/json; charset=utf-8',
-        async: false,
-        dataType: 'json',
-        success(response) {
-            data = response;
-        },
-        error() {
-            data = { error: 'Unable to call fragment parser Backend.' };
-        },
+    const endpoint = `${getServiceEndpoint('ballerina-parser')}/model/parse-fragment`;
+    return new Promise((resolve, reject) => {
+        axios.post(endpoint, fragment, { headers: CONTENT_TYPE_JSON_HEADER })
+            .then((response) => {
+                resolve(response.data);
+            }).catch(error => reject({
+                error: 'Unable to call fragment parser Backend.',
+                cause: error,
+            }));
     });
-    return data;
 }
 
 /**

@@ -96,10 +96,12 @@ export const WsResources = [
  * @param {Fragment} fragment Source Fragment
  */
 function getNodeForFragment(fragment) {
-    const parsedJson = FragmentUtils.parseFragment(fragment);
-    const node = TreeBuilder.build(parsedJson);
-    node.clearWS();
-    return node;
+    return FragmentUtils.parseFragment(fragment)
+        .then((parsedJson) => {
+            const node = TreeBuilder.build(parsedJson);
+            node.clearWS();
+            return node;
+        });
 }
 
 function getStaticDefaultNode(fragmentName, keepWhiteSpace) {
@@ -367,19 +369,19 @@ class DefaultNodeFactory {
                 endpoint ${'http:' + "Client"} ${args.name} {};
             `));
         }
-        const { endpoint, packageName, fullPackageName } = args;
+        const { endpoint, packageName } = args;
         let endpointPackageAlias = (packageName !== 'Current Package' && packageName !== '' &&
             packageName !== 'builtin') ? (packageName + ':') : '';
         endpointPackageAlias = endpointPackageAlias !== '' ? endpointPackageAlias.split(/[.]+/).pop() : '';
 
         return getNodeForFragment(FragmentUtils.createEndpointVarDefFragment(`
-            endpoint ${endpointPackageAlias + endpoint.getName()} ep {};
+            endpoint ${endpointPackageAlias + endpoint} ep {};
         `));
     }
 
     createConnectorActionInvocationAssignmentStatement(args) {
         let stmtString = '';
-        const { functionDef, packageName, fullPackageName, endpoint } = args;
+        const { functionDef, packageName, fullPackageName, endpoint, actionName } = args;
 
         if (functionDef && functionDef.getReturnParams().length > 0) {
             stmtString = 'var var1 = ';
@@ -409,9 +411,9 @@ class DefaultNodeFactory {
             node.setVariables(returnNode.getVariables());
         }
 
-        if (functionDef) {
+        if (actionName) {
             const pkgStr = packageName !== 'Current Package' ? packageName.split(/[.]+/).pop() : '';
-            node.getExpression().getName().setValue(functionDef.getName());
+            node.getExpression().getName().setValue(actionName);
             node.getExpression().setFullPackageName(fullPackageName);
             node.getExpression().getPackageAlias().setValue(pkgStr);
         }

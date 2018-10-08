@@ -22,7 +22,8 @@ import log from 'log';
 import { Menu } from 'semantic-ui-react';
 import PropTypes from 'prop-types';
 import WorkerTools from 'plugins/ballerina/tool-palette/item-provider/worker-tools';
-import ControllerUtil from 'plugins/ballerina/diagram/views/default/components/controllers/controller-util';
+import { getEndpoints } from 'api-client/api-client';
+import ControllerUtil from '../controller-utils/controller-util';
 import TreeUtil from 'plugins/ballerina/model/tree-util';
 import LifelineTools from 'plugins/ballerina/tool-palette/item-provider/lifeline-tools';
 import TreeBuilder from 'plugins/ballerina/model/tree-builder';
@@ -32,6 +33,7 @@ import HoverButton from '../controller-utils/hover-button';
 import Item from '../controller-utils/item';
 import Search from '../controller-utils/search';
 import Toolbox from 'plugins/ballerina/diagram/views/default/components/decorators/action-box';
+import { ACTION_BOX_POSITION } from '../../constants';
 
 class DefaultCtrl extends React.Component {
     render() {
@@ -41,13 +43,13 @@ class DefaultCtrl extends React.Component {
         const items = ControllerUtil.convertToAddItems(WorkerTools, model.getBody());
         const top = bBox.y + bBox.h + 15;
         const left = bBox.x;
-        if (TreeUtil.isInitFunction(model) || model.workers.length > 0) {
+        if (TreeUtil.isInitFunction(model) || model.workers.length > 0 || model.lambda) {
             return null;
         }
 
         if (model.viewState.collapsed
             || (!model.viewState.collapsed && TreeUtil.isResource(model) && model.parent.viewState.collapsed)
-            || (TreeUtil.isFunction(model) && model.getName().getValue() === 'new')) {
+            || (TreeUtil.isFunction(model) && model.name.getValue() === 'new')) {
             return null;
         }
         return (
@@ -108,117 +110,69 @@ class RightCtrl extends React.Component {
         this.hideEndpoints = this.hideEndpoints.bind(this);
         this.storeInputReference = this.storeInputReference.bind(this);
         this.onSuggestionsFetchRequested = this.onSuggestionsFetchRequested.bind(this);
+        this.onChange = this.onChange.bind(this);
+        this.renderSuggestion = this.renderSuggestion.bind(this);
         this.state = {
             listEndpoints: false,
             value: '',
             suggestions: [],
+            allSuggestions: [],
         };
-        this.getAllSuggestions = this.getAllSuggestions.bind(this);
     }
 
     // Autosuggest will call this function every time you need to update suggestions.
     // You already implemented this logic above, so just use it.
     onSuggestionsFetchRequested({ value }) {
-        const environment = this.context.editor.environment;
-        const packages = environment.getFilteredPackages([]);
-        const suggestionsMap = {};
-        packages.forEach((pkg) => {
-            const pkgname = pkg.getName();
-            const endpoints = pkg.getEndpoints();
-
-            endpoints.forEach((endpoint) => {
-                const conName = endpoint.getName();
-                // do the match
-                if (value === ''
-                    || pkgname.toLowerCase().includes(value)
-                    || conName.toLowerCase().includes(value)) {
-                    const key = `${pkg.getName()}-${conName}`;
-                    suggestionsMap[key] = {
-                        pkg,
-                        endpoint,
-                        packageName: pkg.getName(),
-                        fullPackageName: pkg.getName(),
-                    };
+        let suggestions = this.state.allSuggestions;
+        if (value !== '') {
+            suggestions = this.state.allSuggestions.filter((pkg) => {
+                if (pkg.endpoint.toLowerCase().includes(value)
+                    || pkg.packageName.toLowerCase().includes(value)) {
+                    return true;
+                } else {
+                    return false;
                 }
             });
-        });
-
-        const suggestions = _.values(suggestionsMap);
-
-        if (value !== '') {
-            suggestions.push({ addNewValue: true });
         }
         this.setState({
             suggestions,
         });
     }
-
-
     storeInputReference(autosuggest) {
         if (autosuggest !== null) {
             this.input = autosuggest.input;
         }
     }
-
     renderSuggestion(suggestion, value) {
-        if (suggestion.addNewValue) {
-            return (
-                <span />
-            );
-        }
         return (<div className='endpoint-item'>
-            <div className='pkg-name'>{suggestion.pkg.getName()}</div>
-            {suggestion.endpoint.getName()}
+            <div className='pkg-name'>{suggestion.packageName}</div>
+            {suggestion.endpoint}
         </div>);
     }
-
     onSuggestionSelected(event, item) {
-        if (item.suggestion.addNewValue) {
-            this.createEndpoint(item.suggestionValue);
-        } else {
-            const existingImports = this.context.astRoot.getImports();
-            if (_.isArray(existingImports)) {
-                try {
-                    const orgName = item.suggestion.pkg.getOrg();
-                    const pkgName = item.suggestion.pkg.getName();
-                    const importFound = existingImports.find((importNode) => {
-                        return importNode.orgName.value === orgName
-                            && importNode.packageName[0].value === pkgName; // TODO: improve to support multipart pkgNames
-                    });
-                    if (!importFound) {
-                        const importNodeCode = `\nimport ${orgName}/${pkgName};`;
-                        const fragment = FragmentUtils.createTopLevelNodeFragment(importNodeCode);
-                        const newImportNode = FragmentUtils.parseFragment(fragment);
-                        this.context.astRoot.addImport(TreeBuilder.build(newImportNode));
-                    }
-                } catch (err) {
-                    log.error('Error while adding import', err);
+        
+        const existingImports = this.context.astRoot.getImports();
+        if (_.isArray(existingImports)) {
+            try {
+                const orgName = item.suggestion.orgName;
+                const pkgName = item.suggestion.packageName;
+                const importFound = existingImports.find((importNode) => {
+                    return importNode.orgName.value === orgName
+                        && importNode.packageName[0].value === pkgName; // TODO: improve to support multipart pkgNames
+                });
+                if (!importFound && `${orgName}/${pkgName}` !== 'ballerina/builtin') {
+                    const importNodeCode = `\nimport ${orgName}/${pkgName};`;
+                    const fragment = FragmentUtils.createTopLevelNodeFragment(importNodeCode);
+                    FragmentUtils.parseFragment(fragment)
+                        .then((newImportNode) => {
+                            this.context.astRoot.addImport(TreeBuilder.build(newImportNode));
+                        });
                 }
+            } catch (err) {
+                log.error('Error while adding import', err);
             }
-            const node = DefaultNodeFactory.createEndpoint(item.suggestion);
-            this.props.model.acceptDrop(node);
         }
-    }
-
-    getAllSuggestions() {
-        const environment = this.context.editor.environment;
-        const packages = environment.getFilteredPackages([]);
-        const suggestionsMap = {};
-        packages.forEach((pkg) => {
-            const pkgname = pkg.getName();
-            const endpoints = pkg.getEndpoints();
-            endpoints.forEach((endpoint) => {
-                const key = `${pkgname}-${endpoint.getName()}`;
-                suggestionsMap[key] = {
-                    pkg,
-                    endpoint,
-                    packageName: pkgname,
-                    fullPackageName: pkgname,
-                };
-            });
-        });
-        const suggestions = _.values(suggestionsMap);
-        return suggestions;
+        DefaultNodeFactory.createEndpoint(item.suggestion).then(node => this.props.model.acceptDrop(node));
     }
 
     getSuggestionValue(suggestion) {
@@ -226,7 +180,42 @@ class RightCtrl extends React.Component {
     }
 
     showEndpoints() {
-        this.setState({ listEndpoints: true, suggestions: this.getAllSuggestions() });
+        // give priority to getEndpoints method
+        // provided via context
+        const getEPs = this.context.getEndpoints
+                        ? this.context.getEndpoints
+                        : getEndpoints;
+        getEPs().then((endpoints) => {
+            const suggestionsMap = {};
+            endpoints.forEach((ep) => {
+                const pkgname = ep.packageName;
+                const endpoint = ep.name;
+                if (endpoint.includes('Listener')) {
+                    return;
+                }
+                const key = `${pkgname}-${endpoint}`;
+                suggestionsMap[key] = {
+                    endpoint,
+                    packageName: pkgname,
+                    fullPackageName: pkgname,
+                    orgName: ep.orgName,
+                };
+            });
+            const suggestions = _.values(suggestionsMap);
+            this.setState({
+                suggestions,
+                allSuggestions: suggestions,
+                listEndpoints: true,
+            });
+        }).catch((e) => {
+            console.error('could not retrieve endpoints');
+        });
+    }
+
+    onChange(event, { newValue, method }) {
+        this.setState({
+            value: newValue,
+        });
     }
 
     hideEndpoints() {
@@ -238,8 +227,6 @@ class RightCtrl extends React.Component {
         const { model } = this.props;
         const { viewState: { bBox } } = model.getBody();
         const items = ControllerUtil.convertToAddItems(LifelineTools, model);
-        // const top = model.viewState.components.defaultWorker.y;
-        // const left = bBox.x + bBox.w;
         const node = this.props.model;
         const y = node.viewState.components.defaultWorker.y - 20;
         const x = calculateLifelineX(node, this.context.config);
@@ -250,7 +237,7 @@ class RightCtrl extends React.Component {
 
         if (node.viewState.collapsed
             || (!node.viewState.collapsed && TreeUtil.isResource(node) && node.parent.viewState.collapsed)
-            || (TreeUtil.isFunction(node) && node.getName().getValue() === 'new')) {
+            || (TreeUtil.isFunction(node) && node.name.getValue() === 'new')) {
             return null;
         }
 
@@ -325,8 +312,8 @@ class RightCtrl extends React.Component {
 RightCtrl.contextTypes = {
     designer: PropTypes.instanceOf(Object),
     config: PropTypes.instanceOf(Object),
-    editor: PropTypes.instanceOf(Object).isRequired,
     astRoot: PropTypes.instanceOf(Object).isRequired,
+    getEndpoints: PropTypes.func,
 };
 
 class ActionBox extends React.Component {
@@ -335,17 +322,17 @@ class ActionBox extends React.Component {
         const { viewState: { bBox } } = model.getBody();
 
         const top = model.viewState.components.defaultWorker.y + 20;
-        const left = bBox.x;
+        const left = bBox.x + ACTION_BOX_POSITION.SINGLE_ACTION_OFFSET;
 
         const onDelete = () => { model.remove(); };
         const onJumptoCodeLine = () => {
-            const { editor } = this.context;
-            editor.goToSource(model);
+            const { goToSource } = this.context;
+            goToSource(model);
         };
 
         return (
             <Toolbox
-                onDelete={onDelete}
+                disableButtons={{ delete: true }}
                 onJumptoCodeLine={onJumptoCodeLine}
                 show
                 style={{
@@ -359,13 +346,7 @@ class ActionBox extends React.Component {
 
 ActionBox.contextTypes = {
     config: PropTypes.instanceOf(Object),
-    editor: PropTypes.shape({
-        isFileOpenedInEditor: PropTypes.func,
-        getEditorByID: PropTypes.func,
-        setActiveEditor: PropTypes.func,
-        getActiveEditor: PropTypes.func,
-        getDefaultContent: PropTypes.func,
-    }).isRequired,
+    goToSource: PropTypes.func.isRequired,
     designer: PropTypes.instanceOf(Object),
 };
 

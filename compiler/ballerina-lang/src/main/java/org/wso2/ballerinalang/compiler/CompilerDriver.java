@@ -19,10 +19,12 @@ package org.wso2.ballerinalang.compiler;
 
 import org.ballerinalang.compiler.CompilerOptionName;
 import org.ballerinalang.compiler.CompilerPhase;
+import org.wso2.ballerinalang.compiler.bir.BIRGen;
 import org.wso2.ballerinalang.compiler.codegen.CodeGenerator;
 import org.wso2.ballerinalang.compiler.desugar.Desugar;
 import org.wso2.ballerinalang.compiler.semantics.analyzer.CodeAnalyzer;
 import org.wso2.ballerinalang.compiler.semantics.analyzer.CompilerPluginRunner;
+import org.wso2.ballerinalang.compiler.semantics.analyzer.DocumentationAnalyzer;
 import org.wso2.ballerinalang.compiler.semantics.analyzer.SemanticAnalyzer;
 import org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolEnter;
 import org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolResolver;
@@ -69,9 +71,11 @@ public class CompilerDriver {
     private final SemanticAnalyzer semAnalyzer;
     private final CodeAnalyzer codeAnalyzer;
     private final TaintAnalyzer taintAnalyzer;
+    private final DocumentationAnalyzer documentationAnalyzer;
     private final CompilerPluginRunner compilerPluginRunner;
     private final Desugar desugar;
     private final CodeGenerator codeGenerator;
+    private final BIRGen birGenerator;
     private final CompilerPhase compilerPhase;
     private final SymbolResolver symResolver;
 
@@ -94,10 +98,12 @@ public class CompilerDriver {
         this.symbolEnter = SymbolEnter.getInstance(context);
         this.semAnalyzer = SemanticAnalyzer.getInstance(context);
         this.codeAnalyzer = CodeAnalyzer.getInstance(context);
+        this.documentationAnalyzer = DocumentationAnalyzer.getInstance(context);
         this.taintAnalyzer = TaintAnalyzer.getInstance(context);
         this.compilerPluginRunner = CompilerPluginRunner.getInstance(context);
         this.desugar = Desugar.getInstance(context);
         this.codeGenerator = CodeGenerator.getInstance(context);
+        this.birGenerator = BIRGen.getInstance(context);
         this.compilerPhase = getCompilerPhase();
         this.symResolver = SymbolResolver.getInstance(context);
     }
@@ -150,6 +156,11 @@ public class CompilerDriver {
         }
 
         codeAnalyze(pkgNode);
+        if (this.stopCompilation(pkgNode, CompilerPhase.DOCUMENTATION_ANALYZE)) {
+            return;
+        }
+
+        documentationAnalyze(pkgNode);
         if (this.stopCompilation(pkgNode, CompilerPhase.TAINT_ANALYZE)) {
             return;
         }
@@ -180,6 +191,10 @@ public class CompilerDriver {
         return this.semAnalyzer.analyze(pkgNode);
     }
 
+    private BLangPackage documentationAnalyze(BLangPackage pkgNode) {
+        return this.documentationAnalyzer.analyze(pkgNode);
+    }
+
     private BLangPackage codeAnalyze(BLangPackage pkgNode) {
         return this.codeAnalyzer.analyze(pkgNode);
     }
@@ -197,6 +212,10 @@ public class CompilerDriver {
     }
 
     public BLangPackage codegen(BLangPackage pkgNode) {
+        if (this.compilerPhase == CompilerPhase.BIR_GEN) {
+            return this.birGenerator.genBIR(pkgNode);
+        }
+
         return this.codeGenerator.generateBALO(pkgNode);
     }
 
@@ -234,8 +253,8 @@ public class CompilerDriver {
         BField cause = symbolTable.errStructType.fields.get(1);
         BUnionType causeType = (BUnionType) cause.type;
         Set<BType> memberTypes = new HashSet<BType>() {{
-                add(symbolTable.errStructType);
-                add(symbolTable.nilType);
+            add(symbolTable.errStructType);
+            add(symbolTable.nilType);
         }};
         BType newCauseType = new BUnionType(causeType.tsymbol, memberTypes, true);
         cause.type = newCauseType;

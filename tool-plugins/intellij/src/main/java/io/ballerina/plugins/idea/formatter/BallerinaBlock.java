@@ -189,6 +189,15 @@ public class BallerinaBlock extends AbstractBlock {
             if (myAlignmentMap.containsKey(myNode)) {
                 alignment = myAlignmentMap.get(myNode);
             }
+        } else if (childElementType == BallerinaTypes.TRANSACTION_PROPERTY_INIT_STATEMENT
+                && parentElementType == BallerinaTypes.TRANSACTION_PROPERTY_INIT_STATEMENT_LIST) {
+            ASTNode treeParent = myNode.getTreeParent().getTreeParent();
+            if (myAlignmentMap.containsKey(treeParent)) {
+                alignment = myAlignmentMap.get(treeParent);
+            } else {
+                alignment = Alignment.createAlignment(true, Alignment.Anchor.LEFT);
+                myAlignmentMap.put(treeParent, alignment);
+            }
         }
         return alignment;
     }
@@ -216,15 +225,17 @@ public class BallerinaBlock extends AbstractBlock {
                 || parentElementType == BallerinaTypes.NAMED_PATTERN
                 || parentElementType == BallerinaTypes.UNNAMED_PATTERN
                 || parentElementType == BallerinaTypes.RECORD_LITERAL
+                || parentElementType == BallerinaTypes.RECORD_FIELD_DEFINITION_LIST
                 || parentElementType == BallerinaTypes.FOREACH_STATEMENT
                 || parentElementType == BallerinaTypes.LOCK_STATEMENT
                 || parentElementType == BallerinaTypes.OBJECT_TYPE_NAME
-                || parentElementType == BallerinaTypes.PRIVATE_OBJECT_FIELDS
-                || parentElementType == BallerinaTypes.PUBLIC_OBJECT_FIELDS
+                || parentElementType == BallerinaTypes.OBJECT_FIELD_DEFINITION
                 || parentElementType == BallerinaTypes.TRY_CATCH_STATEMENT
                 || parentElementType == BallerinaTypes.CATCH_CLAUSE
                 || parentElementType == BallerinaTypes.FINALLY_CLAUSE
                 || parentElementType == BallerinaTypes.SERVICE_BODY
+                || parentElementType == BallerinaTypes.ARRAY_LITERAL
+                || parentElementType == BallerinaTypes.TRANSACTION_CLAUSE
         )) {
             return Indent.getNormalIndent();
         } else if (parentElementType == BallerinaTypes.CALLABLE_UNIT_SIGNATURE ||
@@ -248,7 +259,8 @@ public class BallerinaBlock extends AbstractBlock {
                 || childElementType == BallerinaTypes.VARIABLE_DEFINITION_STATEMENT
                 || childElementType == BallerinaTypes.RESOURCE_DEFINITION)) {
             return Indent.getNormalIndent();
-        } else if (childElementType == BallerinaTypes.FIELD_DEFINITION) {
+        } else if (childElementType == BallerinaTypes.FIELD_DEFINITION ||
+                childElementType == BallerinaTypes.RECORD_REST_FIELD_DEFINITION) {
             return Indent.getNormalIndent();
         } else if (childElementType == BallerinaTypes.INVOCATION_ARG_LIST) {
             return Indent.getIndent(Indent.Type.NORMAL, true, true);
@@ -271,16 +283,18 @@ public class BallerinaBlock extends AbstractBlock {
             return Indent.getNormalIndent();
         } else if (childElementType == BallerinaTypes.BINARY_ADD_SUB_EXPRESSION
                 || childElementType == BallerinaTypes.BINARY_DIV_MUL_MOD_EXPRESSION
-                || childElementType == BallerinaTypes.BINARY_POW_EXPRESSION
                 || childElementType == BallerinaTypes.BINARY_AND_EXPRESSION
                 || childElementType == BallerinaTypes.BINARY_OR_EXPRESSION
+                || childElementType == BallerinaTypes.BITWISE_EXPRESSION
+                || childElementType == BallerinaTypes.BITWISE_SHIFT_EXPRESSION
                 || childElementType == BallerinaTypes.BINARY_COMPARE_EXPRESSION
                 ) {
             if (!(parentElementType == BallerinaTypes.BINARY_ADD_SUB_EXPRESSION
                     || parentElementType == BallerinaTypes.BINARY_DIV_MUL_MOD_EXPRESSION
-                    || parentElementType == BallerinaTypes.BINARY_POW_EXPRESSION
                     || parentElementType == BallerinaTypes.BINARY_AND_EXPRESSION
                     || parentElementType == BallerinaTypes.BINARY_OR_EXPRESSION
+                    || parentElementType == BallerinaTypes.BITWISE_EXPRESSION
+                    || parentElementType == BallerinaTypes.BITWISE_SHIFT_EXPRESSION
                     || parentElementType == BallerinaTypes.BINARY_COMPARE_EXPRESSION
                     || parentElementType == BallerinaTypes.UNARY_EXPRESSION
             )) {
@@ -289,6 +303,17 @@ public class BallerinaBlock extends AbstractBlock {
         } else if (childElementType == BallerinaTypes.VARIABLE_REFERENCE_EXPRESSION &&
                 (parentElementType == BallerinaTypes.ASSIGNMENT_STATEMENT ||
                         parentElementType == BallerinaTypes.VARIABLE_DEFINITION_STATEMENT)) {
+            return Indent.getNormalIndent();
+        } else if ((childElementType == BallerinaTypes.LAMBDA_FUNCTION_EXPRESSION
+                || childElementType == BallerinaTypes.ARROW_FUNCTION_EXPRESSION)
+                && parentElementType == BallerinaTypes.VARIABLE_DEFINITION_STATEMENT) {
+            return Indent.getNormalIndent();
+        } else if ((childElementType == BallerinaTypes.TABLE_COLUMN_DEFINITION
+                || childElementType == BallerinaTypes.TABLE_DATA_ARRAY)
+                && parentElementType == BallerinaTypes.TABLE_LITERAL) {
+            return Indent.getNormalIndent();
+        } else if (childElementType == BallerinaTypes.TABLE_DATA_LIST
+                && (parentElementType == BallerinaTypes.TABLE_DATA_ARRAY)) {
             return Indent.getNormalIndent();
         }
         return Indent.getNoneIndent();
@@ -358,9 +383,7 @@ public class BallerinaBlock extends AbstractBlock {
             childIndent = Indent.getNormalIndent();
         } else if (myNode.getElementType() == BallerinaTypes.OBJECT_TYPE_NAME) {
             childIndent = Indent.getNormalIndent();
-        } else if (myNode.getElementType() == BallerinaTypes.PUBLIC_OBJECT_FIELDS) {
-            childIndent = Indent.getNormalIndent();
-        } else if (myNode.getElementType() == BallerinaTypes.PRIVATE_OBJECT_FIELDS) {
+        } else if (myNode.getElementType() == BallerinaTypes.OBJECT_FIELD_DEFINITION) {
             childIndent = Indent.getNormalIndent();
         } else if (myNode.getElementType() == BallerinaTypes.FOREVER_STATEMENT) {
             childIndent = Indent.getNormalIndent();

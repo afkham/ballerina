@@ -17,11 +17,11 @@
  */
 package org.ballerinalang.testerina.util;
 
+import org.ballerinalang.launcher.LauncherUtils;
 import org.ballerinalang.testerina.core.BTestRunner;
 import org.ballerinalang.testerina.core.TesterinaConstants;
 import org.ballerinalang.testerina.core.TesterinaRegistry;
 import org.ballerinalang.toml.model.Manifest;
-import org.ballerinalang.toml.parser.ManifestProcessor;
 import org.ballerinalang.util.BLangConstants;
 import org.ballerinalang.util.codegen.PackageInfo;
 import org.ballerinalang.util.codegen.ProgramFile;
@@ -31,7 +31,7 @@ import org.ballerinalang.util.program.BLangFunctions;
 import org.wso2.ballerinalang.compiler.FileSystemProjectDirectory;
 import org.wso2.ballerinalang.compiler.SourceDirectory;
 import org.wso2.ballerinalang.compiler.util.Names;
-import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
+import org.wso2.ballerinalang.util.TomlParserUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,6 +41,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -134,26 +135,11 @@ public class Utils {
      * Set manifest configurations.
      */
     public static void setManifestConfigs() {
-        Manifest manifest = readManifestConfigurations();
+        Manifest manifest = TomlParserUtils.getManifest(Paths.get(System.getProperty("user.dir")));
         String orgName = manifest.getName();
         String version = manifest.getVersion();
         TesterinaRegistry.getInstance().setOrgName(orgName);
         TesterinaRegistry.getInstance().setVersion(version);
-    }
-
-    /**
-     * Read the manifest.
-     *
-     * @return manifest configuration object
-     */
-    private static Manifest readManifestConfigurations() {
-        String tomlFilePath = Paths.get(".").toAbsolutePath().normalize().resolve
-                (ProjectDirConstants.MANIFEST_FILE_NAME).toString();
-        try {
-            return ManifestProcessor.parseTomlContentFromFile(tomlFilePath);
-        } catch (IOException e) {
-            return new Manifest();
-        }
     }
 
     /**
@@ -171,6 +157,8 @@ public class Utils {
             outStream.println();
             return;
         }
+
+        LauncherUtils.loadConfigurations(sourceRootPath, new HashMap<>(), null, false);
 
         Path[] paths = sourceFileList.stream().map(Paths::get).toArray(Path[]::new);
         Utils.setManifestConfigs();

@@ -38,9 +38,9 @@ import io.ballerina.plugins.idea.completion.inserthandlers.ParenthesisWithSemico
 import io.ballerina.plugins.idea.completion.inserthandlers.SemiolonInsertHandler;
 import io.ballerina.plugins.idea.psi.BallerinaAnyIdentifierName;
 import io.ballerina.plugins.idea.psi.BallerinaCallableUnitSignature;
+import io.ballerina.plugins.idea.psi.BallerinaChannelDefinition;
 import io.ballerina.plugins.idea.psi.BallerinaFormalParameterList;
 import io.ballerina.plugins.idea.psi.BallerinaFunctionDefinition;
-import io.ballerina.plugins.idea.psi.BallerinaObjectCallableUnitSignature;
 import io.ballerina.plugins.idea.psi.BallerinaObjectFunctionDefinition;
 import io.ballerina.plugins.idea.psi.BallerinaObjectInitializer;
 import io.ballerina.plugins.idea.psi.BallerinaObjectInitializerParameterList;
@@ -91,6 +91,7 @@ public class BallerinaCompletionUtils {
     private static final LookupElementBuilder SERVICE;
     private static final LookupElementBuilder TYPE;
     private static final LookupElementBuilder XMLNS;
+    private static final LookupElement CHANNEL;
 
     // Simple types
     private static final LookupElementBuilder BLOB;
@@ -167,6 +168,7 @@ public class BallerinaCompletionUtils {
         SERVICE = createKeywordLookupElement("service");
         TYPE = createKeywordLookupElement("type");
         XMLNS = createKeywordLookupElement("xmlns");
+        CHANNEL = createLookupElement("channel");
 
         BLOB = createLookupElement("blob");
         BOOLEAN = createLookupElement("boolean");
@@ -425,6 +427,7 @@ public class BallerinaCompletionUtils {
         // Note - Other top level definitions are added as live templates.
         resultSet.addElement(PrioritizedLookupElement.withPriority(ANNOTATION, REFERENCE_TYPES_PRIORITY));
         resultSet.addElement(PrioritizedLookupElement.withPriority(TYPE, REFERENCE_TYPES_PRIORITY));
+        resultSet.addElement(PrioritizedLookupElement.withPriority(CHANNEL, REFERENCE_TYPES_PRIORITY));
     }
 
     static void addExpressionKeywordsAsLookups(@NotNull CompletionResultSet resultSet) {
@@ -564,7 +567,8 @@ public class BallerinaCompletionUtils {
                                                             @NotNull PsiElement owner,
                                                             @Nullable InsertHandler<LookupElement> insertHandler) {
 
-        BallerinaObjectCallableUnitSignature objectCallableUnitSignature = definition.getObjectCallableUnitSignature();
+        BallerinaCallableUnitSignature objectCallableUnitSignature = definition.getCallableUnitSignature();
+        // We check and confirm that the objectCallableUnitSignature != null before calling the method.
         BallerinaAnyIdentifierName anyIdentifierName = objectCallableUnitSignature.getAnyIdentifierName();
         PsiElement identifier = anyIdentifierName.getIdentifier();
         LookupElementBuilder builder = LookupElementBuilder.createWithSmartPointer(identifier.getText(), identifier)
@@ -600,6 +604,16 @@ public class BallerinaCompletionUtils {
         } else {
             builder = builder.withTypeText(type);
         }
+
+        return PrioritizedLookupElement.withPriority(builder, GLOBAL_VARIABLE_PRIORITY);
+    }
+
+    @NotNull
+    public static LookupElement createChannelVariableLookupElement(@NotNull BallerinaChannelDefinition definition,
+            @Nullable String type) {
+        LookupElementBuilder builder = LookupElementBuilder.createWithSmartPointer(definition.getIdentifier().getText(),
+                definition).withIcon(definition.getIcon(Iconable.ICON_FLAG_VISIBILITY));
+        builder = builder.withTypeText("Variable");
 
         return PrioritizedLookupElement.withPriority(builder, GLOBAL_VARIABLE_PRIORITY);
     }
@@ -689,7 +703,7 @@ public class BallerinaCompletionUtils {
                                                          @NotNull PsiElement ownerName,
                                                          @NotNull String type, @Nullable String defaultValue,
                                                          @Nullable InsertHandler<LookupElement> insertHandler,
-                                                         boolean isPublic) {
+                                                         boolean isPublic, boolean isPrivate) {
         LookupElementBuilder lookupElementBuilder = LookupElementBuilder.createWithSmartPointer(fieldName.getText(),
                 fieldName).withInsertHandler(insertHandler).withTypeText(type).bold();
 

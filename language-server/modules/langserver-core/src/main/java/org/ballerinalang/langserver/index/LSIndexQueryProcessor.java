@@ -31,6 +31,7 @@ import org.ballerinalang.langserver.index.dto.BPackageSymbolDTO;
 import org.ballerinalang.langserver.index.dto.BRecordTypeSymbolDTO;
 import org.ballerinalang.langserver.index.dto.OtherTypeSymbolDTO;
 import org.ballerinalang.langserver.index.dto.PackageIDDTO;
+import org.eclipse.lsp4j.CompletionItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -183,9 +184,11 @@ public class LSIndexQueryProcessor {
 
     /**
      * Batch Insert List of BInvokable Symbols.
+     *
      * @param bFunctionDTOs     List of BFunctionDTOs
      * @return {@link List}     List of Generated Keys
      * @throws SQLException     Exception While Insert
+     * @throws IOException      Exception while Insert
      */
     public List<Integer> batchInsertBLangFunctions(List<BFunctionDTO> bFunctionDTOs)
          throws SQLException, IOException {
@@ -210,6 +213,7 @@ public class LSIndexQueryProcessor {
      * @param recordDTOs        List of BRecordTypeSymbolDTOs
      * @return {@link List}     List of Generated Keys
      * @throws SQLException     Exception While Insert
+     * @throws IOException      Exception while Insert
      */
     public List<Integer> batchInsertBLangRecords(List<BRecordTypeSymbolDTO> recordDTOs) throws SQLException,
             IOException {
@@ -234,6 +238,7 @@ public class LSIndexQueryProcessor {
      * @param otherTypeSymbolDTOs   list of BRecordTypeSymbolDTOs
      * @return {@link List}         List of Generated Keys
      * @throws SQLException         Exception While Insert
+     * @throws IOException          Exception while Insert
      */
     public List<Integer> batchInsertOtherTypes(List<OtherTypeSymbolDTO> otherTypeSymbolDTOs) throws SQLException,
             IOException {
@@ -257,6 +262,7 @@ public class LSIndexQueryProcessor {
      * @param objectDTOs        List of BObjectDTOs
      * @return {@link List}     List of Generated Keys
      * @throws SQLException     Exception While Insert
+     * @throws IOException      Exception while Insert
      */
     public List<Integer> batchInsertBLangObjects(List<BObjectTypeSymbolDTO> objectDTOs) throws SQLException,
             IOException {
@@ -283,6 +289,7 @@ public class LSIndexQueryProcessor {
      * @param endpoints         list of Endpoint IDs
      * @param actionHolders     list of Action holder IDs
      * @return {@link List}     List of Generated Keys
+     * @throws SQLException     Exception while update
      */
     public List<Integer> batchUpdateActionHolderId(List<Integer> endpoints, List<Integer> actionHolders)
             throws SQLException {
@@ -355,6 +362,7 @@ public class LSIndexQueryProcessor {
      * Get a List of RecordDAOs based on the access type either private or public.
      * @param name                  Package Name
      * @param orgName               Org Name
+     * @param isPrivate             Private record or not
      * @return {@link RecordDAO}    List of RecordDAOs
      * @throws SQLException         Exception While Insert
      */
@@ -402,6 +410,7 @@ public class LSIndexQueryProcessor {
      * Get a List of ObjectDAOs based on the access type either private or public.
      * @param name                  Package Name
      * @param orgName               Org Name
+     * @param isPrivate             Private Object or not                             
      * @return {@link ObjectDAO}    List of FunctionDAOs
      * @throws SQLException         Exception While Insert
      */
@@ -494,5 +503,40 @@ public class LSIndexQueryProcessor {
             logger.error("Error getting the Generated Keys: [" + e.getMessage() + "]");
         }
         return generatedKeys;
+    }
+
+    /**
+     * Get all actions of a given endpoint.
+     * @param pkgName           Package name of the endpoint
+     * @param type              Type name of the endpoint
+     * @return                  List of Endpoints
+     * @throws SQLException     Exception while query
+     */
+    public List<BFunctionDTO> getActions(String pkgName, String type) throws SQLException {
+        List<BFunctionDTO> packages = new ArrayList<>();
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
+        try {
+            statement = connection.prepareStatement(Constants.GET_ALL_ACTIONS);
+            statement.setString(1, pkgName);
+            statement.setString(2, type);
+            resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                packages.add(new BFunctionDTO(
+                        Integer.parseInt(resultSet.getString(1)),
+                        Integer.parseInt(resultSet.getString(2)),
+                        resultSet.getString(3),
+                        new CompletionItem() // put an empty completion for now.
+                ));
+            }
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (resultSet != null) {
+                resultSet.close();
+            }
+        }
+        return packages;
     }
 }

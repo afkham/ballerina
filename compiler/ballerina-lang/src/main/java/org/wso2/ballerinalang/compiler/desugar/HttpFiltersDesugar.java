@@ -24,6 +24,7 @@ import org.wso2.ballerinalang.compiler.semantics.model.SymbolEnv;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolTable;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BObjectTypeSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BOperatorSymbol;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BArrayType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BField;
@@ -61,7 +62,6 @@ import static org.wso2.ballerinalang.compiler.util.Names.GEN_VAR_PREFIX;
 /**
  * This class injects the code that invokes the http filters to the first lines of an http resource.
  * The code injected is as follows:
- * <p>
  * <blockquote><pre>
  *          http:FilterContext _$$_filterContext = new (serviceTypeDef, "serviceName", "resourceName");
  *          caller.conn.filterContext = _$$_filterContext;
@@ -71,7 +71,6 @@ import static org.wso2.ballerinalang.compiler.util.Names.GEN_VAR_PREFIX;
  *              }
  *          }
  * </pre></blockquote>
- * <p>
  * The second line in this code stores the _$$_filterContext reference to the http connector to be used when calling
  * the filterResponse method of the filters
  *
@@ -88,10 +87,12 @@ public class HttpFiltersDesugar {
     private static final String HTTP_FILTERS_VAR = "filters";
     private static final String HTTP_FILTER_VAR = "filter";
     private static final String HTTP_FILTERCONTEXT_VAR = "filterContext";
+    private static final String FILTER_REQUEST_FUNCTION = "filterRequest";
 
     private static final String ORG_NAME = "ballerina";
     private static final String PACKAGE_NAME = "http";
     private static final String ENDPOINT_TYPE_NAME = "Listener";
+    private static final String ORG_SEPARATOR = "/";
 
     private static final int ENDPOINT_PARAM_NUM = 0;
     private static final int REQUEST_PARAM_NUM = 1;
@@ -99,8 +100,7 @@ public class HttpFiltersDesugar {
     private static final int FILTER_CONTEXT_FIELD_INDEX = 1;
     private static final int ENDPOINT_CONFIG_INDEX = 4;
     private static final int FILTERS_CONFIG_INDEX = 6;
-
-
+    
     private static final CompilerContext.Key<HttpFiltersDesugar> HTTP_FILTERS_DESUGAR_KEY =
             new CompilerContext.Key<>();
 
@@ -128,7 +128,7 @@ public class HttpFiltersDesugar {
      */
     void invokeFilters(BLangResource resourceNode, SymbolEnv env) {
         BLangVariable endpoint;
-        if (resourceNode.requiredParams.size() == 2) {
+        if (resourceNode.requiredParams.size() >= 2) {
             endpoint = resourceNode.requiredParams.get(0);
             if (ORG_NAME.equals(endpoint.type.tsymbol.pkgID.orgName.value) && PACKAGE_NAME.equals(
                     endpoint.type.tsymbol.pkgID.name.value) && ENDPOINT_TYPE_NAME.equals(
@@ -150,7 +150,7 @@ public class HttpFiltersDesugar {
      * @param env          the symbol environment.
      */
     private BLangVariable addFilterContextCreation(BLangResource resourceNode, SymbolEnv env) {
-        BLangIdentifier pkgAlias = ASTBuilderUtil.createIdentifier(resourceNode.pos, "http");
+        BLangIdentifier pkgAlias = ASTBuilderUtil.createIdentifier(resourceNode.pos, getPackageAlias(env));
         BLangUserDefinedType filterContextUserDefinedType = new BLangUserDefinedType(
                 pkgAlias, ASTBuilderUtil.createIdentifier(resourceNode.pos, "FilterContext"));
         BType filterContextType = symResolver.resolveTypeNode(filterContextUserDefinedType, env);
@@ -200,6 +200,18 @@ public class HttpFiltersDesugar {
         filterContextVar.typeNode = filterContextUserDefinedType;
         resourceNode.body.stmts.add(0, ASTBuilderUtil.createVariableDef(resourceNode.pos, filterContextVar));
         return filterContextVar;
+    }
+
+    /**
+     * Get the alias name of the http import.
+     *
+     * @param env the symbol environment.
+     * @return the alias name.
+     */
+    private String getPackageAlias(SymbolEnv env) {
+        return env.enclPkg.imports.stream()
+                .filter(imports -> imports.symbol.pkgID.toString().equals(ORG_NAME + ORG_SEPARATOR + PACKAGE_NAME))
+                .map(importPackage -> importPackage.alias.value).findFirst().orElse(PACKAGE_NAME);
     }
 
     /**
@@ -290,7 +302,7 @@ public class HttpFiltersDesugar {
         requestRef.symbol = requestVar.symbol;
 
         BLangInvocation filterRequestInvocation = (BLangInvocation) TreeBuilder.createInvocationNode();
-        filterRequestInvocation.symbol = ((BObjectTypeSymbol) filterType.tsymbol).attachedFuncs.get(1).symbol;
+        filterRequestInvocation.symbol = getFilterRequestFuncSymbol(filterType);
         filterRequestInvocation.pos = resourceNode.pos;
         filterRequestInvocation.requiredArgs.add(callerRef);
         filterRequestInvocation.requiredArgs.add(requestRef);
@@ -334,5 +346,11 @@ public class HttpFiltersDesugar {
         List<E> list = new ArrayList<>();
         list.add(val);
         return list;
+    }
+
+    private BSymbol getFilterRequestFuncSymbol(BType filterType) {
+        return ((BObjectTypeSymbol) filterType.tsymbol).attachedFuncs.stream().filter(func -> {
+            return FILTER_REQUEST_FUNCTION.equals(func.funcName.value);
+        }).findFirst().get().symbol;
     }
 }

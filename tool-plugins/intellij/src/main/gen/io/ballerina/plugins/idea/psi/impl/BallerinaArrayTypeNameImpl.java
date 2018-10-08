@@ -28,7 +28,7 @@ import io.ballerina.plugins.idea.psi.*;
 
 public class BallerinaArrayTypeNameImpl extends BallerinaTypeNameImpl implements BallerinaArrayTypeName {
 
-  public BallerinaArrayTypeNameImpl(ASTNode node) {
+  public BallerinaArrayTypeNameImpl(@NotNull ASTNode node) {
     super(node);
   }
 
@@ -39,6 +39,18 @@ public class BallerinaArrayTypeNameImpl extends BallerinaTypeNameImpl implements
   public void accept(@NotNull PsiElementVisitor visitor) {
     if (visitor instanceof BallerinaVisitor) accept((BallerinaVisitor)visitor);
     else super.accept(visitor);
+  }
+
+  @Override
+  @NotNull
+  public List<BallerinaIntegerLiteral> getIntegerLiteralList() {
+    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaIntegerLiteral.class);
+  }
+
+  @Override
+  @NotNull
+  public List<BallerinaSealedLiteral> getSealedLiteralList() {
+    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaSealedLiteral.class);
   }
 
   @Override

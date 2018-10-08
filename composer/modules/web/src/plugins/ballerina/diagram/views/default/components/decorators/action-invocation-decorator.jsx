@@ -19,16 +19,13 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import _ from 'lodash';
 import breakpointHoc from 'src/plugins/debugger/views/BreakpointHoc';
-import ActionBox from './action-box';
 import SimpleBBox from './../../../../../model/view/simple-bounding-box';
 import './statement-decorator.css';
 import Breakpoint from './breakpoint';
-import ActiveArbiter from './active-arbiter';
 import Node from '../../../../../model/tree/node';
-import DropZone from '../../../../../drag-drop/DropZone';
 import ArrowDecorator from './arrow-decorator';
-import StatementPropertyItemSelector from './../utils/statement-property-item-selector';
 import TreeUtil from '../../../../../model/tree-util';
+import SizingUtils from '../../sizing-util';
 import splitVariableDefByLambda from '../../../../../model/lambda-util';
 import { getComponentForNodeArray } from '../../../../diagram-util';
 
@@ -57,8 +54,6 @@ class InvocationDecorator extends React.Component {
      */
     constructor(props) {
         super();
-        this.setActionVisibilityFalse = this.setActionVisibility.bind(this, false);
-        this.setActionVisibilityTrue = this.setActionVisibility.bind(this, true);
 
         this.state = {
             active: 'hidden',
@@ -75,38 +70,10 @@ class InvocationDecorator extends React.Component {
     }
 
     /**
-     * Removes self on delete button click.
-     * @returns {void}
-     */
-    onDelete() {
-        this.props.model.remove();
-    }
-
-    /**
-     * Navigates to code line in the source view from the design view node
-     */
-    onJumpToCodeLine() {
-        const { editor } = this.context;
-        editor.goToSource(this.props.model);
-    }
-
-    /**
      * Call-back for when a new value is entered via expression editor.
      */
     onUpdate() {
         // TODO: implement validate logic.
-    }
-
-    /**
-     * Shows the action box.
-     * @param {boolean} show - Display action box if true or else hide.
-     */
-    setActionVisibility(show) {
-        if (show) {
-            this.context.activeArbiter.readyToActivate(this);
-        } else {
-            this.context.activeArbiter.readyToDeactivate(this);
-        }
     }
 
     /**
@@ -135,20 +102,13 @@ class InvocationDecorator extends React.Component {
      * @returns {XML} rendered component.
      */
     render() {
-        const { viewState, expression, isBreakpoint } = this.props;
+        const { viewState, model, isBreakpoint } = this.props;
         const statementBox = viewState.components['statement-box'];
-        const dropZone = viewState.components['drop-zone'];
-        const text = viewState.components.text;
-
-        const actionBoxBbox = new SimpleBBox();
-
         const { designer } = this.context;
-        actionBoxBbox.w = (3 * designer.config.actionBox.width) / 4;
-        actionBoxBbox.h = designer.config.actionBox.height;
-        actionBoxBbox.x = statementBox.x + ((statementBox.w - actionBoxBbox.w) / 2);
-        actionBoxBbox.y = statementBox.y + statementBox.h + designer.config.actionBox.padding.top;
 
+        let expression = viewState.parameterText;
         let tooltip = null;
+
         if (viewState.fullExpression !== expression) {
             const fullExp = _.trimEnd(this.props.viewState.fullExpression, ';');
             tooltip = (<title>{fullExp}</title>);
@@ -158,6 +118,7 @@ class InvocationDecorator extends React.Component {
         const dropDownItemMeta = [];
         const backwardArrowStart = {};
         const backwardArrowEnd = {};
+
         if (viewState.isActionInvocation) {
             // TODO: Need to remove the unique by filter whne the lang server item resolver is implemented
             dropDownItems = _.uniqBy(TreeUtil.getAllVisibleEndpoints(this.props.model.parent), (item) => {
@@ -187,6 +148,44 @@ class InvocationDecorator extends React.Component {
                                 + designer.config.actionInvocationStatement.timelineHeight;
                 backwardArrowEnd.x = statementBox.x + (designer.config.actionInvocationStatement.width / 2);
                 backwardArrowEnd.y = backwardArrowStart.y;
+
+                if (TreeUtil.isVariableDef(model) ||
+                    TreeUtil.isAssignment(model) ||
+                    TreeUtil.isExpressionStatement(model)) {
+                    let exp;
+
+                    if (TreeUtil.isVariableDef(model)) {
+                        exp = model.getVariable().getInitialExpression();
+                    } else {
+                        exp = model.getExpression();
+                    }
+
+                    if (TreeUtil.isMatchExpression(exp) || TreeUtil.isCheckExpr(exp)) {
+                        exp = exp.getExpression();
+                    }
+
+                    const functionNameWidth = new SizingUtils().getTextWidth(exp.getFunctionName(), 0);
+                    const nodeWidth = viewState.components.text.x -
+                        (designer.config.statement.padding.left + designer.config.statement.padding.right);
+
+                    if (functionNameWidth.w > nodeWidth) {
+                        const truncatedFunctionNameWidth = new SizingUtils().getTextWidth(
+                            exp.getFunctionName(), 0, nodeWidth);
+
+                        expression = (<tspan>
+                            {truncatedFunctionNameWidth.text}
+                        </tspan>);
+                    } else {
+                        const displayExpressionWidth = nodeWidth - functionNameWidth.w;
+                        const expressionDisplayText = new SizingUtils().getTextWidth(model.viewState.parameterText, 0,
+                            displayExpressionWidth).text;
+
+                        expression = (<tspan>
+                            {exp.getFunctionName()}
+                            (<tspan className='client-responder-parameter-text'>{expressionDisplayText}</tspan>)
+                        </tspan>);
+                    }
+                }
             }
         }
 
@@ -205,8 +204,6 @@ class InvocationDecorator extends React.Component {
         return (
             <g
                 className='statement'
-                onMouseOut={this.setActionVisibilityFalse}
-                onMouseOver={this.setActionVisibilityTrue}
                 ref={(group) => {
                     this.myRoot = group;
                 }}
@@ -236,14 +233,6 @@ class InvocationDecorator extends React.Component {
                 >
                     {tooltip}
                 </rect>
-                <ActionBox
-                    bBox={actionBoxBbox}
-                    show={this.state.active}
-                    isBreakpoint={isBreakpoint}
-                    onDelete={() => this.onDelete()}
-                    onJumptoCodeLine={() => this.onJumpToCodeLine()}
-                    onBreakpointClick={() => this.props.onBreakpointClick()}
-                />
                 <g>
                     <ArrowDecorator
                         start={invocationComponent.start}
@@ -278,13 +267,6 @@ InvocationDecorator.propTypes = {
     children: PropTypes.node,
     model: PropTypes.instanceOf(Node).isRequired,
     expression: PropTypes.string.isRequired,
-    editorOptions: PropTypes.shape({
-        propertyType: PropTypes.string,
-        key: PropTypes.string,
-        model: PropTypes.instanceOf(Object),
-        getterMethod: PropTypes.func,
-        setterMethod: PropTypes.func,
-    }),
     onBreakpointClick: PropTypes.func.isRequired,
     isBreakpoint: PropTypes.bool.isRequired,
 };
@@ -293,7 +275,6 @@ InvocationDecorator.contextTypes = {
     getOverlayContainer: PropTypes.instanceOf(Object).isRequired,
     editor: PropTypes.instanceOf(Object).isRequired,
     environment: PropTypes.instanceOf(Object).isRequired,
-    activeArbiter: PropTypes.instanceOf(ActiveArbiter).isRequired,
     mode: PropTypes.string,
     designer: PropTypes.instanceOf(Object),
 };

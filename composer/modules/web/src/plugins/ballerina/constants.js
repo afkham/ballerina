@@ -36,6 +36,7 @@ export const TOOLS = {
 export const DIALOGS = {
     OPEN_PROGRAM_DIR_CONFIRM: 'composer.dialog.ballerina.open-program-dir-confirm',
     FIX_PACKAGE_NAME_OR_PATH_CONFIRM: 'composer.dialog.ballerina.fix-package-name-or-path-confirm',
+    INVALID_SWAGGER_DIALOG: 'composer.dialog.ballerina.invalid-swagger-dialog',
 };
 
 export const EVENTS = {
@@ -47,6 +48,10 @@ export const EVENTS = {
 export const RESPOSIVE_MENU_TRIGGER = {
     ICON_MODE: 650,
     HIDDEN_MODE: 460,
+};
+
+export const ACTION_BOX_POSITION = {
+    SINGLE_ACTION_OFFSET: 12,
 };
 
 export const VIEWS = {

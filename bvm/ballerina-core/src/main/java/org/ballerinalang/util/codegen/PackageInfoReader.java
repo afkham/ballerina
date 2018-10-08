@@ -46,9 +46,11 @@ import org.ballerinalang.model.values.BString;
 import org.ballerinalang.model.values.BValue;
 import org.ballerinalang.natives.NativeUnitLoader;
 import org.ballerinalang.util.codegen.Instruction.InstructionCALL;
+import org.ballerinalang.util.codegen.Instruction.InstructionCompensate;
 import org.ballerinalang.util.codegen.Instruction.InstructionFORKJOIN;
 import org.ballerinalang.util.codegen.Instruction.InstructionIteratorNext;
 import org.ballerinalang.util.codegen.Instruction.InstructionLock;
+import org.ballerinalang.util.codegen.Instruction.InstructionScopeEnd;
 import org.ballerinalang.util.codegen.Instruction.InstructionVCALL;
 import org.ballerinalang.util.codegen.Instruction.InstructionWRKSendReceive;
 import org.ballerinalang.util.codegen.attributes.AttributeInfo;
@@ -61,6 +63,7 @@ import org.ballerinalang.util.codegen.attributes.ErrorTableAttributeInfo;
 import org.ballerinalang.util.codegen.attributes.LineNumberTableAttributeInfo;
 import org.ballerinalang.util.codegen.attributes.LocalVariableAttributeInfo;
 import org.ballerinalang.util.codegen.attributes.ParamDefaultValueAttributeInfo;
+import org.ballerinalang.util.codegen.attributes.ParameterAttributeInfo;
 import org.ballerinalang.util.codegen.attributes.TaintTableAttributeInfo;
 import org.ballerinalang.util.codegen.attributes.VarTypeCountAttributeInfo;
 import org.ballerinalang.util.codegen.cpentries.ActionRefCPEntry;
@@ -97,6 +100,7 @@ import static org.ballerinalang.util.BLangConstants.CONSTRUCTOR_FUNCTION_SUFFIX;
 import static org.ballerinalang.util.BLangConstants.INIT_FUNCTION_SUFFIX;
 import static org.ballerinalang.util.BLangConstants.START_FUNCTION_SUFFIX;
 import static org.ballerinalang.util.BLangConstants.STOP_FUNCTION_SUFFIX;
+import static org.ballerinalang.util.codegen.InstructionCodes.COMPENSATE;
 
 /**
  * Reads a Ballerina {@code PackageInfo} structure from a file.
@@ -679,8 +683,9 @@ public class PackageInfoReader {
 
         int globalMemIndex = dataInStream.readInt();
 
+        BType type = getBTypeFromDescriptor(packageInfo, sigUTF8CPEntry.getValue());
         PackageVarInfo packageVarInfo = new PackageVarInfo(nameCPIndex, nameUTF8CPEntry.getValue(),
-                sigCPIndex, sigUTF8CPEntry.getValue(), globalMemIndex);
+                sigCPIndex, globalMemIndex, type);
 
         // Read attributes
         readAttributeInfoEntries(packageInfo, constantPool, packageVarInfo);
@@ -721,6 +726,8 @@ public class PackageInfoReader {
         int flags = dataInStream.readInt();
         boolean nativeFunc = Flags.isFlagOn(flags, Flags.NATIVE);
         functionInfo.setNative(nativeFunc);
+
+        functionInfo.setPublic(Flags.isFlagOn(flags, Flags.PUBLIC));
 
         String uniqueFuncName;
         boolean attached = Flags.isFlagOn(flags, Flags.ATTACHED);
@@ -911,7 +918,7 @@ public class PackageInfoReader {
 
 
     public void readAttributeInfoEntries(PackageInfo packageInfo, ConstantPool constantPool,
-                                          AttributeInfoPool attributeInfoPool) throws IOException {
+                                         AttributeInfoPool attributeInfoPool) throws IOException {
         int attributesCount = dataInStream.readShort();
         for (int k = 0; k < attributesCount; k++) {
             AttributeInfo attributeInfo = getAttributeInfo(packageInfo, constantPool);
@@ -992,7 +999,7 @@ public class PackageInfoReader {
                 return localVarAttrInfo;
             case LINE_NUMBER_TABLE_ATTRIBUTE:
                 LineNumberTableAttributeInfo lnNoTblAttrInfo = new LineNumberTableAttributeInfo(attribNameCPIndex);
-                int lineNoInfoCount = dataInStream.readShort();
+                int lineNoInfoCount = dataInStream.readInt();
                 for (int i = 0; i < lineNoInfoCount; i++) {
                     LineNumberInfo lineNumberInfo = getLineNumberInfo(constantPool);
                     lnNoTblAttrInfo.addLineNumberInfo(lineNumberInfo);
@@ -1015,11 +1022,11 @@ public class PackageInfoReader {
                 }
                 return paramDefaultValAttrInfo;
             case PARAMETERS_ATTRIBUTE:
-                // Read and discard required param count, defaultable param and rest param count 
-                dataInStream.readInt();
-                dataInStream.readInt();
-                dataInStream.readInt();
-                return null;
+                ParameterAttributeInfo parameterAttributeInfo = new ParameterAttributeInfo(attribNameCPIndex);
+                parameterAttributeInfo.requiredParamsCount = dataInStream.readInt();
+                parameterAttributeInfo.defaultableParamsCount = dataInStream.readInt();
+                parameterAttributeInfo.restParamCount = dataInStream.readInt();
+                return parameterAttributeInfo;
             case TAINT_TABLE:
                 TaintTableAttributeInfo taintTableAttributeInfo = new TaintTableAttributeInfo(attribNameCPIndex);
                 taintTableAttributeInfo.rowCount = dataInStream.readShort();
@@ -1050,15 +1057,17 @@ public class PackageInfoReader {
         for (int i = 0; i < noOfParamInfoEntries; i++) {
             int nameCPIndex = dataInStream.readInt();
             String name = getUTF8EntryValue(nameCPIndex, constantPool);
-            int typeSigCPIndex = dataInStream.readInt();
-            String typeSig = getUTF8EntryValue(typeSigCPIndex, constantPool);
-            int paramKindCPIndex = dataInStream.readInt();
-            String paramKindValue = getUTF8EntryValue(paramKindCPIndex, constantPool);
             int paramDescCPIndex = dataInStream.readInt();
             String paramDesc = getUTF8EntryValue(paramDescCPIndex, constantPool);
-            ParameterDocumentInfo paramDocInfo = new ParameterDocumentInfo(nameCPIndex, name, typeSigCPIndex,
-                    typeSig, paramKindCPIndex, paramKindValue, paramDescCPIndex, paramDesc);
+            ParameterDocumentInfo paramDocInfo = new ParameterDocumentInfo(nameCPIndex, name, paramDescCPIndex,
+                    paramDesc);
             docAttrInfo.paramDocInfoList.add(paramDocInfo);
+        }
+
+        boolean isReturnDocDescriptionAvailable = dataInStream.readBoolean();
+        if (isReturnDocDescriptionAvailable) {
+            int returnParamDescCPIndex = dataInStream.readInt();
+            docAttrInfo.returnParameterDescription = getUTF8EntryValue(returnParamDescCPIndex, constantPool);
         }
 
         return docAttrInfo;
@@ -1071,12 +1080,14 @@ public class PackageInfoReader {
         int variableIndex = dataInStream.readInt();
 
         int typeSigCPIndex = dataInStream.readInt();
+        int scopeStartLineNumber = dataInStream.readInt();
+        int scopeEndLineNumber = dataInStream.readInt();
 
         UTF8CPEntry typeSigCPEntry = (UTF8CPEntry) constantPool.getCPEntry(typeSigCPIndex);
 
         BType type = getBTypeFromDescriptor(packageInfo, typeSigCPEntry.getValue());
         LocalVariableInfo localVariableInfo = new LocalVariableInfo(varNameCPEntry.getValue(), varNameCPIndex,
-                variableIndex, typeSigCPIndex, type);
+                variableIndex, typeSigCPIndex, type, scopeStartLineNumber, scopeEndLineNumber);
         int attchmntIndexesLength = dataInStream.readShort();
         int[] attachmentIndexes = new int[attchmntIndexesLength];
         for (int i = 0; i < attchmntIndexesLength; i++) {
@@ -1143,14 +1154,15 @@ public class PackageInfoReader {
                 case InstructionCodes.THROW:
                 case InstructionCodes.ERRSTORE:
                 case InstructionCodes.NEWXMLSEQ:
+                case InstructionCodes.LOOP_COMPENSATE:
                     i = codeStream.readInt();
                     packageInfo.addInstruction(InstructionFactory.get(opcode, i));
                     break;
 
-                case InstructionCodes.FPLOAD: {
+                case InstructionCodes.VFPLOAD:
+                case InstructionCodes.FPLOAD:
                     readFunctionPointerLoadInstruction(packageInfo, codeStream, opcode);
                     break;
-                }
                 case InstructionCodes.ICONST:
                 case InstructionCodes.FCONST:
                 case InstructionCodes.SCONST:
@@ -1169,7 +1181,6 @@ public class PackageInfoReader {
                 case InstructionCodes.BR_TRUE:
                 case InstructionCodes.BR_FALSE:
                 case InstructionCodes.TR_END:
-                case InstructionCodes.ARRAYLEN:
                 case InstructionCodes.NEWSTRUCT:
                 case InstructionCodes.ITR_NEW:
                 case InstructionCodes.ITR_HAS_NEXT:
@@ -1182,11 +1193,9 @@ public class PackageInfoReader {
                 case InstructionCodes.NEWXMLCOMMENT:
                 case InstructionCodes.NEWXMLTEXT:
                 case InstructionCodes.XMLSEQSTORE:
-                case InstructionCodes.TYPEOF:
                 case InstructionCodes.TYPELOAD:
                 case InstructionCodes.SEQ_NULL:
                 case InstructionCodes.SNE_NULL:
-                case InstructionCodes.NEWJSON:
                 case InstructionCodes.NEWMAP:
                 case InstructionCodes.I2ANY:
                 case InstructionCodes.BI2ANY:
@@ -1203,40 +1212,27 @@ public class PackageInfoReader {
                 case InstructionCodes.ANY2MAP:
                 case InstructionCodes.ANY2TYPE:
                 case InstructionCodes.ANY2DT:
-                case InstructionCodes.NULL2JSON:
                 case InstructionCodes.I2F:
                 case InstructionCodes.I2S:
                 case InstructionCodes.I2B:
                 case InstructionCodes.I2BI:
-                case InstructionCodes.I2JSON:
                 case InstructionCodes.BI2I:
                 case InstructionCodes.F2I:
                 case InstructionCodes.F2S:
                 case InstructionCodes.F2B:
-                case InstructionCodes.F2JSON:
                 case InstructionCodes.S2I:
                 case InstructionCodes.S2F:
                 case InstructionCodes.S2B:
-                case InstructionCodes.S2JSON:
                 case InstructionCodes.B2I:
                 case InstructionCodes.B2F:
                 case InstructionCodes.B2S:
-                case InstructionCodes.B2JSON:
-                case InstructionCodes.JSON2I:
-                case InstructionCodes.JSON2F:
-                case InstructionCodes.JSON2S:
-                case InstructionCodes.JSON2B:
                 case InstructionCodes.DT2XML:
                 case InstructionCodes.DT2JSON:
                 case InstructionCodes.T2MAP:
                 case InstructionCodes.XMLATTRS2MAP:
                 case InstructionCodes.ANY2SCONV:
-                case InstructionCodes.S2XML:
                 case InstructionCodes.XML2S:
-                case InstructionCodes.S2JSONX:
-                case InstructionCodes.NULL2S:
                 case InstructionCodes.AWAIT:
-                case InstructionCodes.CHECK_CONVERSION:
                 case InstructionCodes.XMLLOADALL:
                 case InstructionCodes.ARRAY2JSON:
                     i = codeStream.readInt();
@@ -1297,8 +1293,11 @@ public class PackageInfoReader {
                 case InstructionCodes.BIOR:
                 case InstructionCodes.IXOR:
                 case InstructionCodes.BIXOR:
-                case InstructionCodes.BISHL:
-                case InstructionCodes.BISHR:
+                case InstructionCodes.BILSHIFT:
+                case InstructionCodes.BIRSHIFT:
+                case InstructionCodes.IRSHIFT:
+                case InstructionCodes.ILSHIFT:
+                case InstructionCodes.IURSHIFT:
                 case InstructionCodes.XMLATTRLOAD:
                 case InstructionCodes.XMLATTRSTORE:
                 case InstructionCodes.S2QNAME:
@@ -1329,7 +1328,7 @@ public class PackageInfoReader {
                 case InstructionCodes.SNEWARRAY:
                 case InstructionCodes.BNEWARRAY:
                 case InstructionCodes.RNEWARRAY:
-                case InstructionCodes.JSONNEWARRAY:
+                case InstructionCodes.O2JSON:
                     i = codeStream.readInt();
                     j = codeStream.readInt();
                     k = codeStream.readInt();
@@ -1396,6 +1395,16 @@ public class PackageInfoReader {
 
                     packageInfo.addInstruction(InstructionFactory.get(opcode, funcRefCPIndex, funcCallCPIndex));
                     break;
+                case InstructionCodes.SCOPE_END:
+                    FunctionRefCPEntry funcCP = ((FunctionRefCPEntry) packageInfo.getCPEntry(codeStream.readInt()));
+                    FunctionInfo scopeFunction = funcCP.getFunctionInfo();
+                    String scopeName = ((UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt())).getValue();
+                    Instruction scopeInstruction = new InstructionScopeEnd(opcode, scopeFunction,
+                            getChildScopesList(codeStream, packageInfo), scopeName, funcCP);
+                    int[] pointerOperands = getFunctionPointerLoadOperands(codeStream);
+                    scopeInstruction.operands = pointerOperands;
+                    packageInfo.addInstruction(scopeInstruction);
+                    break;
                 case InstructionCodes.WRKSEND:
                 case InstructionCodes.WRKRECEIVE:
                     int channelRefCPIndex = codeStream.readInt();
@@ -1406,6 +1415,39 @@ public class PackageInfoReader {
                     BType bType = getParamTypes(packageInfo, sigCPEntry.getValue())[0];
                     packageInfo.addInstruction(new InstructionWRKSendReceive(opcode, channelRefCPIndex,
                             channelRefCPEntry.getWorkerDataChannelInfo(), sigCPIndex, bType, codeStream.readInt()));
+                    break;
+                case InstructionCodes.CHNRECEIVE:
+                    BType keyType = null;
+                    int keyIndex = -1;
+                    int hasKey = codeStream.readInt();
+                    if (hasKey == 1) {
+                        UTF8CPEntry keySigCPEntry = (UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt());
+                        keyType = getParamTypes(packageInfo, keySigCPEntry.getValue())[0];
+                        keyIndex = codeStream.readInt();
+                    }
+                    String channelName = ((UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt())).getValue();
+                    UTF8CPEntry receiverSigCPEntry = (UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt());
+                    BType chnReceiveType = getParamTypes(packageInfo, receiverSigCPEntry.getValue())[0];
+                    int receiverIndex = codeStream.readInt();
+
+                    packageInfo.addInstruction(new Instruction.InstructionCHNReceive(opcode, channelName,
+                            chnReceiveType, receiverIndex, keyType, keyIndex));
+                    break;
+                case InstructionCodes.CHNSEND:
+                    keyType = null;
+                    keyIndex = -1;
+                    hasKey = codeStream.readInt();
+                    if (hasKey == 1) {
+                        keyIndex = codeStream.readInt();
+                        UTF8CPEntry keySigCPEntry = (UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt());
+                        keyType = getParamTypes(packageInfo, keySigCPEntry.getValue())[0];
+                    }
+                    String chnName = ((UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt())).getValue();
+                    int dataIndex = codeStream.readInt();
+                    UTF8CPEntry dataSigCPEntry = (UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt());
+                    BType dataType = getParamTypes(packageInfo, dataSigCPEntry.getValue())[0];
+                    packageInfo.addInstruction(new Instruction.InstructionCHNSend(opcode, chnName, dataType,
+                            dataIndex, keyType, keyIndex));
                     break;
                 case InstructionCodes.FORKJOIN:
                     int forkJoinIndexCPIndex = codeStream.readInt();
@@ -1446,6 +1488,17 @@ public class PackageInfoReader {
                     }
                     packageInfo.addInstruction(new InstructionLock(opcode, varTypes, pkgRefs, varRegs));
                     break;
+                case COMPENSATE:
+                    int nameIndex = codeStream.readInt();
+                    String name = ((UTF8CPEntry) packageInfo.getCPEntry(nameIndex)).getValue();
+                    int childCount = codeStream.readInt();
+                    ArrayList<String> childScopeMap = new ArrayList<>();
+                    for (int count = 0; count < childCount; count++) {
+                        childScopeMap.add(((UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt())).getValue());
+                    }
+                    int retRegIndex = codeStream.readInt();
+                    packageInfo.addInstruction(new InstructionCompensate(opcode, name, childScopeMap, retRegIndex));
+                    break;
                 default:
                     throw new ProgramFileFormatException("unknown opcode " + opcode +
                             " in package " + packageInfo.getPkgPath());
@@ -1455,6 +1508,10 @@ public class PackageInfoReader {
 
     private void readFunctionPointerLoadInstruction(PackageInfo packageInfo, DataInputStream codeStream, int opcode)
             throws IOException {
+        packageInfo.addInstruction(InstructionFactory.get(opcode, getFunctionPointerLoadOperands(codeStream)));
+    }
+
+    private int[] getFunctionPointerLoadOperands(DataInputStream codeStream) throws IOException {
         int h;
         int i;
         int j;
@@ -1480,7 +1537,8 @@ public class PackageInfoReader {
                 operands[x + 4] = codeStream.readInt();
             }
         }
-        packageInfo.addInstruction(InstructionFactory.get(opcode, operands));
+
+        return operands;
     }
 
     void resolveCPEntries(PackageInfo currentPackageInfo) {
@@ -1541,6 +1599,13 @@ public class PackageInfoReader {
                 BField structField = new BField(fieldType,
                         fieldInfo.getName(), fieldInfo.flags);
                 structFields[i] = structField;
+            }
+
+            if (structType.getTag() == TypeTags.RECORD_TYPE_TAG && !((BRecordType) structType).sealed) {
+                RecordTypeInfo recTypeInfo = (RecordTypeInfo) structureTypeInfo;
+                String restTypeDesc = recTypeInfo.getRestFieldTypeSignature();
+                BType restFieldType = getBTypeFromDescriptor(packageInfo, restTypeDesc);
+                recTypeInfo.getType().restFieldType = restFieldType;
             }
 
             VarTypeCountAttributeInfo attributeInfo = (VarTypeCountAttributeInfo)
@@ -1678,13 +1743,18 @@ public class PackageInfoReader {
         PackageInfo pkgInfo = programFile.getPackageInfo(pkgPath);
 
         // if the package info is not available in the balx file, then it should be read from the balo
-        if (pkgInfo == null) {
-            PackageFileReader pkgFileReader = new PackageFileReader(this.programFile);
-            pkgFileReader.readPackage(pkgPath);
-            pkgInfo = programFile.getPackageInfo(pkgPath);
+        if (pkgInfo != null) {
+            return pkgInfo;
         }
 
-        return pkgInfo;
+        try {
+            PackageFileReader pkgFileReader = new PackageFileReader(this.programFile);
+            pkgFileReader.readPackage(pkgPath);
+        } catch (IOException e) {
+            throw new BLangRuntimeException("error reading package: " + pkgPath, e);
+        }
+
+        return programFile.getPackageInfo(pkgPath);
     }
 
     private BType getBTypeFromDescriptor(PackageInfo packageInfo, String desc) {
@@ -1710,7 +1780,7 @@ public class PackageInfoReader {
 
     /**
      * Create types for compiler phases.
-     * 
+     *
      * @since 0.975.0
      */
     private class RuntimeTypeCreater implements TypeCreater<BType> {
@@ -1720,7 +1790,7 @@ public class PackageInfoReader {
         public RuntimeTypeCreater(PackageInfo packageInfo) {
             this.packageInfo = packageInfo;
         }
-        
+
         @Override
         public BType getBasicType(char typeChar) {
             switch (typeChar) {
@@ -1792,6 +1862,7 @@ public class PackageInfoReader {
                     return new BStreamType(constraint);
                 case 'G':
                 case 'T':
+                case 'Q':
                 default:
                     return constraint;
             }
@@ -1820,9 +1891,20 @@ public class PackageInfoReader {
             if (retType == null) {
                 returnTypes = new BType[0];
             } else {
-                returnTypes = new BType[] { retType };
+                returnTypes = new BType[]{retType};
             }
             return new BFunctionType(funcParams.toArray(new BType[funcParams.size()]), returnTypes);
         }
+    }
+
+    private ArrayList<String> getChildScopesList(DataInputStream codeStream, PackageInfo packageInfo)
+            throws IOException {
+        int childCount = codeStream.readInt();
+        ArrayList<String> children = new ArrayList<>(childCount);
+        for (int i = 0; i < childCount; i++) {
+            children.add(((UTF8CPEntry) packageInfo.getCPEntry(codeStream.readInt())).getValue());
+        }
+
+        return children;
     }
 }

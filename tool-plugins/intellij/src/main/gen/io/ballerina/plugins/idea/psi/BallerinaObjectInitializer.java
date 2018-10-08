@@ -17,9 +17,11 @@
 // This is a generated file. Not intended for manual editing.
 package io.ballerina.plugins.idea.psi;
 
-import java.util.List;
-import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 public interface BallerinaObjectInitializer extends BallerinaCompositeElement {
 
@@ -33,7 +35,7 @@ public interface BallerinaObjectInitializer extends BallerinaCompositeElement {
   BallerinaObjectInitializerParameterList getObjectInitializerParameterList();
 
   @Nullable
-  BallerinaDocumentationAttachment getDocumentationAttachment();
+  BallerinaDocumentationString getDocumentationString();
 
   @NotNull
   PsiElement getNew();

@@ -38,20 +38,30 @@ class ActionBox extends React.Component {
      * @memberof ActionBox
      */
     render() {
-        const iconSize = 38;
+        const iconSize = 25;
         const style = {
             position: 'absolute',
             ...this.props.style,
             left:  this.props.style.left - iconSize,
         };
         return (<div style={style}>
-            <Button.Group>
-                <Button
-                    onClick={this.props.disableButtons.delete ? () => {} : this.props.onDelete}
-                ><i className='fw'>{ImageUtil.getCodePoint('delete')}</i></Button>
-                <Button
-                    onClick={this.props.disableButtons.jump ? () => {} : this.props.onJumptoCodeLine}
-                ><i className='fw'>{ImageUtil.getCodePoint('code-view')}</i></Button>
+            <Button.Group
+                className='lifeline icons'
+            >
+                {!this.props.disableButtons.delete &&
+                    <Button
+                        onClick={this.props.onDelete}
+                    >
+                        <i className='fw'>{ImageUtil.getCodePoint('delete')}</i>
+                    </Button>
+                }
+                {!this.props.disableButtons.jump &&
+                    <Button
+                        onClick={this.props.onJumptoCodeLine}
+                    >
+                        <i className='fw'>{ImageUtil.getCodePoint('code-view')}</i>
+                    </Button>
+                }
             </Button.Group>
         </div>);
     }

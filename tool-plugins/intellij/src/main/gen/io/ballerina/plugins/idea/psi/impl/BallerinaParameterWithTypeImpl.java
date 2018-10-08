@@ -28,7 +28,7 @@ import io.ballerina.plugins.idea.psi.*;
 
 public class BallerinaParameterWithTypeImpl extends BallerinaCompositeElementImpl implements BallerinaParameterWithType {
 
-  public BallerinaParameterWithTypeImpl(ASTNode node) {
+  public BallerinaParameterWithTypeImpl(@NotNull ASTNode node) {
     super(node);
   }
 
@@ -48,9 +48,9 @@ public class BallerinaParameterWithTypeImpl extends BallerinaCompositeElementImp
   }
 
   @Override
-  @Nullable
+  @NotNull
   public PsiElement getIdentifier() {
-    return findChildByType(IDENTIFIER);
+    return notNullChild(findChildByType(IDENTIFIER));
   }
 
 }

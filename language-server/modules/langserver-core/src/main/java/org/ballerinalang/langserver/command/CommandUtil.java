@@ -15,12 +15,15 @@
  */
 package org.ballerinalang.langserver.command;
 
+import org.ballerinalang.langserver.common.UtilSymbolKeys;
 import org.ballerinalang.langserver.common.constants.CommandConstants;
 import org.ballerinalang.langserver.common.constants.NodeContextKeys;
 import org.ballerinalang.langserver.common.position.PositionTreeVisitor;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.common.utils.CommonUtil.FunctionGenerator;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
 import org.ballerinalang.langserver.compiler.LSCompiler;
+import org.ballerinalang.langserver.compiler.LSCompilerUtil;
 import org.ballerinalang.langserver.compiler.LSPackageLoader;
 import org.ballerinalang.langserver.compiler.LSServiceOperationContext;
 import org.ballerinalang.langserver.compiler.common.LSCustomErrorStrategy;
@@ -32,24 +35,13 @@ import org.ballerinalang.model.symbols.SymbolKind;
 import org.ballerinalang.model.tree.FunctionNode;
 import org.ballerinalang.model.tree.TopLevelNode;
 import org.ballerinalang.model.tree.VariableNode;
+import org.ballerinalang.model.types.TypeKind;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.Diagnostic;
-import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.TextDocumentPositionParams;
 import org.wso2.ballerinalang.compiler.semantics.model.Scope;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BEndpointVarSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BObjectTypeSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BArrayType;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BFiniteType;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BMapType;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BObjectType;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BUnionType;
 import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachment;
 import org.wso2.ballerinalang.compiler.tree.BLangEndpoint;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
@@ -59,19 +51,13 @@ import org.wso2.ballerinalang.compiler.tree.BLangResource;
 import org.wso2.ballerinalang.compiler.tree.BLangService;
 import org.wso2.ballerinalang.compiler.tree.BLangTypeDefinition;
 import org.wso2.ballerinalang.compiler.tree.BLangVariable;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangInvocation;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangLiteral;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangSimpleVarRef;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangAssignment;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangBlockStmt;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangTupleDestructure;
 import org.wso2.ballerinalang.compiler.tree.types.BLangObjectTypeNode;
 import org.wso2.ballerinalang.compiler.tree.types.BLangRecordTypeNode;
 import org.wso2.ballerinalang.compiler.util.Name;
 import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
+import org.wso2.ballerinalang.util.Flags;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -83,10 +69,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.ballerinalang.langserver.common.utils.CommonUtil.generateName;
+
 /**
  * Utilities for the command related operations.
  */
 public class CommandUtil {
+
+    private CommandUtil() {
+    }
 
     /**
      * Get the command for auto documentation Generation.
@@ -95,7 +86,7 @@ public class CommandUtil {
      * @param line              Line of the command being executed
      * @return {@link Command}  Document Generation command
      */
-    public static Command getDocGenerationCommand(String nodeType, String docUri, int line) {
+    private static Command getDocGenerationCommand(String nodeType, String docUri, int line) {
         CommandArgument nodeTypeArg = new CommandArgument(CommandConstants.ARG_KEY_NODE_TYPE, nodeType);
         CommandArgument docUriArg = new CommandArgument(CommandConstants.ARG_KEY_DOC_URI, docUri);
         CommandArgument lineStart = new CommandArgument(CommandConstants.ARG_KEY_NODE_LINE,
@@ -110,30 +101,58 @@ public class CommandUtil {
      * @param docUri            Document Uri
      * @return {@link Command}  All Document Generation command
      */
-    public static Command getAllDocGenerationCommand(String docUri) {
+    private static Command getAllDocGenerationCommand(String docUri) {
         CommandArgument docUriArg = new CommandArgument(CommandConstants.ARG_KEY_DOC_URI, docUri);
         return new Command(CommandConstants.ADD_ALL_DOC_TITLE, CommandConstants.CMD_ADD_ALL_DOC,
                 new ArrayList<>(Collections.singletonList(docUriArg)));
     }
 
+    private static Command getConstructorGenerationCommand(String docUri, int line) {
+        CommandArgument docUriArg = new CommandArgument(CommandConstants.ARG_KEY_DOC_URI, docUri);
+        CommandArgument startLineArg = new CommandArgument(CommandConstants.ARG_KEY_NODE_LINE, String.valueOf(line));
+        return new Command(CommandConstants.CREATE_CONSTRUCTOR_TITLE, CommandConstants.CMD_CREATE_CONSTRUCTOR,
+                new ArrayList<>(Arrays.asList(docUriArg, startLineArg)));
+    }
+
+    /**
+     * Get the commands for the given node type.
+     *
+     * @param nodeType          Node Type
+     * @param docUri            Document URI
+     * @param line              Node line
+     * @return {@link List}     List of commands for the line
+     */
+    public static List<Command> getCommandForNodeType(String nodeType, String docUri, int line) {
+        List<Command> commands = new ArrayList<>();
+        
+        if (UtilSymbolKeys.OBJECT_KEYWORD_KEY.equals(nodeType)) {
+            commands.add(getConstructorGenerationCommand(docUri, line));
+        }
+        commands.add(getDocGenerationCommand(nodeType, docUri, line));
+        commands.add(getAllDocGenerationCommand(docUri));
+        
+        return commands;
+    }
+
     /**
      * Get the command instances for a given diagnostic.
      *
-     * @param diagnostic     Diagnostic to get the command against
-     * @param params         Code Action parameters
-     * @param documentManager Document manager
-     * @return {@link List}    List of commands related to the given diagnostic
+     * @param diagnostic        Diagnostic to get the command against
+     * @param params            Code Action parameters
+     * @param documentManager   Document manager
+     * @param lsCompiler        LSCompiler Instance
+     * @return {@link List}     List of commands related to the given diagnostic
      */
     public static List<Command> getCommandsByDiagnostic(Diagnostic diagnostic, CodeActionParams params,
-                                                        WorkspaceDocumentManager documentManager) {
+                                                        WorkspaceDocumentManager documentManager,
+                                                        LSCompiler lsCompiler) {
         String diagnosticMessage = diagnostic.getMessage();
         List<Command> commands = new ArrayList<>();
         if (isUndefinedPackage(diagnosticMessage)) {
             String packageAlias = diagnosticMessage.substring(diagnosticMessage.indexOf("'") + 1,
                                                               diagnosticMessage.lastIndexOf("'"));
             LSDocument sourceDocument = new LSDocument(params.getTextDocument().getUri());
-            Path openedPath = CommonUtil.getPath(sourceDocument);
-            String sourceRoot = LSCompiler.getSourceRoot(openedPath);
+            String sourceRoot = LSCompilerUtil.getSourceRoot(sourceDocument.getPath());
             sourceDocument.setSourceRoot(sourceRoot);
             List<BallerinaPackage> packagesList = new ArrayList<>();
             Stream.of(LSPackageLoader.getSdkPackages(), LSPackageLoader.getHomeRepoPackages())
@@ -154,7 +173,7 @@ public class CommandUtil {
                                                  new ArrayList<>(Arrays.asList(pkgArgument, docUriArgument))));
                     });
         } else if (isUndefinedFunction(diagnosticMessage)) {
-            BLangInvocation functionNode = getFunctionNode(params, documentManager);
+            BLangInvocation functionNode = getFunctionNode(params, documentManager, lsCompiler);
             String functionName = functionNode.name.getValue();
             List<Object> args = new ArrayList<>();
             BLangNode parent = functionNode.parent;
@@ -167,17 +186,69 @@ public class CommandUtil {
                 if (returnStatement != null) {
                     args.add(new CommandArgument(CommandConstants.ARG_KEY_RETURN_DEFAULT_VAL, returnStatement));
                 }
-                String arguments = FunctionGenerator.getFuncArguments(functionNode);
+                List<String> arguments = FunctionGenerator.getFuncArguments(functionNode);
                 if (arguments != null) {
-                    args.add(new CommandArgument(CommandConstants.ARG_KEY_FUNC_ARGS, arguments));
+                    args.add(new CommandArgument(CommandConstants.ARG_KEY_FUNC_ARGS, String.join(", ", arguments)));
                 }
             }
             args.add(new CommandArgument(CommandConstants.ARG_KEY_FUNC_NAME, functionName));
             args.add(new CommandArgument(CommandConstants.ARG_KEY_DOC_URI, params.getTextDocument().getUri()));
             String commandTitle = CommandConstants.CREATE_FUNCTION_TITLE + " " + functionName + "(...)";
             commands.add(new Command(commandTitle, CommandConstants.CMD_CREATE_FUNCTION, args));
+        } else if (isVariableAssignmentRequired(diagnosticMessage)) {
+            BLangInvocation functionNode = getFunctionNode(params, documentManager, lsCompiler);
+            List<Object> args = new ArrayList<>();
+            String varName = generateName(1, getAllEntries(functionNode));
+            args.add(new CommandArgument(CommandConstants.ARG_KEY_VAR_NAME, varName));
+            String returnSignature = FunctionGenerator.getFuncReturnSignature(functionNode.type);
+            args.add(new CommandArgument(CommandConstants.ARG_KEY_RETURN_TYPE, returnSignature));
+            String funcLocation = functionNode.pos.sLine + "," + functionNode.pos.sCol;
+            args.add(new CommandArgument(CommandConstants.ARG_KEY_FUNC_LOCATION, funcLocation));
+            args.add(new CommandArgument(CommandConstants.ARG_KEY_DOC_URI, params.getTextDocument().getUri()));
+            String commandTitle = CommandConstants.CREATE_VARIABLE_TITLE;
+            commands.add(new Command(commandTitle, CommandConstants.CMD_CREATE_VARIABLE, args));
         }
         return commands;
+    }
+
+    /**
+     * Get the object constructor snippet generated from public object fields.
+     *
+     * @param fields            List of Fields
+     * @param baseOffset        Offset of snippet                         
+     * @return {@link String}   Constructor snippet as String
+     */
+    static String getObjectConstructorSnippet(List<BLangVariable> fields, int baseOffset) {
+        List<String> fieldNames = fields.stream()
+                .filter(bField -> ((bField.symbol.flags & Flags.PUBLIC) == Flags.PUBLIC))
+                .map(bField -> bField.getName().getValue())
+                .collect(Collectors.toList());
+        String offsetStr = String.join("", Collections.nCopies(baseOffset, " "));
+
+        return offsetStr + "new(" + String.join(", ", fieldNames) + ") {" + CommonUtil.LINE_SEPARATOR
+                + CommonUtil.LINE_SEPARATOR + offsetStr + "}" + CommonUtil.LINE_SEPARATOR;
+    }
+
+    private static Set<String> getAllEntries(BLangInvocation functionNode) {
+        Set<String> strings = new HashSet<>();
+        BLangPackage packageNode = getPackageNode(functionNode);
+        if (packageNode != null) {
+            packageNode.getGlobalVariables().forEach(globalVar -> strings.add(globalVar.name.value));
+            packageNode.getGlobalEndpoints().forEach(endpoint -> strings.add(endpoint.getName().getValue()));
+            packageNode.getServices().forEach(service -> strings.add(service.name.value));
+            packageNode.getFunctions().forEach(func -> strings.add(func.name.value));
+        }
+        Map<Name, Scope.ScopeEntry> entries = functionNode.symbol.scope.entries;
+        entries.forEach((name, scopeEntry) -> strings.add(name.value));
+        return strings;
+    }
+
+    private static BLangPackage getPackageNode(BLangNode bLangNode) {
+        BLangNode parent = bLangNode.parent;
+        if (parent != null) {
+            return (parent instanceof BLangPackage) ? (BLangPackage) parent : getPackageNode(parent);
+        }
+        return null;
     }
 
     /**
@@ -197,14 +268,14 @@ public class CommandUtil {
                 filteredFunctions
                         .addAll(((BLangObjectTypeNode) (((BLangTypeDefinition) topLevelNode).typeNode)).getFunctions());
             }
+        }
 
-            for (FunctionNode filteredFunction : filteredFunctions) {
-                DiagnosticPos functionPos =
-                        CommonUtil.toZeroBasedPosition((DiagnosticPos) filteredFunction.getPosition());
-                int functionStart = functionPos.getStartLine();
-                if (functionStart == line) {
-                    return getFunctionNodeDocumentation(filteredFunction, line);
-                }
+        for (FunctionNode filteredFunction : filteredFunctions) {
+            DiagnosticPos functionPos =
+                    CommonUtil.toZeroBasedPosition((DiagnosticPos) filteredFunction.getPosition());
+            int functionStart = functionPos.getStartLine();
+            if (functionStart == line) {
+                return getFunctionNodeDocumentation(filteredFunction, line);
             }
         }
 
@@ -215,43 +286,13 @@ public class CommandUtil {
         DiagnosticPos functionPos =  CommonUtil.toZeroBasedPosition((DiagnosticPos) bLangFunction.getPosition());
         int offset = functionPos.getStartColumn();
         List<String> attributes = new ArrayList<>();
-        if (bLangFunction.getReceiver() != null && bLangFunction.getReceiver() instanceof BLangVariable) {
-            BLangVariable receiverNode = (BLangVariable) bLangFunction.getReceiver();
-            attributes.add(getDocumentationAttribute(receiverNode.docTag.getValue(), receiverNode.getName().getValue(),
-                    offset));
-        }
         bLangFunction.getParameters().forEach(bLangVariable ->
                         attributes.add(getDocAttributeFromBLangVariable((BLangVariable) bLangVariable, offset)));
-        // TODO: Fix with the latest changes properly
-//        bLangFunction.getReturnParameters()
-//                .forEach(bLangVariable -> {
-//                    if (!bLangVariable.getName().getValue().isEmpty()) {
-//                        attributes.add(getDocAttributeFromBLangVariable((BLangVariable) bLangVariable, offset));
-//                    }
-//                });
-
-        return new DocAttachmentInfo(getDocumentationAttachment(attributes, functionPos.getStartColumn()), replaceFrom);
-    }
-
-    /**
-     * Get the Documentation attachment for the struct definition.
-     * @param bLangPackage      BLangPackage built
-     * @param line              Start line of the struct in the source
-     * @return {@link DocAttachmentInfo}   Documentation attachment for the struct
-     */
-    static DocAttachmentInfo getRecordOrObjectDocumentationByPosition(BLangPackage bLangPackage, int line) {
-        for (TopLevelNode topLevelNode : bLangPackage.topLevelNodes) {
-            if (topLevelNode instanceof BLangTypeDefinition) {
-                BLangTypeDefinition typeDefNode = (BLangTypeDefinition) topLevelNode;
-                DiagnosticPos structPos = CommonUtil.toZeroBasedPosition(typeDefNode.getPosition());
-                int structStart = structPos.getStartLine();
-                if (structStart == line) {
-                    return getRecordOrObjectDocumentation(typeDefNode, line);
-                }
-            }
+        if (((BLangFunction) bLangFunction).symbol.retType.getKind() != TypeKind.NIL) {
+            attributes.add(getReturnFieldDescription(offset));
         }
 
-        return null;
+        return new DocAttachmentInfo(getDocumentationAttachment(attributes, functionPos.getStartColumn()), replaceFrom);
     }
 
     static DocAttachmentInfo getRecordOrObjectDocumentation(BLangTypeDefinition typeDef, int replaceFrom) {
@@ -296,46 +337,11 @@ public class CommandUtil {
         return new DocAttachmentInfo(getDocumentationAttachment(null, endpointPos.getStartColumn()), replaceFrom);
     }
 
-    /**
-     * Get the Documentation attachment for the resource.
-     * @param bLangPackage      BLangPackage built
-     * @param line              Start line of the resource in the source
-     * @return {@link DocAttachmentInfo}   Documentation attachment for the resource
-     */
-    static DocAttachmentInfo getResourceDocumentationByPosition(BLangPackage bLangPackage, int line) {
-        // TODO: Currently resource position is invalid and we use the annotation attachment positions.
-        for (TopLevelNode topLevelNode : bLangPackage.topLevelNodes) {
-            if (topLevelNode instanceof BLangService) {
-                BLangService serviceNode = (BLangService) topLevelNode;
-
-                for (BLangResource bLangResource : serviceNode.getResources()) {
-                    List<BLangAnnotationAttachment> annotationAttachments = bLangResource.getAnnotationAttachments();
-                    DiagnosticPos resourcePos = CommonUtil.toZeroBasedPosition(bLangResource.getPosition());
-                    if (!annotationAttachments.isEmpty()) {
-                        DiagnosticPos lastAttachmentPos = CommonUtil.toZeroBasedPosition(
-                                annotationAttachments.get(annotationAttachments.size() - 1).getPosition());
-                        if (lastAttachmentPos.getEndLine() < line && line < resourcePos.getEndLine()) {
-                            return getResourceNodeDocumentation(bLangResource, lastAttachmentPos.getEndLine() + 1);
-                        }
-                    } else if (resourcePos.getStartLine() == line) {
-                        return getResourceNodeDocumentation(bLangResource, line);
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
     static DocAttachmentInfo getResourceNodeDocumentation(BLangResource bLangResource, int replaceFrom) {
         List<String> attributes = new ArrayList<>();
         DiagnosticPos resourcePos = CommonUtil.toZeroBasedPosition(bLangResource.getPosition());
-        bLangResource.getParameters()
-                .forEach(bLangVariable -> {
-                    if (!(bLangVariable.symbol instanceof BEndpointVarSymbol)) {
-                        attributes.add(getDocAttributeFromBLangVariable(bLangVariable, resourcePos.getStartColumn()));
-                    }
-                });
+        bLangResource.getParameters().forEach(bLangVariable ->
+                attributes.add(getDocAttributeFromBLangVariable(bLangVariable, resourcePos.getStartColumn())));
         return new DocAttachmentInfo(getDocumentationAttachment(attributes, resourcePos.getStartColumn()), replaceFrom);
     }
 
@@ -354,8 +360,7 @@ public class CommandUtil {
                 List<BLangAnnotationAttachment> annotationAttachments = serviceNode.getAnnotationAttachments();
                 if (!annotationAttachments.isEmpty()) {
                     DiagnosticPos lastAttachmentPos = CommonUtil.toZeroBasedPosition(
-                            annotationAttachments.get(annotationAttachments.size() - 1).getPosition());
-
+                            CommonUtil.getLastItem(annotationAttachments).getPosition());
                     if (lastAttachmentPos.getEndLine() < line && line < servicePos.getEndLine()) {
                         return getServiceNodeDocumentation(serviceNode, lastAttachmentPos.getEndLine() + 1);
                     }
@@ -379,8 +384,8 @@ public class CommandUtil {
             DiagnosticPos typeNodePos;
             typeNodePos = (DiagnosticPos) topLevelNode.getPosition();
             if ((topLevelNode instanceof BLangTypeDefinition &&
-                    (((BLangTypeDefinition) topLevelNode).symbol.getKind() == SymbolKind.OBJECT
-                            || ((BLangTypeDefinition) topLevelNode).symbol.getKind() == SymbolKind.RECORD))
+                    (((BLangTypeDefinition) topLevelNode).symbol.kind == SymbolKind.OBJECT
+                            || ((BLangTypeDefinition) topLevelNode).symbol.kind == SymbolKind.RECORD))
                     && typeNodePos.getStartLine() - 1 == line) {
                 return getTypeNodeDocumentation(topLevelNode, line);
             }
@@ -395,13 +400,13 @@ public class CommandUtil {
         int offset = typeNodePos.getStartColumn();
         List<VariableNode> publicFields = new ArrayList<>();
         if (typeNode instanceof BLangTypeDefinition &&
-                ((BLangTypeDefinition) typeNode).symbol.getKind() == SymbolKind.OBJECT) {
+                ((BLangTypeDefinition) typeNode).symbol.kind == SymbolKind.OBJECT) {
             publicFields.addAll(((BLangObjectTypeNode) ((BLangTypeDefinition) typeNode).typeNode).getFields().stream()
                     .filter(field -> field.getFlags().contains(Flag.PUBLIC)).collect(Collectors.toList()));
             
         } else if (typeNode instanceof BLangTypeDefinition &&
-                ((BLangTypeDefinition) typeNode).symbol.getKind() == SymbolKind.RECORD) {
-            publicFields.addAll(((BLangObjectTypeNode) ((BLangTypeDefinition) typeNode).typeNode).getFields());
+                ((BLangTypeDefinition) typeNode).symbol.kind == SymbolKind.RECORD) {
+            publicFields.addAll(((BLangRecordTypeNode) ((BLangTypeDefinition) typeNode).typeNode).getFields());
         }
         
         publicFields.forEach(variableNode -> {
@@ -417,7 +422,7 @@ public class CommandUtil {
     }
 
     private static String getDocAttributeFromBLangVariable(BLangVariable bLangVariable, int offset) {
-        return getDocumentationAttribute(bLangVariable.docTag.getValue(), bLangVariable.getName().getValue(), offset);
+        return getDocumentationAttribute(bLangVariable.getName().getValue(), offset);
     }
 
     private static boolean isUndefinedPackage(String diagnosticMessage) {
@@ -428,36 +433,40 @@ public class CommandUtil {
         return diagnosticMessage.toLowerCase(Locale.ROOT).contains(CommandConstants.UNDEFINED_FUNCTION);
     }
 
+    private static boolean isVariableAssignmentRequired(String diagnosticMessage) {
+        return diagnosticMessage.toLowerCase(Locale.ROOT).contains(CommandConstants.VAR_ASSIGNMENT_REQUIRED);
+    }
+
     private static BLangInvocation getFunctionNode(CodeActionParams params,
-                                                   WorkspaceDocumentManager documentManager) {
-        LSServiceOperationContext renameContext = new LSServiceOperationContext();
-        List<Location> contents = new ArrayList<>();
-        Position position = params.getRange().getStart();
-        position.setCharacter(position.getCharacter() + 1);
-        renameContext.put(DocumentServiceKeys.FILE_URI_KEY, params.getTextDocument().getUri());
-        renameContext.put(DocumentServiceKeys.POSITION_KEY,
+                                                   WorkspaceDocumentManager documentManager,
+                                                   LSCompiler lsCompiler) {
+        LSServiceOperationContext context = new LSServiceOperationContext();
+        Position position = new Position();
+        position.setLine(params.getRange().getStart().getLine());
+        position.setCharacter(params.getRange().getStart().getCharacter() + 1);
+        context.put(DocumentServiceKeys.FILE_URI_KEY, params.getTextDocument().getUri());
+        context.put(DocumentServiceKeys.POSITION_KEY,
                           new TextDocumentPositionParams(params.getTextDocument(), position));
-        List<BLangPackage> bLangPackages = LSCompiler.getBLangPackage(renameContext, documentManager, false,
-                                                                      LSCustomErrorStrategy.class, true);
+        List<BLangPackage> bLangPackages = lsCompiler.getBLangPackage(context, documentManager, false,
+                                                                      LSCustomErrorStrategy.class, true).getLeft();
         // Get the current package.
         BLangPackage currentBLangPackage = CommonUtil.getCurrentPackageByFileName(bLangPackages,
                                                                                   params.getTextDocument().getUri());
 
-        renameContext.put(DocumentServiceKeys.CURRENT_PACKAGE_NAME_KEY,
+        context.put(DocumentServiceKeys.CURRENT_PACKAGE_NAME_KEY,
                           currentBLangPackage.symbol.getName().getValue());
-        renameContext.put(NodeContextKeys.REFERENCE_NODES_KEY, contents);
 
         // Run the position calculator for the current package.
-        PositionTreeVisitor positionTreeVisitor = new PositionTreeVisitor(renameContext);
+        PositionTreeVisitor positionTreeVisitor = new PositionTreeVisitor(context);
         currentBLangPackage.accept(positionTreeVisitor);
-        return (BLangInvocation) renameContext.get(NodeContextKeys.NODE_KEY);
+        return (BLangInvocation) context.get(NodeContextKeys.NODE_KEY);
     }
 
 
     /**
      * Inner class for the command argument holding argument key and argument value.
      */
-    private static class CommandArgument {
+    public static class CommandArgument {
         private String argumentK;
 
         private String argumentV;
@@ -476,19 +485,24 @@ public class CommandUtil {
         }
     }
 
-    private static String getDocumentationAttribute(String docTag, String field, int offset) {
+    private static String getDocumentationAttribute(String field, int offset) {
         String offsetStr = String.join("", Collections.nCopies(offset, " "));
-        return String.format("%s%s{{%s}}", offsetStr, docTag, field);
+        return String.format("%s# + %s - %s Parameter Description", offsetStr, field, field);
+    }
+
+    private static String getReturnFieldDescription(int offset) {
+        String offsetStr = String.join("", Collections.nCopies(offset, " "));
+        return String.format("%s# + return - Return Value Description", offsetStr);
     }
 
     private static String getDocumentationAttachment(List<String> attributes, int offset) {
         String offsetStr = String.join("", Collections.nCopies(offset, " "));
         if (attributes == null || attributes.isEmpty()) {
-            return String.format("%sdocumentation {%n%s\t%n%s}", offsetStr, offsetStr, offsetStr);
+            return String.format("%s# Description", offsetStr);
         }
 
-        String joinedList = String.join(" \r\n\t", attributes);
-        return String.format("%sdocumentation {%n%s\t%n\t%s%n%s}", offsetStr, offsetStr, joinedList, offsetStr);
+        String joinedList = String.join(" \r\n", attributes);
+        return String.format("%s# Description%n%s#%n%s", offsetStr, offsetStr, joinedList);
     }
 
     /**
@@ -511,253 +525,6 @@ public class CommandUtil {
 
         int getReplaceStartFrom() {
             return replaceStartFrom;
-        }
-    }
-
-    /**
-     * Inner class for generating function code.
-     */
-    public static class FunctionGenerator {
-
-        /**
-         * Generate function code.
-         *
-         * @param name               function name
-         * @param returnType         return type
-         * @param returnDefaultValue default return value
-         * @return
-         */
-        public static String createFunction(String name, String args, String returnType, String returnDefaultValue) {
-            String funcBody = CommonUtil.LINE_SEPARATOR;
-            String funcReturnSignature = "";
-            if (returnType != null) {
-                funcBody = returnDefaultValue + funcBody;
-                funcReturnSignature = " returns " + returnType + " ";
-            }
-            return CommonUtil.LINE_SEPARATOR + CommonUtil.LINE_SEPARATOR + "function " + name + "(" + args + ")"
-                    + funcReturnSignature + "{" + CommonUtil.LINE_SEPARATOR + funcBody + "}"
-                    + CommonUtil.LINE_SEPARATOR;
-        }
-
-        private static String getFuncReturnDefaultStatement(BLangNode bLangNode, String returnStatement) {
-            if (bLangNode.type == null && bLangNode instanceof BLangTupleDestructure) {
-                // Check for tuple assignment eg. (int, int)
-                List<String> list = new ArrayList<>();
-                for (BLangExpression bLangExpression : ((BLangTupleDestructure) bLangNode).varRefs) {
-                    if (bLangExpression.type != null) {
-                        list.add(getFuncReturnDefaultStatement(bLangExpression.type, "{%1}"));
-                    }
-                }
-                return returnStatement.replace("{%1}", "(" + String.join(", ", list) + ")");
-            } else if (bLangNode instanceof BLangLiteral) {
-                return returnStatement.replace("{%1}", ((BLangLiteral) bLangNode).getValue().toString());
-            } else if (bLangNode instanceof BLangAssignment) {
-                return returnStatement.replace("{%1}", "0");
-            }
-            return (bLangNode.type != null)
-                    ? getFuncReturnDefaultStatement(bLangNode.type, returnStatement)
-                    : null;
-        }
-
-        private static String getFuncReturnDefaultStatement(BType bType, String returnStatement) {
-            if (bType.tsymbol == null && bType instanceof BArrayType) {
-                return returnStatement.replace("{%1}", "[" +
-                        getFuncReturnDefaultStatement(((BArrayType) bType).eType.tsymbol, "") + "]");
-            } else if (bType instanceof BFiniteType) {
-                // Check for finite set assignment
-                BFiniteType bFiniteType = (BFiniteType) bType;
-                Set<BLangExpression> valueSpace = bFiniteType.valueSpace;
-                if (!valueSpace.isEmpty()) {
-                    return getFuncReturnDefaultStatement(valueSpace.stream().findFirst().get(), returnStatement);
-                }
-            } else if (bType instanceof BMapType && ((BMapType) bType).constraint != null) {
-                // Check for constrained map assignment eg. map<Student>
-                BType constraintType = ((BMapType) bType).constraint;
-                String name = constraintType.tsymbol.name.getValue();
-                String mapName = name.toLowerCase(Locale.ROOT) + "Map";
-                String mapDef = "map<" + name + "> " + mapName + " = "
-                        + "{key: " + getFuncReturnDefaultStatement(constraintType, "{%1}") + "};"
-                        + CommonUtil.LINE_SEPARATOR;
-                return returnStatement
-                        .replace("return", mapDef + "    return")
-                        .replace("{%1}", mapName);
-            } else if (bType instanceof BUnionType) {
-                BUnionType bUnionType = (BUnionType) bType;
-                Set<BType> memberTypes = bUnionType.memberTypes;
-                if (!memberTypes.isEmpty()) {
-                    return getFuncReturnDefaultStatement(memberTypes.stream().findFirst().get(), returnStatement);
-                }
-            } else if (bType instanceof BObjectType && ((BObjectType) bType).tsymbol instanceof BObjectTypeSymbol) {
-                BObjectTypeSymbol bStructSymbol = (BObjectTypeSymbol) ((BObjectType) bType).tsymbol;
-                List<String> list = new ArrayList<>();
-                for (BVarSymbol param : bStructSymbol.initializerFunc.symbol.params) {
-                    list.add(getFuncReturnDefaultStatement(param.type.tsymbol, "{%1}"));
-                }
-                return returnStatement.replace("{%1}", "new " + bStructSymbol.name.getValue()
-                        + "(" + String.join(", ", list) + ")");
-            }
-            return (bType.tsymbol != null) ? getFuncReturnDefaultStatement(bType.tsymbol, returnStatement) :
-                    returnStatement.replace("{%1}", "()");
-        }
-
-        private static String getFuncReturnDefaultStatement(BTypeSymbol tSymbol, String returnStatement) {
-            String result;
-            switch (tSymbol.name.getValue()) {
-                case "int":
-                case "any":
-                    result = "0";
-                    break;
-                case "string":
-                    result = "\"\"";
-                    break;
-                case "float":
-                    result = "0.0";
-                    break;
-                case "json":
-                    result = "{}";
-                    break;
-                case "map":
-                    result = "<map>{}";
-                    break;
-                case "boolean":
-                    result = "false";
-                    break;
-                case "xml":
-                    result = "xml ` `";
-                    break;
-                case "blob":
-                    result = "[]";
-                    break;
-                default:
-                    result = "()";
-                    break;
-            }
-            return returnStatement.replace("{%1}", result);
-        }
-
-        private static String getFuncReturnSignature(BLangNode bLangNode) {
-            if (bLangNode.type == null && bLangNode instanceof BLangTupleDestructure) {
-                // Check for tuple assignment eg. (int, int)
-                List<String> list = new ArrayList<>();
-                for (BLangExpression bLangExpression : ((BLangTupleDestructure) bLangNode).varRefs) {
-                    if (bLangExpression.type != null) {
-                        list.add(getFuncReturnSignature(bLangExpression.type));
-                    }
-                }
-                return "(" + String.join(", ", list) + ")";
-            } else if (bLangNode instanceof BLangAssignment) {
-                if (((BLangAssignment) bLangNode).declaredWithVar) {
-                    return "any";
-                }
-            }
-            return (bLangNode.type != null) ? getFuncReturnSignature(bLangNode.type) : null;
-        }
-
-        private static String getFuncReturnSignature(BType bType) {
-            if (bType.tsymbol == null && bType instanceof BArrayType) {
-                // Check for array assignment eg.  int[]
-                return getFuncReturnSignature(((BArrayType) bType).eType.tsymbol) + "[]";
-            } else if (bType instanceof BMapType && ((BMapType) bType).constraint != null) {
-                // Check for constrained map assignment eg. map<Student>
-                BTypeSymbol tSymbol = ((BMapType) bType).constraint.tsymbol;
-                if (tSymbol != null) {
-                    return "map<" + getFuncReturnSignature(tSymbol) + ">";
-                }
-            } else if (bType instanceof BUnionType) {
-                // Check for union type assignment eg. int | string
-                List<String> list = new ArrayList<>();
-                for (BType memberType : ((BUnionType) bType).memberTypes) {
-                    list.add(getFuncReturnSignature(memberType));
-                }
-                return "(" + String.join("|", list) + ")";
-            }
-            return (bType.tsymbol != null) ? getFuncReturnSignature(bType.tsymbol) : "any";
-        }
-
-        private static String getFuncReturnSignature(BTypeSymbol tSymbol) {
-            if (tSymbol != null) {
-                return tSymbol.name.getValue();
-            }
-            return "any";
-        }
-
-        private static String getFuncArguments(BLangNode parent) {
-            List<String> list = new ArrayList<>();
-            if (parent instanceof BLangInvocation) {
-                BLangInvocation bLangInvocation = (BLangInvocation) parent;
-                if (bLangInvocation.argExprs.isEmpty()) {
-                    return null;
-                }
-                int argCounter = 1;
-                Set<String> argNames = new HashSet<>();
-                for (BLangExpression bLangExpression : bLangInvocation.argExprs) {
-                    if (bLangExpression instanceof BLangSimpleVarRef) {
-                        BLangSimpleVarRef simpleVarRef = (BLangSimpleVarRef) bLangExpression;
-                        String varName = simpleVarRef.variableName.value;
-                        String argType = lookupVariableReturnType(varName, parent);
-                        list.add(argType + " " + varName);
-                        argNames.add(varName);
-                    } else if (bLangExpression instanceof BLangInvocation) {
-                        BLangInvocation invocation = (BLangInvocation) bLangExpression;
-                        String functionName = invocation.name.value;
-                        String argType = lookupFunctionReturnType(functionName, parent);
-                        String argName = generateArgName(argCounter++, argNames);
-                        list.add(argType + " " + argName);
-                        argNames.add(argName);
-                    } else {
-                        String argName = generateArgName(argCounter++, argNames);
-                        list.add("any " + argName);
-                        argNames.add(argName);
-                    }
-                }
-            }
-            return (!list.isEmpty()) ? String.join(", ", list) : null;
-        }
-
-        private static String lookupVariableReturnType(String variableName, BLangNode parent) {
-            if (parent instanceof BLangBlockStmt) {
-                BLangBlockStmt blockStmt = (BLangBlockStmt) parent;
-                Scope scope = blockStmt.scope;
-                if (scope != null) {
-                    for (Map.Entry<Name, Scope.ScopeEntry> entry : scope.entries.entrySet()) {
-                        String key = entry.getKey().getValue();
-                        BSymbol symbol = entry.getValue().symbol;
-                        if (variableName.equals(key) && symbol instanceof BVarSymbol) {
-                            return getFuncReturnSignature(symbol.type);
-                        }
-                    }
-                }
-            }
-            return (parent != null && parent.parent != null)
-                    ? lookupVariableReturnType(variableName, parent.parent)
-                    : "any";
-        }
-
-        private static String lookupFunctionReturnType(String functionName, BLangNode parent) {
-            if (parent instanceof BLangPackage) {
-                BLangPackage blockStmt = (BLangPackage) parent;
-                List<BLangFunction> functions = blockStmt.functions;
-                for (BLangFunction function : functions) {
-                    if (functionName.equals(function.name.getValue())) {
-                        return getFuncReturnSignature(function.returnTypeNode);
-                    }
-                }
-            }
-            return (parent != null && parent.parent != null)
-                    ? lookupFunctionReturnType(functionName, parent.parent) : "any";
-        }
-
-        private static String generateArgName(int value, Set<String> argNames) {
-            StringBuilder result = new StringBuilder();
-            int index = value;
-            while (--index >= 0) {
-                result.insert(0, (char) ('a' + index % 26));
-                index /= 26;
-            }
-            while (argNames.contains(result.toString())) {
-                result = new StringBuilder(generateArgName(++value, argNames));
-            }
-            return result.toString();
         }
     }
 }

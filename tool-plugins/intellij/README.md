@@ -32,11 +32,20 @@ IntelliJ Platfom.
 | Plugin Version | Platform Version |
 | --- | --- |
 | 0.8.0 - 0.8.2 | IntelliJ IDEA 2016.3+ (Does not support IntelliJ IDEA 2017+)|
-| 0.8.3+ | IntelliJ IDEA 2016.3+ (Supports IntelliJ IDEA 2017+)|
+| 0.8.3 - 0.981.0 | IntelliJ IDEA 2016.3+ (Supports IntelliJ IDEA 2017+)|
+| 0.982.0+ | IntelliJ IDEA 2017.3+|
 
 ## Getting started
 
 Please refer the [Getting Started](getting-started) section.
+
+## Semantic Analyzing
+
+Ballerina IDEA plugin provides semantic analyzing capabilities through Ballerina SDK. But this feature is disabled by default due to performance related reasons.
+
+You can enable this in `Settings -> Languages & Frameworks -> Ballerina -> Semantic Analyzer`.
+
+![alt text](getting-started/features/images/SemanticAnalyzing.png)
 
 ## How to contribute
 Pull requests are highly encouraged and we recommend you to create a GitHub issue to discuss the issue or feature that you are contributing to.

@@ -32,19 +32,23 @@ import org.ballerinalang.natives.annotations.Receiver;
 import org.ballerinalang.natives.annotations.ReturnType;
 import org.ballerinalang.stdlib.io.channels.base.Channel;
 import org.ballerinalang.stdlib.io.events.EventContext;
+import org.ballerinalang.stdlib.io.events.EventRegister;
 import org.ballerinalang.stdlib.io.events.EventResult;
+import org.ballerinalang.stdlib.io.events.Register;
+import org.ballerinalang.stdlib.io.events.bytes.WriteBytesEvent;
 import org.ballerinalang.stdlib.io.utils.IOConstants;
 import org.ballerinalang.stdlib.io.utils.IOUtils;
 
 /**
- * Native function ballerina.lo#writeBytes.
+ * Extern function ballerina.lo#writeBytes.
  *
  * @since 0.94
  */
 @BallerinaFunction(
         orgName = "ballerina", packageName = "io",
         functionName = "write",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = "ByteChannel", structPackage = "ballerina/io"),
+        receiver = @Receiver(type = TypeKind.OBJECT, structType = "WritableByteChannel",
+                structPackage = "ballerina/io"),
         args = {@Argument(name = "content", type = TypeKind.ARRAY, elementType = TypeKind.BYTE),
                 @Argument(name = "offset", type = TypeKind.INT)},
         returnType = {@ReturnType(type = TypeKind.INT),
@@ -103,7 +107,10 @@ public class WriteBytes implements NativeCallableUnit {
         int offset = (int) context.getIntArgument(START_OFFSET_INDEX);
         Channel byteChannel = (Channel) channel.getNativeData(IOConstants.BYTE_CHANNEL_NAME);
         EventContext eventContext = new EventContext(context, callback);
-        IOUtils.write(byteChannel, content, offset, eventContext, WriteBytes::writeResponse);
+        WriteBytesEvent writeBytesEvent = new WriteBytesEvent(byteChannel, content, offset, eventContext);
+        Register register = EventRegister.getFactory().register(writeBytesEvent, WriteBytes::writeResponse);
+        eventContext.setRegister(register);
+        register.submit();
     }
 
     @Override

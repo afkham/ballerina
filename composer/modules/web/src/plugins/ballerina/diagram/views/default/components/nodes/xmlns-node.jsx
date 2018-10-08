@@ -21,7 +21,6 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import _ from 'lodash';
 import StatementDecorator from '../decorators/statement-decorator';
-import ActiveArbiter from '../decorators/active-arbiter';
 import FragmentUtil from '../../../../../utils/fragment-utils';
 import TreeBuilder from './../../../../../model/tree-builder';
 
@@ -53,10 +52,12 @@ class XmlnsNode extends React.Component {
      * */
     handleSetter(value) {
         if (!_.isNil(value)) {
-            const parsedJson = FragmentUtil.createStatementFragment(value);
-            const newXmlNsNode = TreeBuilder.build(
-                FragmentUtil.parseFragment(parsedJson), this.parent, this.parent.kind);
-            this.parent.replaceStatements(this, newXmlNsNode);
+            const fragment = FragmentUtil.createStatementFragment(value);
+            FragmentUtil.parseFragment(fragment)
+                .then((parsedJson) => {
+                    const newXmlNsNode = TreeBuilder.build(parsedJson, this.parent, this.parent.kind);
+                    this.parent.replaceStatements(this, newXmlNsNode);
+                });
         }
     }
 
@@ -106,7 +107,6 @@ XmlnsNode.PropTypes = {
 };
 
 XmlnsNode.contextTypes = {
-    activeArbiter: PropTypes.instanceOf(ActiveArbiter).isRequired,
     designer: PropTypes.instanceOf(Object).isRequired,
 };
 

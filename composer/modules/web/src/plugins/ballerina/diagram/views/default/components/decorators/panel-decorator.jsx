@@ -161,7 +161,7 @@ class PanelDecorator extends React.Component {
             };
             return React.createElement(rightComponent.component, rightComponent.props, null);
         });
-        if (this.context.fitToWidth) {
+        if (this.context.editMode) {
             return [];
         } else {
             return [...staticButtons, ...dynamicButtons];
@@ -210,18 +210,20 @@ class PanelDecorator extends React.Component {
     setPropertyName() {
         if (this.state.editingTitle) {
             const fragment = FragmentUtils.createExpressionFragment(this.state.editingTitle);
-            const parsedJson = FragmentUtils.parseFragment(fragment);
-            if (!parsedJson.error) {
-                const identifierNode = TreeBuilder.build(parsedJson);
-                if (TreeUtils.isSimpleVariableRef(identifierNode.getVariable().getInitialExpression())) {
-                    this.props.model.setName(identifierNode.getVariable().getInitialExpression().getVariableName());
+            FragmentUtils.parseFragment(fragment)
+            .then((parsedJson) => {
+                if (!parsedJson.error) {
+                    const identifierNode = TreeBuilder.build(parsedJson);
+                    if (TreeUtils.isSimpleVariableRef(identifierNode.getVariable().getInitialExpression())) {
+                        this.props.model.setName(identifierNode.getVariable().getInitialExpression().getVariableName());
+                    }
                 }
-            }
+                this.setState({
+                    titleEditing: false,
+                    editingTitle: this.props.model.getName().value,
+                });
+            });
         }
-        this.setState({
-            titleEditing: false,
-            editingTitle: this.props.model.getName().value,
-        });
     }
 
     togglePublicPrivateFlag() {
@@ -456,12 +458,12 @@ PanelDecorator.defaultProps = {
     receiver: undefined,
     headerComponent: undefined,
     packageIdentifier: undefined,
-    fitToWidth: true,
+    editMode: true,
 };
 
 PanelDecorator.contextTypes = {
     editor: PropTypes.instanceOf(Object).isRequired,
-    fitToWidth: PropTypes.bool,
+    editMode: PropTypes.bool,
 };
 
 export default PanelDecorator;

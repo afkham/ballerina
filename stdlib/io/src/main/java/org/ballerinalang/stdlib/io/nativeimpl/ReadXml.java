@@ -29,13 +29,14 @@ import org.ballerinalang.model.values.BXML;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.natives.annotations.Receiver;
 import org.ballerinalang.stdlib.io.channels.base.CharacterChannel;
+import org.ballerinalang.stdlib.io.events.EventContext;
 import org.ballerinalang.stdlib.io.readers.CharacterChannelReader;
 import org.ballerinalang.stdlib.io.utils.IOConstants;
 import org.ballerinalang.stdlib.io.utils.IOUtils;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
 /**
- * Native function ballerina/io#readXml.
+ * Extern function ballerina/io#readXml.
  *
  * @since 0.971.0
  */
@@ -43,7 +44,8 @@ import org.ballerinalang.util.exceptions.BallerinaException;
         orgName = "ballerina",
         packageName = "io",
         functionName = "readXml",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = "CharacterChannel", structPackage = "ballerina/io"),
+        receiver = @Receiver(type = TypeKind.OBJECT, structType = "ReadableCharacterChannel",
+                structPackage = "ballerina/io"),
         isPublic = true
 )
 public class ReadXml implements NativeCallableUnit {
@@ -51,7 +53,7 @@ public class ReadXml implements NativeCallableUnit {
     public void execute(Context context, CallableUnitCallback callback) {
         BMap<String, BValue> channel = (BMap<String, BValue>) context.getRefArgument(0);
         CharacterChannel charChannel = (CharacterChannel) channel.getNativeData(IOConstants.CHARACTER_CHANNEL_NAME);
-        CharacterChannelReader reader = new CharacterChannelReader(charChannel);
+        CharacterChannelReader reader = new CharacterChannelReader(charChannel, new EventContext());
         final BXML xml;
         try {
             xml = XMLUtils.parse(reader);

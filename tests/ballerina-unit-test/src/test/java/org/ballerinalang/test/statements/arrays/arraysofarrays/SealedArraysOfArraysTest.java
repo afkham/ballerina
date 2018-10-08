@@ -76,10 +76,9 @@ public class SealedArraysOfArraysTest {
     @Test
     public void testIntegerSealedArraysOfArrays() {
 
-        BIntArray arrayValue = new BIntArray(3);
+        BIntArray arrayValue = new BIntArray(2);
         arrayValue.add(0, 10);
         arrayValue.add(1, 12);
-        arrayValue.add(2, 13);
         BValue[] args = {arrayValue};
 
         BValue[] returnValues = BRunUtil.invoke(compileResult, "twoDArrayIntAssignment", args);
@@ -142,5 +141,17 @@ public class SealedArraysOfArraysTest {
                 resultNegative, 17, "array index out of range: index: '4', size: '3'", 64, 14);
         BAssertUtil.validateError(
                 resultNegative, 18, "array index out of range: index: '4', size: '3'", 68, 14);
+        BAssertUtil.validateError(
+                resultNegative, 19, "size mismatch in sealed array. expected '3', but found '5'", 73, 49);
+        BAssertUtil.validateError(
+                resultNegative, 20, "size mismatch in sealed array. expected '3', but found '4'", 73, 69);
+        BAssertUtil.validateError(
+                resultNegative, 21, "invalid usage of sealed type: can not infer array size", 75, 25);
+        BAssertUtil.validateError(
+                resultNegative, 22, "invalid usage of sealed type: can not infer array size", 75, 29);
+        BAssertUtil.validateError(
+                resultNegative, 23, "invalid usage of sealed type: array not initialized", 76, 5);
+        BAssertUtil.validateError(
+                resultNegative, 24, "array index out of range: index: '4', size: '3'", 83, 11);
     }
 }

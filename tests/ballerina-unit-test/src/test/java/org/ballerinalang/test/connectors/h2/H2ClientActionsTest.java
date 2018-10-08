@@ -22,7 +22,6 @@ import org.ballerinalang.launcher.util.BRunUtil;
 import org.ballerinalang.launcher.util.CompileResult;
 import org.ballerinalang.model.values.BIntArray;
 import org.ballerinalang.model.values.BInteger;
-import org.ballerinalang.model.values.BMap;
 import org.ballerinalang.model.values.BString;
 import org.ballerinalang.model.values.BValue;
 import org.ballerinalang.test.utils.SQLDBUtils;
@@ -105,24 +104,13 @@ public class H2ClientActionsTest {
     }
 
     @Test
-    public void testAddToMirrorTable() throws Exception {
-        BValue[] returns = BRunUtil.invoke(result, "testAddToMirrorTable");
-        Assert.assertEquals(returns.length, 2);
-        Assert.assertTrue(returns[0] instanceof BMap);
-        Assert.assertEquals(returns[0].stringValue(),
-                "{customerId:40, name:\"Manuri\", creditLimit:1000.0, country:\"Sri Lanka\"}");
-        Assert.assertEquals(returns[1].stringValue(),
-                "{customerId:41, name:\"Devni\", creditLimit:1000.0, country:\"Sri Lanka\"}");
-    }
-
-    @Test
     public void testUpdateInMemory() {
         BValue[] returns = BRunUtil.invoke(result, "testUpdateInMemory");
         Assert.assertEquals(returns.length, 2);
         BInteger retValue = (BInteger) returns[0];
         Assert.assertEquals(retValue.intValue(), 1);
         Assert.assertEquals(returns[1].stringValue(),
-                "[{\"customerId\":15,\"name\":\"Anne\",\"creditLimit\":1000.0," + "\"country\":\"UK\"}]");
+                "[{\"customerId\":15, \"name\":\"Anne\", \"creditLimit\":1000.0, \"country\":\"UK\"}]");
     }
 
     @Test
@@ -157,7 +145,13 @@ public class H2ClientActionsTest {
     public void testH2MemDBUpdate() {
         BValue[] returns = BRunUtil.invoke(result, "testH2MemDBUpdate");
         Assert.assertEquals(((BInteger) returns[0]).intValue(), 1);
-        Assert.assertEquals(returns[1].stringValue(), "[{\"ID\":15,\"NAME\":\"Anne\"}]");
+        Assert.assertEquals(returns[1].stringValue(), "[{\"ID\":15, \"NAME\":\"Anne\"}]");
+    }
+
+    @Test(description = "Test re-init endpoint")
+    public void testReInitEndpoint() {
+        BValue[] returns = BRunUtil.invoke(result, "testReInitEndpoint");
+        Assert.assertEquals(((BInteger) returns[0]).intValue(), 1);
     }
 
     @AfterSuite

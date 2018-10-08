@@ -38,6 +38,7 @@ import { PLUGIN_ID, EDITOR_ID, DOC_VIEW_ID, COMMANDS as COMMAND_IDS, TOOLS as TO
             DIALOGS as DIALOG_IDS, EVENTS } from './constants';
 import OpenProgramDirConfirmDialog from './dialogs/OpenProgramDirConfirmDialog';
 import FixPackageNameOrPathConfirmDialog from './dialogs/FixPackageNameOrPathConfirmDialog';
+import InvalidSwaggerDialog from './dialogs/InvalidSwaggerDialog';
 import { isInCorrectPath, getCorrectPackageForPath, getCorrectPathForPackage } from './utils/program-dir-utils';
 import TreeBuilder from './model/tree-builder';
 import FragmentUtils from './utils/fragment-utils';
@@ -100,7 +101,6 @@ class BallerinaPlugin extends Plugin {
                 listen({
                     webSocket,
                     onConnection: (connection) => {
-                        this.langServerConnection = connection;
                         // create and start the language client
                         const languageClient = new BaseLanguageClient({
                             name: 'Ballerina Language Client',
@@ -115,8 +115,13 @@ class BallerinaPlugin extends Plugin {
                             },
                             services: {
                                 commands: {
-                                    registerCommand: (...args) => {
-                                        this.lsCommands.push({ ...args });
+                                    registerCommand: (command, callback, thisArg) => {
+                                        this.lsCommands.push({
+                                            command,
+                                            callback,
+                                            thisArg,
+                                        });
+                                        return { dispose: () => {} };
                                     },
                                 },
                                 languages: new MonacoLanguages(p2m, m2p),
@@ -130,12 +135,14 @@ class BallerinaPlugin extends Plugin {
                                 },
                             },
                         });
+                        languageClient.onReady().then(() => {
+                            this.langServerConnection = connection;
+                            resolve(this.langServerConnection);
+                        });
                         const disposable = languageClient.start();
                         connection.onClose(() => disposable.dispose());
-                        resolve(this.langServerConnection);
                     },
                 });
-                
             }
         });
     }
@@ -164,18 +171,7 @@ class BallerinaPlugin extends Plugin {
                         };
                     },
                     newFileContentProvider: (fileFullPath) => {
-                        if (!fileFullPath) {
-                            return '';
-                        }
-                        const { workspace } = this.appContext;
-                        const pathSep = getPathSeperator();
-                        const pathParts = fileFullPath.split(pathSep);
-                        pathParts.splice(-1, 1);
-                        const filePath = pathParts.join(pathSep);
-                        const workspaceDir = workspace.getExplorerFolderForPath(filePath);
-                        const programDir = workspaceDir ? workspaceDir.fullPath : undefined;
-                        const pkg = getCorrectPackageForPath(programDir, filePath);
-                        return pkg ? `package ${pkg};` : '';
+                        return '';
                     },
                 },
             ],
@@ -271,18 +267,20 @@ class BallerinaPlugin extends Plugin {
                                 const onFixPackage = () => {
                                     const pkgName = `package ${correctPkg};`;
                                     const fragment = FragmentUtils.createTopLevelNodeFragment(pkgName);
-                                    const parsedJson = FragmentUtils.parseFragment(fragment);
-                                    // If there's no packageDeclaration node, then create one
-                                    if (ast.filterTopLevelNodes({ kind: 'PackageDeclaration' }).length === 0) {
-                                        ast.addTopLevelNodes(TreeBuilder.build(parsedJson), 0);
-                                    } else {
-                                        // If a packageDeclaratioNode already exists then -
-                                        // remove that node, and add a new one
-                                        const pkgDeclarationNode =
-                                            ast.filterTopLevelNodes({ kind: 'PackageDeclaration' })[0];
-                                        ast.removeTopLevelNodes(pkgDeclarationNode, true);
-                                        ast.addTopLevelNodes(TreeBuilder.build(parsedJson), 0);
-                                    }
+                                    FragmentUtils.parseFragment(fragment)
+                                        .then((parsedJson) => {
+                                            // If there's no packageDeclaration node, then create one
+                                            if (ast.filterTopLevelNodes({ kind: 'PackageDeclaration' }).length === 0) {
+                                                ast.addTopLevelNodes(TreeBuilder.build(parsedJson), 0);
+                                            } else {
+                                                // If a packageDeclaratioNode already exists then -
+                                                // remove that node, and add a new one
+                                                const pkgDeclarationNode =
+                                                    ast.filterTopLevelNodes({ kind: 'PackageDeclaration' })[0];
+                                                ast.removeTopLevelNodes(pkgDeclarationNode, true);
+                                                ast.addTopLevelNodes(TreeBuilder.build(parsedJson), 0);
+                                            }
+                                        });
                                 };
 
                                 dispatch(LAYOUT_COMMANDS.POPUP_DIALOG, {
@@ -304,7 +302,7 @@ class BallerinaPlugin extends Plugin {
                     cmdID: WORKSPACE_EVENTS.FILE_OPENED,
                     handler: ({ file }) => {
                         parseFile(file)
-                            .then(({ programDirPath = undefined }) => {
+                            .then(({ programDirPath = undefined, debugPackagePath }) => {
                                 const { workspace, command: { dispatch } } = this.appContext;
                                 if (programDirPath && !workspace.isFilePathOpenedInExplorer(programDirPath)) {
                                     dispatch(LAYOUT_COMMANDS.POPUP_DIALOG, {
@@ -317,6 +315,9 @@ class BallerinaPlugin extends Plugin {
                                             },
                                         },
                                     });
+                                }
+                                if (debugPackagePath) {
+                                    file.debugPackagePath = debugPackagePath;
                                 }
                             });
                     },
@@ -335,6 +336,15 @@ class BallerinaPlugin extends Plugin {
                 {
                     id: DIALOG_IDS.FIX_PACKAGE_NAME_OR_PATH_CONFIRM,
                     component: FixPackageNameOrPathConfirmDialog,
+                    propsProvider: () => {
+                        return {
+                            ballerinaPlugin: this,
+                        };
+                    },
+                },
+                {
+                    id: DIALOG_IDS.INVALID_SWAGGER_DIALOG,
+                    component: InvalidSwaggerDialog,
                     propsProvider: () => {
                         return {
                             ballerinaPlugin: this,

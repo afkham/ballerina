@@ -84,6 +84,7 @@ import io.ballerina.plugins.idea.psi.BallerinaNamedPattern;
 import io.ballerina.plugins.idea.psi.BallerinaNamespaceDeclaration;
 import io.ballerina.plugins.idea.psi.BallerinaNullableTypeName;
 import io.ballerina.plugins.idea.psi.BallerinaObjectCallableUnitSignature;
+import io.ballerina.plugins.idea.psi.BallerinaObjectFieldDefinition;
 import io.ballerina.plugins.idea.psi.BallerinaObjectFunctionDefinition;
 import io.ballerina.plugins.idea.psi.BallerinaObjectInitializer;
 import io.ballerina.plugins.idea.psi.BallerinaObjectInitializerParameterList;
@@ -157,6 +158,9 @@ public class BallerinaPsiImplUtil {
     }
 
     public static final String LOCAL_PACKAGE_PLACEHOLDER = "$LOCAL_PROJECT$";
+    // Since instances of "com.intellij.openapi.project.Project" returns system-independant paths for project directory
+    // File.seperator should not be used
+    private static final String FILE_SEPARATOR = "/";
 
     @Nullable
     public static String getName(@NotNull BallerinaPackageName ballerinaPackageName) {
@@ -585,8 +589,8 @@ public class BallerinaPsiImplUtil {
                     PsiTreeUtil.findChildrenOfType(ballerinaTypeDefinition, BallerinaObjectFunctionDefinition.class);
             for (BallerinaObjectFunctionDefinition ballerinaObjectFunctionDefinition :
                     ballerinaObjectFunctionDefinitions) {
-                BallerinaObjectCallableUnitSignature objectCallableUnitSignature =
-                        ballerinaObjectFunctionDefinition.getObjectCallableUnitSignature();
+                BallerinaCallableUnitSignature objectCallableUnitSignature =
+                        ballerinaObjectFunctionDefinition.getCallableUnitSignature();
                 if (objectCallableUnitSignature == null) {
                     continue;
                 }
@@ -608,8 +612,8 @@ public class BallerinaPsiImplUtil {
             Collection<BallerinaObjectFunctionDefinition> ballerinaObjectFunctionDefinitions =
                     PsiTreeUtil.findChildrenOfType(ballerinaTypeDefinition, BallerinaObjectFunctionDefinition.class);
             for (BallerinaObjectFunctionDefinition functionDefinition : ballerinaObjectFunctionDefinitions) {
-                BallerinaObjectCallableUnitSignature objectCallableUnitSignature =
-                        functionDefinition.getObjectCallableUnitSignature();
+                BallerinaCallableUnitSignature objectCallableUnitSignature =
+                        functionDefinition.getCallableUnitSignature();
                 if (objectCallableUnitSignature == null) {
                     continue;
                 }
@@ -625,6 +629,61 @@ public class BallerinaPsiImplUtil {
     @Nullable
     public static BallerinaTypeDefinition getClientFromReturnType(@NotNull BallerinaObjectCallableUnitSignature
                                                                           signature) {
+        return CachedValuesManager.getCachedValue(signature, () -> {
+            BallerinaReturnParameter returnParameter = signature.getReturnParameter();
+            if (returnParameter == null) {
+                return CachedValueProvider.Result.create(null, signature);
+            }
+            BallerinaReturnType returnType = returnParameter.getReturnType();
+            if (returnType == null) {
+                return CachedValueProvider.Result.create(null, signature);
+            }
+            BallerinaTypeName typeName = returnType.getTypeName();
+            if (typeName instanceof BallerinaTupleTypeName) {
+                List<BallerinaTypeName> typeNameList = ((BallerinaTupleTypeName) typeName).getTypeNameList();
+                if (typeNameList.size() != 1) {
+                    return CachedValueProvider.Result.create(null, signature);
+                }
+                BallerinaTypeName ballerinaTypeName = typeNameList.get(0);
+                if (!(ballerinaTypeName instanceof BallerinaSimpleTypeName)) {
+                    return CachedValueProvider.Result.create(null, signature);
+                }
+                PsiElement typeFromTypeName = getTypeFromTypeName(ballerinaTypeName);
+                if (typeFromTypeName == null) {
+                    return CachedValueProvider.Result.create(null, signature);
+                }
+                if ((!(typeFromTypeName.getParent() instanceof BallerinaTypeDefinition))) {
+                    return CachedValueProvider.Result.create(null, signature);
+                }
+                BallerinaTypeDefinition result = ((BallerinaTypeDefinition) typeFromTypeName.getParent());
+                return CachedValueProvider.Result.create(result, signature);
+            } else if (typeName instanceof BallerinaSimpleTypeName) {
+                PsiElement typeFromTypeName = getTypeFromTypeName(typeName);
+                if (typeFromTypeName != null) {
+                    if ((typeFromTypeName.getParent() instanceof BallerinaTypeDefinition)) {
+                        BallerinaTypeDefinition result = ((BallerinaTypeDefinition) typeFromTypeName.getParent());
+                        return CachedValueProvider.Result.create(result, signature);
+                    }
+                    PsiReference reference = typeFromTypeName.findReferenceAt(typeFromTypeName.getTextLength());
+                    if (reference == null) {
+                        return CachedValueProvider.Result.create(null, signature);
+                    }
+                    PsiElement resolvedElement = reference.resolve();
+                    if (resolvedElement == null) {
+                        return CachedValueProvider.Result.create(null, signature);
+                    }
+                    if (resolvedElement.getParent() instanceof BallerinaTypeDefinition) {
+                        BallerinaTypeDefinition result = (BallerinaTypeDefinition) resolvedElement;
+                        return CachedValueProvider.Result.create(result, signature);
+                    }
+                }
+            }
+            return CachedValueProvider.Result.create(null, signature);
+        });
+    }
+
+    @Nullable
+    public static BallerinaTypeDefinition getClientFromReturnType(@NotNull BallerinaCallableUnitSignature signature) {
         return CachedValuesManager.getCachedValue(signature, () -> {
             BallerinaReturnParameter returnParameter = signature.getReturnParameter();
             if (returnParameter == null) {
@@ -992,8 +1051,8 @@ public class BallerinaPsiImplUtil {
             BallerinaObjectFunctionDefinition objectFunctionDefinition = PsiTreeUtil.getParentOfType(parent,
                     BallerinaObjectFunctionDefinition.class);
             if (objectFunctionDefinition != null) {
-                BallerinaObjectCallableUnitSignature callableUnitSignature =
-                        objectFunctionDefinition.getObjectCallableUnitSignature();
+                BallerinaCallableUnitSignature callableUnitSignature =
+                        objectFunctionDefinition.getCallableUnitSignature();
                 if (callableUnitSignature == null) {
                     return CachedValueProvider.Result.create(null, variableReference);
                 }
@@ -1554,6 +1613,15 @@ public class BallerinaPsiImplUtil {
         return formatParameterDefaultValue(expression);
     }
 
+    @Nullable
+    public static String getObjectFieldDefaultValue(@Nullable BallerinaObjectFieldDefinition ballerinaFieldDefinition) {
+        if (ballerinaFieldDefinition == null) {
+            return null;
+        }
+        BallerinaExpression expression = ballerinaFieldDefinition.getExpression();
+        return formatParameterDefaultValue(expression);
+    }
+
     public static boolean isObjectInitializer(@NotNull PsiElement element) {
         if (element instanceof BallerinaVariableDefinitionStatement) {
             PsiElement type = BallerinaPsiImplUtil.getType(((BallerinaVariableDefinitionStatement) element));
@@ -1681,37 +1749,37 @@ public class BallerinaPsiImplUtil {
     @NotNull
     public static String getPackage(@NotNull PsiFile file) {
         Project project = file.getProject();
-        String modulePath = project.getBasePath() + File.separator;
+        String modulePath = project.getBasePath() + FILE_SEPARATOR;
         String filePath = file.getVirtualFile().getPath();
         filePath = filePath.replace(modulePath, "");
-        if (!filePath.contains(File.separator)) {
+        if (!filePath.contains(FILE_SEPARATOR)) {
             return "";
         }
-        int index = filePath.indexOf(File.separator);
+        int index = filePath.indexOf(FILE_SEPARATOR);
         return filePath.substring(0, index);
     }
 
     @NotNull
     public static String getPackage(@NotNull Project project, @NotNull VirtualFile virtualFile) {
-        String modulePath = project.getBasePath() + File.separator;
+        String modulePath = project.getBasePath() + FILE_SEPARATOR;
         String filePath = virtualFile.getPath();
         filePath = filePath.replace(modulePath, "");
-        if (!filePath.contains(File.separator)) {
+        if (!filePath.contains(FILE_SEPARATOR)) {
             return "";
         }
-        int index = filePath.indexOf(File.separator);
+        int index = filePath.indexOf(FILE_SEPARATOR);
         return filePath.substring(0, index);
     }
 
     @NotNull
     public static String getFilePathInPackage(@NotNull Project project, @NotNull VirtualFile virtualFile) {
-        String projectPath = project.getBasePath() + File.separator;
+        String projectPath = project.getBasePath() + FILE_SEPARATOR;
         String filePath = virtualFile.getPath();
         filePath = filePath.replace(projectPath, "");
-        if (!filePath.contains(File.separator)) {
+        if (!filePath.contains(FILE_SEPARATOR)) {
             return "";
         }
-        int index = filePath.indexOf(File.separator);
+        int index = filePath.indexOf(FILE_SEPARATOR);
         return filePath.substring(index + 1);
     }
 

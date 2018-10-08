@@ -2,7 +2,6 @@ lexer grammar BallerinaLexer;
 
 @members {
     boolean inTemplate = false;
-    boolean inDocTemplate = false;
     boolean inDeprecatedTemplate = false;
     boolean inSiddhi = false;
     boolean inTableSqlQuery = false;
@@ -17,7 +16,7 @@ IMPORT      : 'import' ;
 AS          : 'as' ;
 PUBLIC      : 'public' ;
 PRIVATE     : 'private' ;
-NATIVE      : 'native' ;
+EXTERN      : 'extern' ;
 SERVICE     : 'service' ;
 RESOURCE    : 'resource' ;
 FUNCTION    : 'function' ;
@@ -32,10 +31,11 @@ BIND        : 'bind' ;
 XMLNS       : 'xmlns' ;
 RETURNS     : 'returns';
 VERSION     : 'version';
-DOCUMENTATION  : 'documentation';
-DEPRECATED  :  'deprecated';
+DEPRECATED  : 'deprecated';
+CHANNEL     : 'channel';
+ABSTRACT    : 'abstract';
 
-FROM        : 'from' { inSiddhi = true; inTableSqlQuery = true; inSiddhiInsertQuery = true; inSiddhiOutputRateLimit = true; } ;
+FROM        : 'from' { inTableSqlQuery = true; inSiddhiInsertQuery = true; inSiddhiOutputRateLimit = true; } ;
 ON          : 'on' ;
 SELECT      : {inTableSqlQuery}? 'select' { inTableSqlQuery = false; } ;
 GROUP       : 'group' ;
@@ -44,10 +44,7 @@ HAVING      : 'having' ;
 ORDER       : 'order' ;
 WHERE       : 'where' ;
 FOLLOWED    : 'followed' ;
-INSERT      : {inSiddhi}? 'insert' { inSiddhi = false; } ;
 INTO        : 'into' ;
-UPDATE      : {inSiddhi}? 'update' { inSiddhi = false; } ;
-DELETE      : {inSiddhi}? 'delete' { inSiddhi = false; } ;
 SET         : 'set' ;
 FOR         : 'for' { inSiddhiTimeScaleQuery = true; } ;
 WINDOW      : 'window' ;
@@ -74,12 +71,12 @@ HOUR        : {inSiddhiTimeScaleQuery}? 'hour' { inSiddhiTimeScaleQuery = false;
 DAY         : {inSiddhiTimeScaleQuery}? 'day' { inSiddhiTimeScaleQuery = false; } ;
 MONTH       : {inSiddhiTimeScaleQuery}? 'month' { inSiddhiTimeScaleQuery = false; } ;
 YEAR        : {inSiddhiTimeScaleQuery}? 'year' { inSiddhiTimeScaleQuery = false; } ;
-SECONDS      : {inSiddhiTimeScaleQuery}? 'seconds' { inSiddhiTimeScaleQuery = false; } ;
-MINUTES      : {inSiddhiTimeScaleQuery}? 'minutes' { inSiddhiTimeScaleQuery = false; } ;
-HOURS        : {inSiddhiTimeScaleQuery}? 'hours' { inSiddhiTimeScaleQuery = false; } ;
-DAYS         : {inSiddhiTimeScaleQuery}? 'days' { inSiddhiTimeScaleQuery = false; } ;
+SECONDS     : {inSiddhiTimeScaleQuery}? 'seconds' { inSiddhiTimeScaleQuery = false; } ;
+MINUTES     : {inSiddhiTimeScaleQuery}? 'minutes' { inSiddhiTimeScaleQuery = false; } ;
+HOURS       : {inSiddhiTimeScaleQuery}? 'hours' { inSiddhiTimeScaleQuery = false; } ;
+DAYS        : {inSiddhiTimeScaleQuery}? 'days' { inSiddhiTimeScaleQuery = false; } ;
 MONTHS      : {inSiddhiTimeScaleQuery}? 'months' { inSiddhiTimeScaleQuery = false; } ;
-YEARS        : {inSiddhiTimeScaleQuery}? 'years' { inSiddhiTimeScaleQuery = false; } ;
+YEARS       : {inSiddhiTimeScaleQuery}? 'years' { inSiddhiTimeScaleQuery = false; } ;
 FOREVER     : 'forever' ;
 LIMIT       : 'limit' ;
 ASCENDING   : 'ascending' ;
@@ -121,7 +118,7 @@ THROW       : 'throw' ;
 RETURN      : 'return' ;
 TRANSACTION : 'transaction' ;
 ABORT       : 'abort' ;
-RETRY        : 'retry' ;
+RETRY       : 'retry' ;
 ONRETRY     : 'onretry' ;
 RETRIES     : 'retries' ;
 ONABORT     : 'onabort' ;
@@ -136,8 +133,10 @@ AWAIT       : 'await' ;
 BUT         : 'but' ;
 CHECK       : 'check' ;
 DONE        : 'done' ;
+SCOPE       : 'scope';
+COMPENSATION: 'compensation';
+COMPENSATE  : 'compensate' ;
 PRIMARYKEY  : 'primarykey' ;
-SEALED      : 'sealed' ;
 
 // Separators
 
@@ -153,6 +152,11 @@ RIGHT_PARENTHESIS   : ')' ;
 LEFT_BRACKET        : '[' ;
 RIGHT_BRACKET       : ']' ;
 QUESTION_MARK       : '?' ;
+
+// Documentation markdown
+
+fragment
+HASH                : '#' ;
 
 // Arithmetic operators
 
@@ -177,8 +181,9 @@ OR          : '||' ;
 
 // Bitwise Operators
 
-BITAND  : '&' ;
-BITXOR  : '^' ;
+BIT_AND          : '&' ;
+BIT_XOR          : '^' ;
+BIT_COMPLEMENT   : '~' ;
 
 // Additional symbols 
 
@@ -200,6 +205,14 @@ COMPOUND_SUB   : '-=' ;
 COMPOUND_MUL   : '*=' ;
 COMPOUND_DIV   : '/=' ;
 
+COMPOUND_BIT_AND   : '&=' ;
+COMPOUND_BIT_OR    : '|=' ;
+COMPOUND_BIT_XOR   : '^=' ;
+
+COMPOUND_LEFT_SHIFT      : '<<=' ;
+COMPOUND_RIGHT_SHIFT     : '>>=' ;
+COMPOUND_LOGICAL_SHIFT   : '>>>=' ;
+
 // Post Arithmetic operators.
 
 INCREMENT      : '++' ;
@@ -210,35 +223,26 @@ DECREMENT      : '--' ;
 HALF_OPEN_RANGE   : '..<' ;
 
 DecimalIntegerLiteral
-    :   DecimalNumeral IntegerTypeSuffix?
+    :   DecimalNumeral
     ;
 
 HexIntegerLiteral
-    :   HexNumeral IntegerTypeSuffix?
-    ;
-
-OctalIntegerLiteral
-    :   OctalNumeral IntegerTypeSuffix?
+    :   HexNumeral
     ;
 
 BinaryIntegerLiteral
-    :   BinaryNumeral IntegerTypeSuffix?
-    ;
-
-fragment
-IntegerTypeSuffix
-    :   [lL]
+    :   BinaryNumeral
     ;
 
 fragment
 DecimalNumeral
     :   '0'
-    |   NonZeroDigit (Digits? | Underscores Digits)
+    |   NonZeroDigit Digits?
     ;
 
 fragment
 Digits
-    :   Digit (DigitOrUnderscore* Digit)?
+    :   Digit+
     ;
 
 fragment
@@ -253,56 +257,30 @@ NonZeroDigit
     ;
 
 fragment
-DigitOrUnderscore
-    :   Digit
-    |   '_'
-    ;
-
-fragment
-Underscores
-    :   '_'+
-    ;
-
-fragment
 HexNumeral
     :   '0' [xX] HexDigits
     ;
 
 fragment
+DottedHexNumber
+    :   HexDigits DOT HexDigits
+    |   DOT HexDigits
+    ;
+
+fragment
+DottedDecimalNumber
+    :   DecimalNumeral DOT Digits
+    |   DOT Digit+
+    ;
+
+fragment
 HexDigits
-    :   HexDigit (HexDigitOrUnderscore* HexDigit)?
+    :   HexDigit+
     ;
 
 fragment
 HexDigit
     :   [0-9a-fA-F]
-    ;
-
-fragment
-HexDigitOrUnderscore
-    :   HexDigit
-    |   '_'
-    ;
-
-fragment
-OctalNumeral
-    :   '0' Underscores? OctalDigits
-    ;
-
-fragment
-OctalDigits
-    :   OctalDigit (OctalDigitOrUnderscore* OctalDigit)?
-    ;
-
-fragment
-OctalDigit
-    :   [0-7]
-    ;
-
-fragment
-OctalDigitOrUnderscore
-    :   OctalDigit
-    |   '_'
     ;
 
 fragment
@@ -312,7 +290,7 @@ BinaryNumeral
 
 fragment
 BinaryDigits
-    :   BinaryDigit (BinaryDigitOrUnderscore* BinaryDigit)?
+    :   BinaryDigit+
     ;
 
 fragment
@@ -320,25 +298,15 @@ BinaryDigit
     :   [01]
     ;
 
-fragment
-BinaryDigitOrUnderscore
-    :   BinaryDigit
-    |   '_'
-    ;
-
 // §3.10.2 Floating-Point Literals
 
-FloatingPointLiteral
-    :   DecimalFloatingPointLiteral
-    |   HexadecimalFloatingPointLiteral
+HexadecimalFloatingPointLiteral
+    :   HexIndicator HexFloatingPointNumber
     ;
 
-fragment
-DecimalFloatingPointLiteral
-    :   Digits '.' (Digits ExponentPart? FloatTypeSuffix? | Digits? ExponentPart FloatTypeSuffix? | Digits? ExponentPart? FloatTypeSuffix)
-    |   '.' Digits ExponentPart? FloatTypeSuffix?
-    |   Digits ExponentPart FloatTypeSuffix?
-    |   Digits FloatTypeSuffix
+DecimalFloatingPointNumber
+    :   DecimalNumeral ExponentPart
+    |   DottedDecimalNumber ExponentPart?
     ;
 
 fragment
@@ -362,19 +330,14 @@ Sign
     ;
 
 fragment
-FloatTypeSuffix
-    :   [fFdD]
+HexIndicator
+    :   '0' [xX]
     ;
 
 fragment
-HexadecimalFloatingPointLiteral
-    :   HexSignificand BinaryExponent FloatTypeSuffix?
-    ;
-
-fragment
-HexSignificand
-    :   HexNumeral '.'?
-    |   '0' [xX] HexDigits? '.' HexDigits
+HexFloatingPointNumber
+    :   HexDigits BinaryExponent
+    |   DottedHexNumber BinaryExponent?
     ;
 
 fragment
@@ -416,25 +379,12 @@ StringCharacter
 fragment
 EscapeSequence
     :   '\\' [btnfr"'\\]
-    |   OctalEscape
     |   UnicodeEscape
-    ;
-
-fragment
-OctalEscape
-    :   '\\' OctalDigit
-    |   '\\' OctalDigit OctalDigit
-    |   '\\' ZeroToThree OctalDigit OctalDigit
     ;
 
 fragment
 UnicodeEscape
     :   '\\' 'u' HexDigit HexDigit HexDigit HexDigit
-    ;
-
-fragment
-ZeroToThree
-    :   [0-3]
     ;
 
 // Blob Literal
@@ -508,20 +458,25 @@ StringTemplateLiteralStart
     :   TYPE_STRING WS* BACKTICK   { inTemplate = true; } -> pushMode(STRING_TEMPLATE)
     ;
 
-DocumentationTemplateStart
-    :   DOCUMENTATION WS* LEFT_BRACE   { inDocTemplate = true; } -> pushMode(DOCUMENTATION_TEMPLATE)
+DocumentationLineStart
+    :   HASH DocumentationSpace? -> pushMode(MARKDOWN_DOCUMENTATION)
     ;
+
+ParameterDocumentationStart
+    :   HASH DocumentationSpace? ADD DocumentationSpace* -> pushMode(MARKDOWN_DOCUMENTATION_PARAM)
+    ;
+
+ReturnParameterDocumentationStart
+    :   HASH DocumentationSpace? ADD DocumentationSpace* RETURN DocumentationSpace* SUB DocumentationSpace* -> pushMode(MARKDOWN_DOCUMENTATION)
+    ;
+
 
 DeprecatedTemplateStart
     :   DEPRECATED WS* LEFT_BRACE   { inDeprecatedTemplate = true; } -> pushMode(DEPRECATED_TEMPLATE)
     ;
 
 ExpressionEnd
-    :   {inTemplate}? RIGHT_BRACE WS* RIGHT_BRACE   ->  popMode
-    ;
-
-DocumentationTemplateAttributeEnd
-    :   {inDocTemplate}? RIGHT_BRACE WS* RIGHT_BRACE               ->  popMode
+    :   {inTemplate}? RIGHT_BRACE RIGHT_BRACE   ->  popMode
     ;
 
 // Whitespace and comments
@@ -550,6 +505,100 @@ IdentifierLiteralEscapeSequence
     : '\\' [|"\\/]
     | '\\\\' [btnfr]
     | UnicodeEscape
+    ;
+
+mode MARKDOWN_DOCUMENTATION;
+
+VARIABLE    : 'variable';
+MODULE      : 'module';
+
+ReferenceType
+    :   TYPE|ENDPOINT|SERVICE|VARIABLE|VAR|ANNOTATION|MODULE|FUNCTION|PARAMETER
+    ;
+
+DocumentationText
+    :   (DocumentationTextCharacter | DocumentationEscapedCharacters)+
+    ;
+
+SingleBacktickStart
+    :   BACKTICK -> pushMode(SINGLE_BACKTICKED_DOCUMENTATION)
+    ;
+
+DoubleBacktickStart
+    :   BACKTICK BACKTICK -> pushMode(DOUBLE_BACKTICKED_DOCUMENTATION)
+    ;
+
+TripleBacktickStart
+    :   BACKTICK BACKTICK BACKTICK -> pushMode(TRIPLE_BACKTICKED_DOCUMENTATION)
+    ;
+
+DefinitionReference
+    :   ReferenceType DocumentationSpace+
+    ;
+
+fragment
+DocumentationTextCharacter
+    :   ~[`\n ]
+    |   '\\' BACKTICK
+    ;
+
+DocumentationEscapedCharacters
+    :   DocumentationSpace
+    ;
+
+DocumentationSpace
+    :   [ ]
+    ;
+
+DocumentationEnd
+    :   [\n] -> channel(HIDDEN), popMode
+    ;
+
+mode MARKDOWN_DOCUMENTATION_PARAM;
+
+ParameterName
+    :   Identifier
+    ;
+
+DescriptionSeparator
+    :   DocumentationSpace* SUB DocumentationSpace* -> popMode, pushMode(MARKDOWN_DOCUMENTATION)
+    ;
+
+DocumentationParamEnd
+    :   [\n] -> channel(HIDDEN), popMode
+    ;
+
+mode SINGLE_BACKTICKED_DOCUMENTATION;
+
+SingleBacktickContent
+    :   ((~[`\n] | '\\' BACKTICK)* [\n])? (DocumentationLineStart (~[`\n] | '\\' BACKTICK)* [\n]?)+
+    |   (~[`\n] | '\\' BACKTICK)+
+    ;
+
+SingleBacktickEnd
+    :   BACKTICK -> popMode
+    ;
+
+mode DOUBLE_BACKTICKED_DOCUMENTATION;
+
+DoubleBacktickContent
+    :   ((~[`\n] | BACKTICK ~[`])* [\n])? (DocumentationLineStart (~[`\n] | BACKTICK ~[`])* [\n]?)+
+    |   (~[`\n] | BACKTICK ~[`])+
+    ;
+
+DoubleBacktickEnd
+    :   BACKTICK BACKTICK -> popMode
+    ;
+
+mode TRIPLE_BACKTICKED_DOCUMENTATION;
+
+TripleBacktickContent
+    :   ((~[`\n] | BACKTICK ~[`] | BACKTICK BACKTICK ~[`])* [\n])? (DocumentationLineStart (~[`\n] | BACKTICK ~[`] | BACKTICK BACKTICK ~[`])* [\n]?)+
+    |   (~[`\n] | BACKTICK ~[`] | BACKTICK BACKTICK ~[`])+
+    ;
+
+TripleBacktickEnd
+    :   BACKTICK BACKTICK BACKTICK -> popMode
     ;
 
 
@@ -816,64 +865,6 @@ XMLCommentSpecialSequence
     |   '-'? '>'* '-'+
     ;
 
-mode DOCUMENTATION_TEMPLATE;
-
-DocumentationTemplateEnd
-    :   RIGHT_BRACE { inDocTemplate = false; }                                 -> popMode
-    ;
-
-DocumentationTemplateAttributeStart
-    :   AttributePrefix ExpressionStart                                        -> pushMode(DEFAULT_MODE)
-    ;
-
-SBDocInlineCodeStart
-    :  AttributePrefix? DocBackTick                                            -> pushMode(SINGLE_BACKTICK_INLINE_CODE)
-    ;
-
-DBDocInlineCodeStart
-    :  AttributePrefix? DocBackTick DocBackTick                                -> pushMode(DOUBLE_BACKTICK_INLINE_CODE)
-    ;
-
-TBDocInlineCodeStart
-    :  AttributePrefix? DocBackTick DocBackTick DocBackTick                    -> pushMode(TRIPLE_BACKTICK_INLINE_CODE)
-    ;
-
-DocumentationTemplateText
-    :   DocumentationValidCharSequence? (DocumentationTemplateStringChar DocumentationValidCharSequence?)+
-    |   DocumentationValidCharSequence  (DocumentationTemplateStringChar DocumentationValidCharSequence?)*
-    ;
-
-fragment
-DocumentationTemplateStringChar
-    :   ~[`{}\\FPTRVE]
-    |   '\\' [{}`]
-    |   WS
-    |   DocumentationEscapedSequence
-    ;
-
-fragment
-AttributePrefix
-    :   [FPTRVE]
-    ;
-
-fragment
-DocBackTick
-    :   '`'
-    ;
-
-fragment
-DocumentationEscapedSequence
-    :   '\\\\'
-    ;
-
-fragment
-DocumentationValidCharSequence
-     :  [FPTRVE] ~[`{}\\]
-     |  [FPTRVE] '\\' [{}`]
-     |  [FPTRVE] '\\' ~[{}`]
-     |  '\\' ~'\\'
-     ;
-
 mode TRIPLE_BACKTICK_INLINE_CODE;
 
 TripleBackTickInlineCodeEnd
@@ -921,6 +912,8 @@ fragment
 SingleBackTickInlineCodeChar
     :  ~[`]
     ;
+
+// Todo - Remove after finalizing the new deprecated annotation
 
 mode DEPRECATED_TEMPLATE;
 

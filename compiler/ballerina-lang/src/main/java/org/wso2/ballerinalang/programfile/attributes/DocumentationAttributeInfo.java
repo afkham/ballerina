@@ -30,6 +30,7 @@ public class DocumentationAttributeInfo implements AttributeInfo {
     // Index to a UTF8CPEntry
     public int attributeNameIndex;
     public int descriptionCPIndex;
+    public int returnParameterDescriptionCPIndex = -1;
 
     public List<ParameterDocumentInfo> paramDocInfoList;
 
@@ -55,18 +56,13 @@ public class DocumentationAttributeInfo implements AttributeInfo {
      * @since 0.970.0
      */
     public static class ParameterDocumentInfo {
+
         public int nameCPIndex;
-        public int typeSigCPIndex;
-        public int paramKindCPIndex;
         public int descriptionCPIndex;
 
         public ParameterDocumentInfo(int nameCPIndex,
-                                     int typeSigCPIndex,
-                                     int paramKindCPIndex,
                                      int descriptionCPIndex) {
             this.nameCPIndex = nameCPIndex;
-            this.typeSigCPIndex = typeSigCPIndex;
-            this.paramKindCPIndex = paramKindCPIndex;
             this.descriptionCPIndex = descriptionCPIndex;
         }
     }

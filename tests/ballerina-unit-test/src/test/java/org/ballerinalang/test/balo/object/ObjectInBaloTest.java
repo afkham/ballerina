@@ -383,9 +383,7 @@ public class ObjectInBaloTest {
         CompileResult result = BCompileUtil.compile("test-src/balo/test_balo/object" +
                 "/object_with_interface_negative.bal");
         Assert.assertEquals(result.getErrorCount(), 1);
-
-        BAssertUtil.validateError(result, 0, "cannot initialize object 'testorg/foo:v1:Country', " +
-                "no implementation for the interface 'Country.attachInterface'", 4, 21);
+        BAssertUtil.validateError(result, 0, "cannot initialize abstract object 'testorg/foo:v1:Country'", 4, 21);
     }
 
     @Test (description = "Negative test to test uninitialized object variables")
@@ -395,7 +393,7 @@ public class ObjectInBaloTest {
         Assert.assertEquals(result.getErrorCount(), 3);
         BAssertUtil.validateError(result, 0, "variable 'pp' is not initialized", 3, 1);
         BAssertUtil.validateError(result, 1, "variable 'p' is not initialized", 6, 5);
-        BAssertUtil.validateError(result, 2, "undefined function 'attachInterface' in struct " +
+        BAssertUtil.validateError(result, 2, "undefined function 'attachInterface' in object " +
                 "'testorg/foo:v1:Architect'", 7, 13);
     }
 
@@ -408,9 +406,9 @@ public class ObjectInBaloTest {
                 12);
         BAssertUtil.validateError(result, 1, "cannot infer type of the object from 'testorg/foo:v1:Apartment?'", 12,
                 33);
-        BAssertUtil.validateError(result, 2, "invalid variable definition; can not infer the assignment type.",
+        BAssertUtil.validateError(result, 2, "cannot infer type of the object from 'other'", 13, 19);
+        BAssertUtil.validateError(result, 3, "invalid variable definition; can not infer the assignment type.",
                 13, 19);
-        BAssertUtil.validateError(result, 3, "cannot infer type of the object from 'other'", 13, 19);
         BAssertUtil.validateError(result, 4, "invalid usage of 'new' with type 'error'", 14, 21);
     }
 
@@ -529,7 +527,7 @@ public class ObjectInBaloTest {
 
     @AfterClass
     public void tearDown() {
-        BaloCreator.cleaPackageFromRepository("testorg", "foo");
+        BaloCreator.clearPackageFromRepository("testorg", "foo");
     }
 
 }

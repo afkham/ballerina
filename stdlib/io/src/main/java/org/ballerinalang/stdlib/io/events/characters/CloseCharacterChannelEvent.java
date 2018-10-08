@@ -18,12 +18,14 @@
 
 package org.ballerinalang.stdlib.io.events.characters;
 
+import org.ballerinalang.stdlib.io.channels.base.Channel;
 import org.ballerinalang.stdlib.io.channels.base.CharacterChannel;
 import org.ballerinalang.stdlib.io.events.Event;
 import org.ballerinalang.stdlib.io.events.EventContext;
 import org.ballerinalang.stdlib.io.events.EventResult;
+import org.ballerinalang.stdlib.io.events.EventType;
 import org.ballerinalang.stdlib.io.events.result.BooleanResult;
-import org.ballerinalang.stdlib.io.nativeimpl.CloseCharacterChannel;
+import org.ballerinalang.stdlib.io.nativeimpl.CloseReadableCharacterChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +44,7 @@ public class CloseCharacterChannelEvent implements Event {
      */
     private EventContext context;
 
-    private static final Logger log = LoggerFactory.getLogger(CloseCharacterChannel.class);
+    private static final Logger log = LoggerFactory.getLogger(CloseReadableCharacterChannel.class);
 
     public CloseCharacterChannelEvent(CharacterChannel channel, EventContext context) {
         this.channel = channel;
@@ -68,5 +70,30 @@ public class CloseCharacterChannelEvent implements Event {
             result = new BooleanResult(context);
         }
         return result;
+    }
+
+    @Override
+    public int getChannelId() {
+        return channel.id();
+    }
+
+    @Override
+    public boolean isSelectable() {
+        return channel.isSelectable();
+    }
+
+    @Override
+    public EventType getType() {
+        return EventType.CLOSE;
+    }
+
+    @Override
+    public Channel getChannel() {
+        return channel.getChannel();
+    }
+
+    @Override
+    public boolean remaining() {
+        return channel.remaining();
     }
 }

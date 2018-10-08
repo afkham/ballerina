@@ -29,7 +29,9 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 /**
- * Tests for BCounter metric.
+ * Tests for Counter metric.
+ *
+ * @since 0.980.0
  */
 public class CounterTest extends MetricTest {
     private CompileResult compileResult;
@@ -51,7 +53,7 @@ public class CounterTest extends MetricTest {
         Assert.assertEquals(returns[0], new BInteger(5));
     }
 
-    @Test
+    @Test(dependsOnGroups = "RegistryTest.testGetAllMetrics")
     public void testCounterError() {
         try {
             BRunUtil.invoke(compileResult, "testCounterError");
@@ -68,7 +70,7 @@ public class CounterTest extends MetricTest {
         Assert.assertEquals(returns[0], new BInteger(3));
     }
 
-    @Test
+    @Test(dependsOnGroups = "RegistryTest.testGetAllMetrics")
     public void testReset() {
         BValue[] returns = BRunUtil.invoke(compileResult, "testReset");
         Assert.assertTrue(((BBoolean) returns[0]).booleanValue());

@@ -41,10 +41,12 @@ import org.wso2.ballerinalang.compiler.tree.expressions.BLangTypeInit;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangAssignment;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangBlockStmt;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangCatch;
+import org.wso2.ballerinalang.compiler.tree.statements.BLangCompoundAssignment;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangForeach;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangForkJoin;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangIf;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangMatch;
+import org.wso2.ballerinalang.compiler.tree.statements.BLangScope;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangTransaction;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangTryCatchFinally;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangTupleDestructure;
@@ -458,9 +460,22 @@ public class DefinitionTreeVisitor extends LSNodeVisitor {
             this.acceptNode(typeDefinition.typeNode);
         }
 
-//        if (typeDefinition.valueSpace != null) {
-//            typeDefinition.valueSpace.forEach(this::acceptNode);
-//        }
+    }
+
+    @Override
+    public void visit(BLangScope scopeNode) {
+        if (scopeNode.scopeBody != null) {
+            this.acceptNode(scopeNode.scopeBody);
+        }
+
+        visit(scopeNode.compensationFunction);
+    }
+
+    @Override
+    public void visit(BLangCompoundAssignment assignment) {
+        if (assignment.varRef != null) {
+            this.acceptNode(assignment.varRef);
+        }
     }
 
     /**

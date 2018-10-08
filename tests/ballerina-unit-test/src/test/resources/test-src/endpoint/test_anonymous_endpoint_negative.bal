@@ -30,10 +30,11 @@ type DummyEndpoint object {
     }
 };
 
-public type DummyEndpointConfig sealed record {
+public type DummyEndpointConfig record {
     string conf1;
     boolean conf2;
     int conf3;
+    !...
 };
 
 type DummyClient object {
@@ -50,7 +51,7 @@ type DummyClient object {
     }
 };
 
-type DummyServiceType object {
+type DummyServiceType abstract object {
     function getEndpoint () returns (DummyEndpoint);
 };
 

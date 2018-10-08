@@ -28,7 +28,7 @@ import io.ballerina.plugins.idea.psi.*;
 
 public class BallerinaValueTypeNameImpl extends BallerinaCompositeElementImpl implements BallerinaValueTypeName {
 
-  public BallerinaValueTypeNameImpl(ASTNode node) {
+  public BallerinaValueTypeNameImpl(@NotNull ASTNode node) {
     super(node);
   }
 
@@ -43,14 +43,14 @@ public class BallerinaValueTypeNameImpl extends BallerinaCompositeElementImpl im
 
   @Override
   @Nullable
-  public PsiElement getBlob() {
-    return findChildByType(BLOB);
+  public PsiElement getBoolean() {
+    return findChildByType(BOOLEAN);
   }
 
   @Override
   @Nullable
-  public PsiElement getBoolean() {
-    return findChildByType(BOOLEAN);
+  public PsiElement getByte() {
+    return findChildByType(BYTE);
   }
 
   @Override

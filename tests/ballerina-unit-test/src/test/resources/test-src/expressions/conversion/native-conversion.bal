@@ -1,4 +1,4 @@
-type Person sealed record {
+type Person record {
     string name;
     int age;
     Person | () parent;
@@ -9,22 +9,26 @@ type Person sealed record {
     float score;
     boolean alive;
     Person[]|() children;
+    !...
 };
 
-type Person2 sealed record {
+type Person2 record {
     string name;
     int age;
+    !...
 };
 
-type Person3 sealed record {
+type Person3 record {
     string name;
     int age;
     string gender;
+    !...
 };
 
-type Student sealed record {
+type Student record {
     string name;
     int age;
+    !...
 };
 
 function testStructToMap () returns (map) {
@@ -66,6 +70,36 @@ function testMapToStruct () returns (Person) {
                 score:5.67,
                 alive:true
             };
+    Person p = check <Person> m;
+    return p;
+}
+
+function testNestedMapToNestedStruct() returns Person {
+    int[] marks = [87, 94, 72];
+    map parent = {
+        name:"Parent",
+        age:50,
+        parent:null,
+        address:null,
+        info:null,
+        marks:null,
+        a:null,
+        score:4.57,
+        alive:false
+    };
+
+    json info = {status:"single"};
+    map addr = {"city":"Colombo", "country":"SriLanka"};
+    map m = {name:"Child",
+        age:25,
+        parent:parent,
+        address:addr,
+        info:info,
+        marks:marks,
+        a:"any value",
+        score:5.67,
+        alive:true
+    };
     Person p = check <Person> m;
     return p;
 }
@@ -138,7 +172,7 @@ function testJsonToStruct () returns (Person | error) {
     return p;
 }
 
-function testIncompatibleMapToStruct () returns (Person) {
+function testMapToStructWithMapValueForJsonField() returns Person {
     int[] marks = [87, 94, 72];
     map addr = {"city":"Colombo", "country":"SriLanka"};
     map info = {status:"single"};
@@ -165,7 +199,7 @@ function testMapWithMissingFieldsToStruct () returns (Person) {
 }
 
 function testMapWithIncompatibleArrayToStruct () returns (Person) {
-    float[] marks = [87, 94, 72];
+    float[] marks = [87.0, 94.0, 72.0];
     Person parent = {
                         name:"Parent",
                         age:50,
@@ -194,13 +228,14 @@ function testMapWithIncompatibleArrayToStruct () returns (Person) {
     return p;
 }
 
-type Employee sealed record {
+type Employee record {
     string name;
     int age;
     Person partner;
     json info;
     map address;
     int[] marks;
+    !...
 };
 
 function testMapWithIncompatibleStructToStruct () returns (Employee) {
@@ -314,8 +349,9 @@ function testJsonArrayToStruct () returns (Person) {
     return p;
 }
 
-type Info sealed record {
+type Info record {
     map foo;
+    !...
 };
 
 function testStructWithIncompatibleTypeMapToJson () returns (json) {
@@ -368,13 +404,15 @@ function testIncompatibleJsonToBoolean () returns (boolean) {
     return value;
 }
 
-type Address sealed record {
+type Address record {
     string city;
     string country;
+    !...
 };
 
-type AnyArray sealed record {
+type AnyArray record {
     any[] a;
+    !...
 };
 
 function testJsonToAnyArray () returns (AnyArray) {
@@ -383,8 +421,9 @@ function testJsonToAnyArray () returns (AnyArray) {
     return value;
 }
 
-type IntArray sealed record {
+type IntArray record {
     int[] a;
+    !...
 };
 
 function testJsonToIntArray () returns (IntArray) {
@@ -394,8 +433,9 @@ function testJsonToIntArray () returns (IntArray) {
 }
 
 
-type StringArray sealed record {
+type StringArray record {
     string[]? a;
+    !...
 };
 
 function testJsonToStringArray () returns (StringArray) {
@@ -410,8 +450,9 @@ function testJsonIntArrayToStringArray () returns (StringArray) {
     return a;
 }
 
-type XmlArray sealed record {
+type XmlArray record {
     xml[] a;
+    !...
 };
 
 function testJsonToXmlArray () returns (XmlArray) {
@@ -438,7 +479,7 @@ function testNonArrayJsonToArray () returns (StringArray) {
     return a;
 }
 
-function testNullJsonToStruct () returns (Person | error) {
+function testNullJsonToStruct () returns Person {
     json j;
     var p = check <Person>j;
     return p;
@@ -470,9 +511,10 @@ function testIncompatibleJsonToStructWithErrors () returns (Person | error) {
     return p;
 }
 
-type PersonA sealed record {
+type PersonA record {
     string name;
     int age;
+    !...
 };
 
 function JsonToStructWithErrors () returns (PersonA | error) {
@@ -483,8 +525,9 @@ function JsonToStructWithErrors () returns (PersonA | error) {
     return pA;
 }
 
-type PhoneBook sealed record {
+type PhoneBook record {
     string[] names;
+    !...
 };
 
 function testStructWithStringArrayToJSON () returns (json) {
@@ -493,19 +536,21 @@ function testStructWithStringArrayToJSON () returns (json) {
     return phonebookJson;
 }
 
-type person sealed record {
+type person record {
     string fname;
     string lname;
     int age;
+    !...
 };
 
-type movie sealed record {
+type movie record {
     string title;
     int year;
     string released;
     string[] genre;
     person[] writers;
     person[] actors;
+    !...
 };
 
 function testStructToMapWithRefTypeArray () returns (map, int) {
@@ -525,13 +570,14 @@ function testStructToMapWithRefTypeArray () returns (map, int) {
     return (m, writers[0].age);
 }
 
-type StructWithDefaults sealed record {
+type StructWithDefaults record {
     string s = "string value";
     int a = 45;
     float f = 5.3;
     boolean b = true;
     json j;
     byte[] blb;
+    !...
 };
 
 function testEmptyJSONtoStructWithDefaults () returns (StructWithDefaults | error) {
@@ -541,13 +587,14 @@ function testEmptyJSONtoStructWithDefaults () returns (StructWithDefaults | erro
     return testStruct;
 }
 
-type StructWithoutDefaults sealed record {
+type StructWithoutDefaults record {
     string s;
     int a;
     float f;
     boolean b;
     json j;
     byte[] blb;
+    !...
 };
 
 function testEmptyJSONtoStructWithoutDefaults () returns (StructWithoutDefaults | error) {
@@ -608,7 +655,7 @@ function structWithComplexMapToJson() returns (json | error) {
     return js;
 }
 
-type ComplexArrayStruct sealed record {
+type ComplexArrayStruct record {
     int[] a;
     float[] b;
     boolean[] c;
@@ -616,6 +663,7 @@ type ComplexArrayStruct sealed record {
     map[] e;
     PersonA[] f;
     json[] g;
+    !...
 };
 
 function structWithComplexArraysToJson() returns (json | error) {
@@ -660,9 +708,10 @@ function testJsonToMapConstrained1() returns map {
     return check <map<string>> j;
 }
 
-type T1 sealed record {
+type T1 record {
     int x;
     int y;
+    !...
 };
 
 function testJsonToMapConstrained2() returns map {
@@ -687,10 +736,11 @@ function testJsonToMapConstrainedFail() returns map {
     return m;
 }
 
-type T2 sealed record {
+type T2 record {
   int x;
   int y;
   int z;
+    !...
 };
 
 function testStructArrayConversion1() returns T1 {
@@ -716,9 +766,9 @@ function testStructArrayConversion2() returns T2 {
     return b[0];
 }
 
-public type T3 sealed record {
-  int x,
-  int y,
+public type T3 record {
+  int x;
+  int y;
 };
 
 public type O1 object {
@@ -784,10 +834,10 @@ function testArrayToJson2() returns json {
     return j;
 }
 
-public type TX sealed record {
-  int x,
-  int y,
-  byte[] b,
+public type TX record {
+  int x;
+  int y;
+  byte[] b;
 };
 
 function testArrayToJsonFail() {
@@ -831,11 +881,11 @@ function anyToFloat() returns float {
     return check <float> a;
 }
 
-type A sealed record {
+type A record {
     float f;
 };
 
-function testJsonFloatToInt() returns A {
+function testJsonIntToFloat() returns A {
     json j = {f : 3};
     return check <A> j;
 }

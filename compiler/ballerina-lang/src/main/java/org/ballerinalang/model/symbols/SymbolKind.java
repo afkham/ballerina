@@ -25,7 +25,6 @@ public enum SymbolKind {
     STRUCT,
     OBJECT,
     RECORD,
-    ENUM,
     CONNECTOR,
     ACTION,
     SERVICE,
@@ -48,5 +47,6 @@ public enum SymbolKind {
     CONVERSION_OPERATOR,
 
     XMLNS,
+    SCOPE,
     OTHER
 }

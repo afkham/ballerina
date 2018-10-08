@@ -24,15 +24,9 @@ import com.intellij.psi.PsiElement;
 public interface BallerinaObjectBody extends BallerinaCompositeElement {
 
   @Nullable
-  BallerinaObjectFunctions getObjectFunctions();
-
-  @Nullable
   BallerinaObjectInitializer getObjectInitializer();
 
-  @Nullable
-  BallerinaPrivateObjectFields getPrivateObjectFields();
-
-  @Nullable
-  BallerinaPublicObjectFields getPublicObjectFields();
+  @NotNull
+  List<BallerinaObjectMember> getObjectMemberList();
 
 }

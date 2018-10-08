@@ -30,22 +30,22 @@ public interface BallerinaObjectFunctionDefinition extends BallerinaCompositeEle
   BallerinaCallableUnitBody getCallableUnitBody();
 
   @Nullable
-  BallerinaObjectCallableUnitSignature getObjectCallableUnitSignature();
+  BallerinaCallableUnitSignature getCallableUnitSignature();
 
   @Nullable
   BallerinaDeprecatedAttachment getDeprecatedAttachment();
 
   @Nullable
-  BallerinaDocumentationAttachment getDocumentationAttachment();
+  BallerinaDocumentationString getDocumentationString();
 
   @Nullable
   PsiElement getSemicolon();
 
+  @Nullable
+  PsiElement getExtern();
+
   @NotNull
   PsiElement getFunction();
-
-  @Nullable
-  PsiElement getNative();
 
   @Nullable
   PsiElement getPublic();

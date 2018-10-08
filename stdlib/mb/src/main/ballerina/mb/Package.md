@@ -22,7 +22,7 @@ import ballerina/mb;
 import ballerina/log;
 
 // Create a simple queue receiver.
-mb:SimpleQueueReceiver receiver {
+endpoint mb:SimpleQueueReceiver receiver {
    host: "localhost",
    port: 5672,
    queueName: "MyQueue"
@@ -56,7 +56,7 @@ endpoint mb:SimpleQueueSender queueSender {
    queueName: "MyQueue"
 };
 
-function main (string... args) {
+public function main (string... args) {
    // Create a text message.
    match (queueSender.createTextMessage("Hello from Ballerina")) {
        error e => {

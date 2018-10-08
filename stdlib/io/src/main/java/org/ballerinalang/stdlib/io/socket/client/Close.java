@@ -27,15 +27,18 @@ import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.natives.annotations.Receiver;
 import org.ballerinalang.natives.annotations.ReturnType;
 import org.ballerinalang.stdlib.io.channels.base.Channel;
+import org.ballerinalang.stdlib.io.socket.SelectorManager;
 import org.ballerinalang.stdlib.io.utils.IOConstants;
 import org.ballerinalang.stdlib.io.utils.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.channels.ByteChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 
 /**
- * Native function to close a Client socket.
+ * Extern function to close a Client socket.
  *
  * @since 0.963.0
  */
@@ -58,11 +61,21 @@ public class Close extends BlockingNativeCallableUnit {
             ByteChannel byteChannel = (ByteChannel) socket.getNativeData(IOConstants.CLIENT_SOCKET_NAME);
             BMap<String, BValue> byteChannelStruct = (BMap<String, BValue>) socket.get(IOConstants.BYTE_CHANNEL_NAME);
             Channel channel = (Channel) byteChannelStruct.getNativeData(IOConstants.BYTE_CHANNEL_NAME);
-            byteChannel.close();
-            channel.close();
+            if (byteChannel instanceof SocketChannel) {
+                SocketChannel socketChannel = (SocketChannel) byteChannel;
+                final SelectionKey selectionKey = socketChannel.keyFor(SelectorManager.getInstance());
+                if (selectionKey != null) {
+                    selectionKey.cancel();
+                }
+            }
+            if (byteChannel != null) {
+                byteChannel.close();
+            }
+            if (channel != null) {
+                channel.close();
+            }
         } catch (Throwable e) {
-            String message = "Failed to close the socket:" + e.getMessage();
-            log.error(message, e);
+            String message = "Failed to close the socket connection.";
             context.setReturnValues(IOUtils.createError(context, message));
         }
         context.setReturnValues();

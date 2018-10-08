@@ -1,16 +1,16 @@
 function testMapElementIncrement()  returns (int){
     map namesMap = {fname:1};
-    namesMap["fname"]++;
+    namesMap.fname++;
     int x;
-    x = check <int>namesMap["fname"];
+    x = check <int>namesMap.fname;
     return x;
 }
 
 function testMapElementDecrement() returns (int){
     map namesMap = {fname:1};
-    namesMap["fname"]--;
+    namesMap.fname--;
     int x;
-    x = check <int>namesMap["fname"];
+    x = check <int>namesMap.fname;
     return x;
 }
 
@@ -80,4 +80,41 @@ function testCompoundAssignmentAdditionWithFunctionInvocation() returns (int){
 
 function getMultiIncrement() returns (int, int) {
    return (200, 100);
+}
+
+
+function testCompoundAssignmentBitwiseAND() returns (int){
+    int x = 15;
+    x &= "Ballerina";
+    return x;
+}
+
+function testCompoundAssignmentBitwiseOR() returns (int){
+    int x = 15;
+    x |= "Ballerina";
+    return x;
+}
+
+function testCompoundAssignmentBitwiseXOR() returns (int){
+    int x = 15;
+    x ^= "Ballerina";
+    return x;
+}
+
+function testCompoundAssignmentLeftShift() returns (int){
+    int x = 8;
+    x <<= "Ballerina";
+    return x;
+}
+
+function testCompoundAssignmentRightShift() returns (int){
+    int x = 8;
+    x >>= "Ballerina";
+    return x;
+}
+
+function testCompoundAssignmentLogicalShift() returns (int){
+    int x = 8;
+    x >>>= "Ballerina";
+    return x;
 }

@@ -30,9 +30,8 @@ public enum NodeKind {
     COMPILATION_UNIT,
     DEPRECATED,
     DOCUMENTATION,
+    MARKDOWN_DOCUMENTATION,
     ENDPOINT,
-    ENUM,
-    ENUMERATOR,
     FUNCTION,
     IDENTIFIER,
     IMPORT,
@@ -47,11 +46,10 @@ public enum NodeKind {
     VARIABLE,
     WORKER,
     XMLNS,
+    CHANNEL,
 
     /* Expressions */
     DOCUMENTATION_ATTRIBUTE,
-    ANNOTATION_ATTACHMENT_ATTRIBUTE,
-    ANNOTATION_ATTACHMENT_ATTRIBUTE_VALUE,
     ARRAY_LITERAL_EXPR,
     BINARY_EXPR,
     ELVIS_EXPR,
@@ -62,6 +60,7 @@ public enum NodeKind {
     INT_RANGE_EXPR,
     INVOCATION,
     LAMBDA,
+    ARROW_EXPR,
     LITERAL,
     RECORD_LITERAL_EXPR,
     SIMPLE_VARIABLE_REF,
@@ -69,7 +68,6 @@ public enum NodeKind {
     TERNARY_EXPR,
     AWAIT_EXPR,
     TYPEDESC_EXPRESSION,
-    TYPE_CAST_EXPR,
     TYPE_CONVERSION_EXPR,
     IS_ASSIGNABLE_EXPR,
     UNARY_EXPR,
@@ -89,6 +87,9 @@ public enum NodeKind {
     MATCH_EXPRESSION_PATTERN_CLAUSE,
     CHECK_EXPR,
 
+    DOCUMENTATION_DESCRIPTION,
+    DOCUMENTATION_PARAMETER,
+
     /* streams/tables expressions */
     SELECT_EXPRESSION,
     TABLE_QUERY_EXPRESSION,
@@ -100,7 +101,6 @@ public enum NodeKind {
     ASSIGNMENT,
     COMPOUND_ASSIGNMENT,
     POST_INCREMENT,
-    BIND,
     BLOCK,
     BREAK,
     NEXT,
@@ -123,6 +123,10 @@ public enum NodeKind {
     WORKER_RECEIVE,
     WORKER_SEND,
     STREAM,
+    SCOPE,
+    COMPENSATE,
+    CHANNEL_RECEIVE,
+    CHANNEL_SEND,
 
     /* Types */
     ARRAY_TYPE,

@@ -31,7 +31,7 @@ import java.util.Map;
  */
 public class TesterinaReport {
 
-    private static PrintStream outStream = System.err;
+    private static PrintStream outStream = System.out;
     private Map<String, TestSummary> testReportOfPackage = new HashMap<>();
     private boolean failure;
 
@@ -43,14 +43,14 @@ public class TesterinaReport {
         }
         if (!testSummary.failedTests.isEmpty()) {
             for (TesterinaResult failedResult : testSummary.failedTests) {
-                outStream.println("\t✗ " + failedResult.getTestFunctionName() + ":");
+                outStream.println("\t[fail] " + failedResult.getTestFunctionName() + ":");
                 outStream.println("\t    " + Utils.formatError(failedResult.getAssertFailureMessage()));
             }
         }
 
         if (!testSummary.passedTests.isEmpty()) {
             for (TesterinaResult passedResult : testSummary.passedTests) {
-                outStream.println("\t✔ " + passedResult.getTestFunctionName());
+                outStream.println("\t[pass] " + passedResult.getTestFunctionName());
             }
             outStream.println();
         }

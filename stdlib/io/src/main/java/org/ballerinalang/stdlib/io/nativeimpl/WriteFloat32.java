@@ -31,23 +31,23 @@ import org.ballerinalang.natives.annotations.Receiver;
 import org.ballerinalang.stdlib.io.channels.base.DataChannel;
 import org.ballerinalang.stdlib.io.channels.base.Representation;
 import org.ballerinalang.stdlib.io.events.EventContext;
-import org.ballerinalang.stdlib.io.events.EventManager;
+import org.ballerinalang.stdlib.io.events.EventRegister;
 import org.ballerinalang.stdlib.io.events.EventResult;
+import org.ballerinalang.stdlib.io.events.Register;
 import org.ballerinalang.stdlib.io.events.data.WriteFloatEvent;
 import org.ballerinalang.stdlib.io.utils.IOConstants;
 import org.ballerinalang.stdlib.io.utils.IOUtils;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
- * Native function ballerina/io#writeFloat32.
+ * Extern function ballerina/io#writeFloat32.
  *
  * @since 0.973.1
  */
 @BallerinaFunction(
         orgName = "ballerina", packageName = "io",
         functionName = "writeFloat32",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = "DataChannel", structPackage = "ballerina/io"),
+        receiver = @Receiver(type = TypeKind.OBJECT, structType = "WritableDataChannel",
+                structPackage = "ballerina/io"),
         args = {@Argument(name = "value", type = TypeKind.FLOAT)},
         isPublic = true
 )
@@ -85,9 +85,10 @@ public class WriteFloat32 implements NativeCallableUnit {
         DataChannel channel = (DataChannel) dataChannelStruct.getNativeData(IOConstants.DATA_CHANNEL_NAME);
         double value = context.getFloatArgument(VALUE_INDEX);
         EventContext eventContext = new EventContext(context, callback);
-        WriteFloatEvent writeIntegerEvent = new WriteFloatEvent(channel, value, Representation.BIT_32, eventContext);
-        CompletableFuture<EventResult> publish = EventManager.getInstance().publish(writeIntegerEvent);
-        publish.thenApply(WriteFloat32::writeFloatResponse);
+        WriteFloatEvent writeFloatEvent = new WriteFloatEvent(channel, value, Representation.BIT_32, eventContext);
+        Register register = EventRegister.getFactory().register(writeFloatEvent, WriteFloat32::writeFloatResponse);
+        eventContext.setRegister(register);
+        register.submit();
     }
 
     @Override

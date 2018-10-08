@@ -33,12 +33,16 @@ import org.ballerinalang.bre.bvm.SyncCallableWorkerResponseContext;
 import org.ballerinalang.bre.bvm.WorkerData;
 import org.ballerinalang.bre.bvm.WorkerExecutionContext;
 import org.ballerinalang.bre.bvm.WorkerResponseContext;
+import org.ballerinalang.model.InterruptibleNativeCallableUnit;
 import org.ballerinalang.model.NativeCallableUnit;
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.model.types.BTypes;
 import org.ballerinalang.model.values.BCallableFuture;
 import org.ballerinalang.model.values.BMap;
 import org.ballerinalang.model.values.BValue;
+import org.ballerinalang.persistence.states.State;
+import org.ballerinalang.persistence.store.PersistenceStore;
+import org.ballerinalang.runtime.Constants;
 import org.ballerinalang.util.FunctionFlags;
 import org.ballerinalang.util.codegen.CallableUnitInfo;
 import org.ballerinalang.util.codegen.CallableUnitInfo.WorkerSet;
@@ -108,6 +112,8 @@ public class BLangFunctions {
         }
         invokePackageInitFunctions(programFile, parentCtx);
         invokePackageStartFunctions(programFile, parentCtx);
+        //Add compensation table
+        parentCtx.globalProps.put(Constants.COMPENSATION_TABLE, CompensationTable.getInstance());
         BValue[] result = invokeCallable(functionInfo, parentCtx, args);
         BLangScheduler.waitForWorkerCompletion();
         return result;
@@ -254,6 +260,7 @@ public class BLangFunctions {
                 invokeNativeCallableAsync(callableUnitInfo, parentCtx, argRegs, retRegs, flags);
                 resultCtx = parentCtx;
             } else {
+                checkAndHandleInterruptibleCallable(callableUnitInfo, parentCtx);
                 resultCtx = invokeNativeCallable(callableUnitInfo, parentCtx, argRegs, retRegs, flags);
             }
         } else {
@@ -386,6 +393,7 @@ public class BLangFunctions {
                 nativeCallable.execute(ctx, null);
                 BLangVMUtils.populateWorkerDataWithValues(parentLocalData, retRegs, ctx.getReturnValues(), retTypes);
                 checkAndStopCallableObservation(observerContext, flags);
+                BLangScheduler.handleInterruptibleAfterCallback(parentCtx);
                 /* we want the parent to continue, since we got the response of the native call already */
                 return parentCtx;
             } else {
@@ -428,14 +436,14 @@ public class BLangFunctions {
         throw new BLangRuntimeException("error: " + BLangVMErrors.getPrintableStackTrace(ctx.getError()));
     }
     
-    private static WorkerExecutionContext executeWorker(WorkerResponseContext respCtx, 
-            WorkerExecutionContext parentCtx, int[] argRegs, CallableUnitInfo callableUnitInfo, 
-            WorkerInfo workerInfo, WorkerDataIndex wdi, WorkerData initWorkerLocalData, 
-            CodeAttributeInfo initWorkerCAI, boolean runInCaller, ObserverContext observerContext) {
-        WorkerData workerLocal = BLangVMUtils.createWorkerDataForLocal(workerInfo, parentCtx, argRegs,
-                callableUnitInfo.getParamTypes());
+    private static WorkerExecutionContext executeWorker(WorkerResponseContext respCtx, WorkerExecutionContext parentCtx,
+            int[] argRegs, CallableUnitInfo callableUnitInfo, WorkerInfo workerInfo, WorkerDataIndex wdi,
+            WorkerData initWorkerLocalData, CodeAttributeInfo initWorkerCAI, boolean runInCaller,
+            ObserverContext observerContext) {
+        WorkerData workerLocal = BLangVMUtils
+                .createWorkerDataForLocal(workerInfo, parentCtx, argRegs, callableUnitInfo.getParamTypes());
         if (initWorkerLocalData != null) {
-            BLangVMUtils.mergeInitWorkertData(initWorkerLocalData, workerLocal, initWorkerCAI);
+            BLangVMUtils.mergeInitWorkerData(initWorkerLocalData, workerLocal, initWorkerCAI);
         }
         WorkerData workerResult = BLangVMUtils.createWorkerData(wdi);
         WorkerExecutionContext ctx = new WorkerExecutionContext(parentCtx, respCtx, callableUnitInfo, workerInfo,
@@ -461,7 +469,7 @@ public class BLangFunctions {
     }
     
     private static void invokePackageInitFunction(FunctionInfo initFuncInfo, WorkerExecutionContext context) {
-        invokeCallable(initFuncInfo, context, new int[0], new int[0], true);
+        invokeCallable(initFuncInfo, context, new BValue[0]);
         if (context.getError() != null) {
             String stackTraceStr = BLangVMErrors.getPrintableStackTrace(context.getError());
             throw new BLangRuntimeException("error: " + stackTraceStr);
@@ -474,7 +482,7 @@ public class BLangFunctions {
     }
 
     private static void invokeVMUtilFunction(FunctionInfo utilFuncInfo, WorkerExecutionContext context) {
-        invokeCallable(utilFuncInfo, context, new int[0], new int[0], true);
+        invokeCallable(utilFuncInfo, context, new BValue[0]);
         if (context.getError() != null) {
             String stackTraceStr = BLangVMErrors.getPrintableStackTrace(context.getError());
             throw new BLangRuntimeException("error: " + stackTraceStr);
@@ -488,7 +496,7 @@ public class BLangFunctions {
 
     public static void invokeServiceInitFunction(FunctionInfo initFuncInfo) {
         WorkerExecutionContext context = new WorkerExecutionContext(initFuncInfo.getPackageInfo().getProgramFile());
-        invokeCallable(initFuncInfo, context, new int[0], new int[0], true);
+        invokeCallable(initFuncInfo, context, new BValue[0]);
         if (context.getError() != null) {
             String stackTraceStr = BLangVMErrors.getPrintableStackTrace(context.getError());
             throw new BLangRuntimeException("error: " + stackTraceStr);
@@ -521,7 +529,7 @@ public class BLangFunctions {
         if (forkjoinInfo.isTimeoutAvailable()) {
             long timeout = parentCtx.workerLocal.longRegs[timeoutRegIndex];
             //fork join timeout is in seconds, hence converting to milliseconds
-            AsyncTimer.schedule(new ForkJoinTimeoutCallback(respCtx), timeout * 1000);
+            AsyncTimer.schedule(new ForkJoinTimeoutCallback(respCtx), timeout);
         }
         Map<String, Object> globalProps = parentCtx.globalProps;
         BLangScheduler.workerWaitForResponse(parentCtx);
@@ -603,7 +611,23 @@ public class BLangFunctions {
                 callableUnitInfo.attachedToType.toString(), callableUnitInfo.getName(), parentCtx);
         return observerContext.orElse(null);
     }
-    
+
+    private static void checkAndHandleInterruptibleCallable(CallableUnitInfo callableUnitInfo,
+                                                            WorkerExecutionContext parentCtx) {
+        NativeCallableUnit nativeCallable = callableUnitInfo.getNativeCallableUnit();
+        if (parentCtx.interruptible && nativeCallable instanceof InterruptibleNativeCallableUnit) {
+            InterruptibleNativeCallableUnit interruptibleNativeCallableUnit
+                    = (InterruptibleNativeCallableUnit) nativeCallable;
+            String stateId = (String) parentCtx.globalProps.get(Constants.STATE_ID);
+            if (interruptibleNativeCallableUnit.persistBeforeOperation()) {
+                PersistenceStore.persistState(new State(parentCtx, stateId));
+            }
+            if (interruptibleNativeCallableUnit.persistAfterOperation()) {
+                parentCtx.markAsCheckPointed = true;
+            }
+        }
+    }
+
     /**
      * Callback handler to check for callable response availability.
      */

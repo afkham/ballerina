@@ -28,7 +28,7 @@ import io.ballerina.plugins.idea.psi.*;
 
 public class BallerinaStatementImpl extends BallerinaCompositeElementImpl implements BallerinaStatement {
 
-  public BallerinaStatementImpl(ASTNode node) {
+  public BallerinaStatementImpl(@NotNull ASTNode node) {
     super(node);
   }
 
@@ -57,6 +57,12 @@ public class BallerinaStatementImpl extends BallerinaCompositeElementImpl implem
   @Nullable
   public BallerinaBreakStatement getBreakStatement() {
     return PsiTreeUtil.getChildOfType(this, BallerinaBreakStatement.class);
+  }
+
+  @Override
+  @Nullable
+  public BallerinaCompensateStatement getCompensateStatement() {
+    return PsiTreeUtil.getChildOfType(this, BallerinaCompensateStatement.class);
   }
 
   @Override
@@ -135,6 +141,12 @@ public class BallerinaStatementImpl extends BallerinaCompositeElementImpl implem
   @Nullable
   public BallerinaReturnStatement getReturnStatement() {
     return PsiTreeUtil.getChildOfType(this, BallerinaReturnStatement.class);
+  }
+
+  @Override
+  @Nullable
+  public BallerinaScopeStatement getScopeStatement() {
+    return PsiTreeUtil.getChildOfType(this, BallerinaScopeStatement.class);
   }
 
   @Override

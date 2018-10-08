@@ -47,7 +47,7 @@ function arrayLengthAccessTestMapInitializerCase (int x, int y) returns (int) {
     arr[2] = arr[0] + arr[1];
     map tempMap = {"length":(lengthof arr)};
     int length;
-    length =check <int> tempMap["length"];
+    length =check <int> tempMap.length;
     return length;
 }
 
@@ -131,14 +131,6 @@ function arrayLengthAccessTestJSONArrayCase (int x, int y) returns (int) {
     return length;
 }
 
-function arrayLengthAccessTestJSONArrayNegativeNonArrayCase (int x, int y) returns (int) {
-    json arr = {"number1":x, "number2":y};
-    int length;
-    length = (lengthof arr);
-    return length;
-}
-
-
 function lengthOfMap (int x, int y) returns (int) {
     map namesMap = {fname:"Supun", lname:"Setunga", sname:"Kevin", tname:"Ratnasekera"};
     int length = lengthof namesMap;
@@ -174,4 +166,9 @@ function lengthOfBlob() returns (int, int) {
 function lengthOfNullString() returns (int) {
     string foo;
     return lengthof foo;
+}
+
+function lengthOfJSONObject() returns (int) {
+    json j = {"a":"A", "b":"B"};
+    return lengthof j;
 }

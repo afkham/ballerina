@@ -22,7 +22,6 @@ import SimpleBBox from 'plugins/ballerina/model/view/simple-bounding-box';
 import HoverGroup from 'plugins/ballerina/graphical-editor/controller-utils/hover-group';
 import Node from '../../../../../model/tree/node';
 import './compound-statement-decorator.css';
-import ActiveArbiter from '../decorators/active-arbiter';
 import Breakpoint from '../decorators/breakpoint';
 import { getComponentForNodeArray } from './../../../../diagram-util';
 import ElseStatementDecorator from './else-statement-decorator';
@@ -42,10 +41,6 @@ class IfStatementDecorator extends React.Component {
         this.state = {
             active: 'hidden',
         };
-        this.onDelete = this.onDelete.bind(this);
-        this.onJumpToCodeLine = this.onJumpToCodeLine.bind(this);
-        this.setActionVisibilityFalse = this.setActionVisibility.bind(this, false);
-        this.setActionVisibilityTrue = this.setActionVisibility.bind(this, true);
     }
     /**
      * Handles click event of breakpoint, adds/remove breakpoint from the node when click event fired
@@ -62,80 +57,10 @@ class IfStatementDecorator extends React.Component {
     }
 
     /**
-     * Removes self on delete button click. Note that model is retried form dropTarget for
-     * backward compatibility with old components written when model was not required.
-     * @returns {void}
-     */
-    onDelete() {
-        const model = this.props.model || this.props.dropTarget;
-        model.remove();
-    }
-    /**
-     * Navigates to codeline in the source view from the design view node
-     *
-     */
-    onJumpToCodeLine() {
-        const { editor } = this.context;
-        editor.goToSource(this.props.model);
-    }
-
-    /**
      * Call-back for when a new value is entered via expression editor.
      */
     onUpdate() {
         // TODO: implement validate logic.
-    }
-
-    /**
-     * Shows the action box, depending on whether on child element, delays display.
-     * @param {boolean} show - Display action box.
-     * @param {MouseEvent} e - Mouse move event from moving on to or out of statement.
-     */
-    setActionVisibility(show, e) {
-        e.stopPropagation();
-        if (show) {
-            const isInChildStatement = this.isInFocusableChild(e.target);
-            const isFromChildStatement = this.isInFocusableChild(e.relatedTarget);
-
-            if (!isInChildStatement) {
-                if (isFromChildStatement) {
-                    this.context.activeArbiter.readyToDelayedActivate(this);
-                } else {
-                    this.context.activeArbiter.readyToActivate(this);
-                }
-            }
-        } else {
-            let elm = e.relatedTarget;
-            let isInMe = false;
-            while (elm && elm.getAttribute) {
-                if (elm === this.myRoot) {
-                    isInMe = true;
-                }
-                elm = elm.parentNode;
-            }
-            if (!isInMe) {
-                this.context.activeArbiter.readyToDeactivate(this);
-            }
-        }
-    }
-
-    /**
-     * True if the given element is a child of this element that has it's own focus.
-     * @private
-     * @param {HTMLElement} elmToCheck - child to be checked.
-     * @return {boolean} True if child is focusable.
-     */
-    isInFocusableChild(elmToCheck) {
-        const regex = new RegExp('(^|\\s)((compound-)?statement|life-line-group)(\\s|$)');
-        let isInStatement = false;
-        let elm = elmToCheck;
-        while (elm && elm !== this.myRoot && elm.getAttribute) {
-            if (regex.test(elm.getAttribute('class'))) {
-                isInStatement = true;
-            }
-            elm = elm.parentNode;
-        }
-        return isInStatement;
     }
 
     /**
@@ -168,12 +93,14 @@ class IfStatementDecorator extends React.Component {
      */
     render() {
         const { bBox, title, expression, isBreakpoint, isDebugHit } = this.props;
-        const { designer } = this.context;
 
         const model = this.props.model;
         const viewState = model.viewState;
         const titleH = this.context.designer.config.flowChartControlStatement.heading.height;
         const titleW = this.context.designer.config.flowChartControlStatement.heading.width;
+        const decisionLabelH = this.context.designer.config.flowChartControlStatement.decision.height;
+        const decisionLabelW = this.context.designer.config.flowChartControlStatement.decision.width;
+        const decisionLabelRadius = this.context.designer.config.flowChartControlStatement.decision.radius;
         const statementBBox = viewState.components['statement-box'];
         const displayExpression = viewState.components.expression;
         const gapLeft = this.context.designer.config.flowChartControlStatement.gap.left;
@@ -237,6 +164,13 @@ class IfStatementDecorator extends React.Component {
         const p12X = p8X;
         const p12Y = p8Y + this.context.designer.config.flowChartControlStatement.heading.gap;
 
+        const decisionTrueLabelPositionX = (p8X - (decisionLabelW / 2));
+        const decisionTrueLabelPositionY = (((p8Y + p12Y) / 2) - (decisionLabelH / 2));
+        const decisionFalseLabelPositionX = (p3X + 2);
+        const decisionFalseLabelPositionY = (p3Y - (decisionLabelH / 2));
+        const expressionPositionX = (bBox.x + (viewState.components.expression.w / 2)) + 18;
+        const expressionPositionY = (p2Y + 22);
+
         this.conditionBox = new SimpleBBox(p2X, (p2Y - (this.context.designer.config.statement.height / 2)),
             statementBBox.w, this.context.designer.config.statement.height);
 
@@ -284,31 +218,49 @@ class IfStatementDecorator extends React.Component {
                     className={statementRectClass}
                 />
                 <text
-                    x={p9X}
-                    y={p9Y + 14}
+                    x={p8X}
+                    y={p2Y}
                     className='statement-title-text'
                 >
                     if
                 </text>
                 {expression &&
                     <text
-                        x={p8X}
-                        y={p2Y}
+                        x={expressionPositionX}
+                        y={expressionPositionY}
                         className='condition-text'
                     >
                         {displayExpression.text}
                     </text>
                 }
+                <rect
+                    x={decisionTrueLabelPositionX}
+                    y={decisionTrueLabelPositionY}
+                    width={decisionLabelW}
+                    height={decisionLabelH}
+                    rx={decisionLabelRadius}
+                    ry={decisionLabelRadius}
+                    className='flowchart-true-text-bg'
+                />
                 <text
-                    x={p12X - 4}
-                    y={(p8Y + p12Y) / 2}
+                    x={p8X + 12}
+                    y={((p8Y + p12Y) / 2) + 4}
                     className='flowchart-true-text'
                 >
                     true
                 </text>
+                <rect
+                    x={decisionFalseLabelPositionX}
+                    y={decisionFalseLabelPositionY}
+                    width={decisionLabelW}
+                    height={decisionLabelH}
+                    rx={decisionLabelRadius}
+                    ry={decisionLabelRadius}
+                    className='flowchart-false-text-bg'
+                />
                 <text
-                    x={p3X + 4}
-                    y={p3Y - 4}
+                    x={p3X + 8}
+                    y={p3Y + 4}
                     className='flowchart-false-text'
                 >
                     false
@@ -379,33 +331,11 @@ IfStatementDecorator.propTypes = {
     model: PropTypes.instanceOf(Node).isRequired,
     children: PropTypes.arrayOf(PropTypes.node),
     bBox: PropTypes.instanceOf(SimpleBBox).isRequired,
-    dropTarget: PropTypes.instanceOf(Node).isRequired,
     expression: PropTypes.shape({
         text: PropTypes.string,
     }).isRequired,
-    editorOptions: PropTypes.shape({
-        propertyType: PropTypes.string,
-        key: PropTypes.string,
-        model: PropTypes.instanceOf(Node),
-        getterMethod: PropTypes.func,
-        setterMethod: PropTypes.func,
-    }),
-    parameterEditorOptions: PropTypes.shape({
-        propertyType: PropTypes.string,
-        key: PropTypes.string,
-        value: PropTypes.string,
-        model: PropTypes.instanceOf(Node),
-        getterMethod: PropTypes.func,
-        setterMethod: PropTypes.func,
-    }),
     onBreakpointClick: PropTypes.func.isRequired,
     isBreakpoint: PropTypes.bool.isRequired,
-    disableButtons: PropTypes.shape({
-        debug: PropTypes.bool.isRequired,
-        delete: PropTypes.bool.isRequired,
-        jump: PropTypes.bool.isRequired,
-    }),
-    disableDropzoneMiddleLineOverlay: PropTypes.bool,
     isDebugHit: PropTypes.bool,
 };
 
@@ -414,7 +344,6 @@ IfStatementDecorator.contextTypes = {
     environment: PropTypes.instanceOf(Object).isRequired,
     editor: PropTypes.instanceOf(Object).isRequired,
     mode: PropTypes.string,
-    activeArbiter: PropTypes.instanceOf(ActiveArbiter).isRequired,
     designer: PropTypes.instanceOf(Object),
 };
 

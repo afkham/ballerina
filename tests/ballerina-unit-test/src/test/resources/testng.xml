@@ -27,6 +27,13 @@ under the License.
     </listeners>
 
 
+    <test name="ballerina-socket-test-suite" preserve-order="true" parallel="false">
+        <classes>
+            <class name="org.ballerinalang.test.nativeimpl.functions.io.socket.ClientSocketTest"/>
+            <class name="org.ballerinalang.test.nativeimpl.functions.io.socket.SecureClientSocketTest"/>
+            <!--<class name="org.ballerinalang.test.nativeimpl.functions.io.socket.ServerSocketTest"/>-->
+        </classes>
+    </test>
     <!-- Ballerina language Test Cases. -->
     <test name="ballerina-lang-test-suite" preserve-order="true" parallel="false">
         <groups>
@@ -47,7 +54,9 @@ under the License.
             <package name="org.ballerinalang.test.access.*"/>
             <package name="org.ballerinalang.test.functions.*"/>
             <package name="org.ballerinalang.test.worker.*"/>
-            <package name="org.ballerinalang.test.nativeimpl.*"/>
+            <package name="org.ballerinalang.test.nativeimpl.functions.*">
+                <exclude name="org.ballerinalang.test.nativeimpl.functions.io.socket"/>
+            </package>
             <package name="org.ballerinalang.test.connectors.sql.*"/>
             <package name="org.ballerinalang.test.connectors.h2.*"/>
             <package name="org.ballerinalang.test.net.*"/>
@@ -78,6 +87,7 @@ under the License.
             <package name="org.ballerinalang.test.balo.*" />
             <package name="org.ballerinalang.test.compression.*"/>
             <package name="org.ballerinalang.test.variable.shadowing.*" />
+            <package name="org.ballerinalang.test.channels.*" />
         </packages>
 
 		<!-- TODO: remove once constraint tests are fixed -->
@@ -92,9 +102,21 @@ under the License.
             <package name="org.ballerinalang.test.auth.*"/>
         </packages>
     </test>
-    <test name="ballerina-observe-test-suite" parallel="false">
-        <packages>
-            <package name="org.ballerinalang.test.observe.*"/>
+    <test name="ballerina-observe-test-suite" preserve-order="true" parallel="false">
+        <classes >
+            <class name="org.ballerinalang.test.observe.SummaryTest"/>
+            <class name="org.ballerinalang.test.observe.RegistryTest"/>
+            <class name="org.ballerinalang.test.observe.CounterTest"/>
+        </classes>
+    </test>
+    <test name="ballerina-checkpointing-test-suite" preserve-order="true" parallel="false">
+        <classes >
+            <class name="org.ballerinalang.test.checkpointing.SerializationTest"/>
+        </classes>
+    </test>
+    <test name="ballerina-entry-function-test-suite" preserve-order="true" parallel="false">
+        <packages >
+            <package name="org.ballerinalang.test.entry.function.*"/>
         </packages>
     </test>
 </suite>

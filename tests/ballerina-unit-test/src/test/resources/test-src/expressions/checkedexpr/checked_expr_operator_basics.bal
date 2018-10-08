@@ -79,6 +79,7 @@ public type myerror record {
     string message;
     error? cause;
     int code;
+    !...
 };
 
 public type customError record {
@@ -86,6 +87,7 @@ public type customError record {
     error? cause;
     int code;
     string data;
+    !...
 };
 
 function getPerson() returns person | myerror {
@@ -170,4 +172,30 @@ function testCheckedExprAsFuncParam1() returns string | error  {
     return check bar(check bar(check foo(check foo(check foo(check foo("S")))),
                 check foo(check foo("A"))) ,
                     check bar(check foo(check foo(check foo("M"))), "done"));
+}
+
+function testCheckInBinaryAndExpression() returns boolean {
+    string s = "Ballerina";
+    if (check s.matches("B.*") && check s.matches(".*a")) {
+        return true;
+    }
+    return false;
+}
+
+function testCheckInBinaryAddExpression() returns int {
+    int|error a = 10;
+    int|error b = 20;
+    return check a + check b;
+}
+
+function testCheckInBinaryDivExpression() returns int {
+    int|error a = 10;
+    int|error b = 20;
+    return check b / check a;
+}
+
+function testCheckInBinaryLTExpression() returns boolean {
+    int|error a = 10;
+    int|error b = 20;
+    return check b < check a;
 }

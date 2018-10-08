@@ -14,12 +14,12 @@ function testForkJoinAllOfSpecific() returns string[] {
                 "pqr" -> fork;
             }
         } join (all ABC_Airline, XYZ_Airline) (map airlineResponses) {
-            string abc= <string> airlineResponses["ABC_Airline"];
-            string xyz= <string> airlineResponses["XYZ_Airline"];
+            string abc= <string> airlineResponses.ABC_Airline;
+            string xyz= <string> airlineResponses.XYZ_Airline;
             results[0] = abc;
             results[1] = xyz;
             return results;
-        } timeout (30) (map airlineResponses) {
+        } timeout (3000) (map airlineResponses) {
             return results;
         }
 }

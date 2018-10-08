@@ -25,15 +25,16 @@ import io.ballerina.plugins.idea.completion.BallerinaCompletionUtils;
 import io.ballerina.plugins.idea.psi.BallerinaCatchClause;
 import io.ballerina.plugins.idea.psi.BallerinaExpression;
 import io.ballerina.plugins.idea.psi.BallerinaFieldDefinition;
-import io.ballerina.plugins.idea.psi.BallerinaFieldDefinitionList;
 import io.ballerina.plugins.idea.psi.BallerinaJoinClause;
 import io.ballerina.plugins.idea.psi.BallerinaNamedPattern;
+import io.ballerina.plugins.idea.psi.BallerinaRecordFieldDefinitionList;
 import io.ballerina.plugins.idea.psi.BallerinaRecordKey;
 import io.ballerina.plugins.idea.psi.BallerinaRecordKeyValue;
 import io.ballerina.plugins.idea.psi.BallerinaRecordLiteralExpression;
 import io.ballerina.plugins.idea.psi.BallerinaRecordTypeName;
 import io.ballerina.plugins.idea.psi.BallerinaServiceBody;
 import io.ballerina.plugins.idea.psi.BallerinaStatement;
+import io.ballerina.plugins.idea.psi.BallerinaTimeoutClause;
 import io.ballerina.plugins.idea.psi.BallerinaTypeDefinition;
 import io.ballerina.plugins.idea.psi.BallerinaTypeName;
 import io.ballerina.plugins.idea.psi.BallerinaVariableDefinitionStatement;
@@ -92,8 +93,8 @@ public class BallerinaStatementProcessor extends BallerinaScopeProcessorBase {
                         if (resolvedElement != null) {
                             PsiElement parent = resolvedElement.getParent();
                             if (resolvedElement instanceof BallerinaRecordTypeName) {
-                                BallerinaFieldDefinitionList fieldDefinitionList = PsiTreeUtil.findChildOfType(parent,
-                                        BallerinaFieldDefinitionList.class);
+                                BallerinaRecordFieldDefinitionList fieldDefinitionList =
+                                        PsiTreeUtil.findChildOfType(parent, BallerinaRecordFieldDefinitionList.class);
                                 List<BallerinaFieldDefinition> fieldDefinitions =
                                         PsiTreeUtil.getChildrenOfTypeAsList(fieldDefinitionList,
                                                 BallerinaFieldDefinition.class);
@@ -110,8 +111,7 @@ public class BallerinaStatementProcessor extends BallerinaScopeProcessorBase {
                                         myResult.addElement(BallerinaCompletionUtils.createFieldLookupElement
                                                 (identifier, resolvedElement, type,
                                                         BallerinaPsiImplUtil.getObjectFieldDefaultValue
-                                                                (ballerinaFieldDefinition),
-                                                        null, false));
+                                                                (ballerinaFieldDefinition), null, false, false));
                                     } else if (myElement.getText().equals(identifier.getText())) {
                                         add(identifier);
                                     }
@@ -207,6 +207,28 @@ public class BallerinaStatementProcessor extends BallerinaScopeProcessorBase {
                     }
                     ballerinaJoinClause = PsiTreeUtil.getParentOfType(ballerinaJoinClause, BallerinaJoinClause.class);
                 }
+
+                // Process timeout clause variables.
+                BallerinaTimeoutClause ballerinaTimeoutClause = PsiTreeUtil.
+                        getParentOfType(statement, BallerinaTimeoutClause.class);
+                while (ballerinaTimeoutClause != null) {
+                    PsiElement identifier = ballerinaTimeoutClause.getIdentifier();
+                    if (identifier != null) {
+                        if (myResult != null) {
+                            myResult.addElement(BallerinaCompletionUtils.createVariableLookupElement(identifier,
+                                    BallerinaPsiImplUtil.
+                                            formatBallerinaTypeName(ballerinaTimeoutClause.getTypeName())));
+                        } else if (myElement.getText().equals(identifier.getText())) {
+                            add(identifier);
+                        }
+                    }
+                    if (!isCompletion() && getResult() != null) {
+                        return false;
+                    }
+                    ballerinaTimeoutClause = PsiTreeUtil.getParentOfType(ballerinaTimeoutClause,
+                            BallerinaTimeoutClause.class);
+                }
+
             } else if (scopeElement instanceof BallerinaVariableDefinitionStatement) {
                 BallerinaVariableDefinitionStatement statement = (BallerinaVariableDefinitionStatement) scopeElement;
                 BallerinaServiceBody ballerinaServiceBody = PsiTreeUtil.getParentOfType(myElement,

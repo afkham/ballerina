@@ -24,6 +24,42 @@ function testCompoundAssignmentDivision() returns (int){
     return x;
 }
 
+function testCompoundAssignmentBitwiseAND() returns (int){
+    int x = 15;
+    x &= 5;
+    return x;
+}
+
+function testCompoundAssignmentBitwiseOR() returns (int){
+    int x = 15;
+    x |= 5;
+    return x;
+}
+
+function testCompoundAssignmentBitwiseXOR() returns (int){
+    int x = 15;
+    x ^= 5;
+    return x;
+}
+
+function testCompoundAssignmentLeftShift() returns (int){
+    int x = 8;
+    x <<= 1;
+    return x;
+}
+
+function testCompoundAssignmentRightShift() returns (int){
+    int x = 8;
+    x >>= 1;
+    return x;
+}
+
+function testCompoundAssignmentLogicalShift() returns (int){
+    int x = 8;
+    x >>>= 1;
+    return x;
+}
+
 function testIncrementOperator() returns (int){
     int x = 100;
     x++;
@@ -133,13 +169,13 @@ function testStringIntCompoundAssignmentAddition() returns (string){
 }
 
 function testIncrementOperatorFloat() returns (float){
-    float x = 100;
+    float x = 100.0;
     x++;
     return x;
 }
 
 function testDecrementOperatorFloat() returns (float){
-    float x = 100;
+    float x = 100.0;
     x--;
     return x;
 }

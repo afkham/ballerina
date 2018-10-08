@@ -24,7 +24,6 @@ import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.An
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.AnnotationDef;
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.Connector;
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.Endpoint;
-import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.Enum;
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.Enumerator;
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.Function;
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.ModelPackage;
@@ -36,11 +35,11 @@ import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.St
 import org.ballerinalang.composer.service.ballerina.parser.service.model.lang.StructField;
 import org.ballerinalang.langserver.index.LSIndexImpl;
 import org.ballerinalang.langserver.index.LSIndexQueryProcessor;
+import org.ballerinalang.langserver.index.dto.BFunctionDTO;
 import org.ballerinalang.langserver.index.dto.BObjectTypeSymbolDTO;
 import org.ballerinalang.langserver.index.dto.PackageIDDTO;
 import org.ballerinalang.model.elements.Flag;
 import org.ballerinalang.model.elements.PackageID;
-import org.ballerinalang.model.tree.EnumNode;
 import org.ballerinalang.model.tree.VariableNode;
 import org.ballerinalang.model.tree.types.TypeNode;
 import org.ballerinalang.repository.PackageRepository;
@@ -272,29 +271,6 @@ public class ParserUtils {
             modelPackage.setName(packagePath);
 
             modelPackage.addAnnotationsItem(AnnotationDef.convertToPackageModel(annotation));
-            packages.put(packagePath, modelPackage);
-        }
-    }
-
-    /**
-     * Extract Enums from ballerina lang.
-     *
-     * @param packages    packages to send.
-     * @param packagePath packagePath.
-     * @param bLangEnum   enum.
-     */
-    private static void extractEnums(Map<String, ModelPackage> packages, String packagePath,
-                                     EnumNode bLangEnum) {
-        String fileName = bLangEnum.getPosition().getSource().getCompilationUnitName();
-        if (packages.containsKey(packagePath)) {
-            ModelPackage modelPackage = packages.get(packagePath);
-            modelPackage.addEnumItem(createNewEnum(bLangEnum.getName().getValue(), bLangEnum.getEnumerators(),
-                    fileName));
-        } else {
-            ModelPackage modelPackage = new ModelPackage();
-            modelPackage.setName(packagePath);
-            modelPackage.addEnumItem(createNewEnum(bLangEnum.getName().getValue(), bLangEnum.getEnumerators(),
-                    fileName));
             packages.put(packagePath, modelPackage);
         }
     }
@@ -662,23 +638,6 @@ public class ParserUtils {
     }
 
     /**
-     * Create new enum.
-     *
-     * @param name        name of the enum
-     * @param enumerators
-     * @return {Enum} enum
-     */
-    private static Enum createNewEnum(String name, List<? extends EnumNode.Enumerator> enumerators, String fileName) {
-        Enum anEnum = new Enum(name);
-        enumerators.forEach((enumeratorItem) -> {
-            Enumerator enumerator = createNewEnumerator(enumeratorItem.getName().getValue());
-            anEnum.addEnumerator(enumerator);
-        });
-        anEnum.setFileName(fileName);
-        return anEnum;
-    }
-
-    /**
      * create a new enumerator item for the enum.
      *
      * @param name name of the field
@@ -729,5 +688,42 @@ public class ParserUtils {
                         Names.BUILTIN_PACKAGE.getValue(), Names.EMPTY.getValue()))));
         symbolTable.builtInPackageSymbol = builtInPkg.symbol;
         return builtInPkg;
+    }
+
+    public static List<Endpoint> getEndpoints() {
+        final List<Endpoint> endpoints = new ArrayList<>();
+        try {
+            LSIndexImpl lsIndex = LSIndexImpl.getInstance();
+            LSIndexQueryProcessor lsIndexQueryProcessor = lsIndex.getQueryProcessor();
+            List<PackageIDDTO> allPackages = lsIndexQueryProcessor.getAllPackages();
+            List<BObjectTypeSymbolDTO> allEndpoints = lsIndexQueryProcessor.getAllEndpoints();
+            allPackages.forEach(packageIDDTO -> {
+                String pkgName = packageIDDTO.getName();
+                String orgName = packageIDDTO.getOrgName();
+                List<Endpoint> endpointsList = allEndpoints
+                        .stream()
+                        .map(bObjectTypeSymbolDTO -> new Endpoint(bObjectTypeSymbolDTO.getName(), pkgName, orgName))
+                        .collect(Collectors.toList());
+                endpoints.addAll(endpointsList);
+            });
+        } catch (Exception e) {
+            // Above catch is to fail safe composer front end due to core errors.
+            logger.warn("Error while loading package: " + e.getMessage());
+        }
+        return endpoints;
+    }
+
+    public static List<BFunctionDTO> getActions(String pkgName, String typeName) {
+        final List<BFunctionDTO> actions = new ArrayList<>();
+        try {
+            LSIndexImpl lsIndex = LSIndexImpl.getInstance();
+            LSIndexQueryProcessor lsIndexQueryProcessor = lsIndex.getQueryProcessor();
+            List<BFunctionDTO> allPackages = lsIndexQueryProcessor.getActions(pkgName, typeName);
+            actions.addAll(allPackages);
+        } catch (Exception e) {
+            // Above catch is to fail safe composer front end due to core errors.
+            logger.warn("Error while loading package: " + e.getMessage());
+        }
+        return actions;
     }
 }

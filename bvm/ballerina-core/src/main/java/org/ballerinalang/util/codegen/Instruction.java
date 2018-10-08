@@ -19,7 +19,9 @@ package org.ballerinalang.util.codegen;
 
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.util.codegen.cpentries.ForkJoinCPEntry;
+import org.ballerinalang.util.codegen.cpentries.FunctionRefCPEntry;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.StringJoiner;
 
@@ -180,6 +182,54 @@ public class Instruction {
     }
 
     /**
+     * {@code InstructionCHNReceive} represents the channel receive operation in Ballerina.
+     *
+     * @since 0.982.0
+     */
+    public static class InstructionCHNReceive extends Instruction {
+
+        public String channelName;
+        public BType receiverType;
+        public int receiverReg;
+        public BType keyType;
+        public int keyReg;
+
+        public InstructionCHNReceive(int opcode, String channelName, BType receiverType,
+                int receiverReg, BType keyType, int keyReg) {
+            super(opcode);
+            this.channelName = channelName;
+            this.receiverType = receiverType;
+            this.receiverReg = receiverReg;
+            this.keyType = keyType;
+            this.keyReg = keyReg;
+        }
+    }
+
+    /**
+     * {@code InstructionCHNSend} represents the channel send operation in Ballerina.
+     *
+     * @since 0.982.0
+     */
+    public static class InstructionCHNSend extends Instruction {
+
+        public String channelName;
+        public BType dataType;
+        public int dataReg;
+        public BType keyType;
+        public int keyReg;
+
+        public InstructionCHNSend(int opcode, String channelName, BType dataType,
+                int dataReg, BType keyType, int keyReg) {
+            super(opcode);
+            this.channelName = channelName;
+            this.dataType = dataType;
+            this.dataReg = dataReg;
+            this.keyType = keyType;
+            this.keyReg = keyReg;
+        }
+    }
+
+    /**
      * {@code InstructionFORKJOIN} represents forkjoin statement in in Ballerina.
      *
      * @since 0.95.6
@@ -264,6 +314,61 @@ public class Instruction {
                 sj.add(types[i].toString());
                 sj.add(String.valueOf(pkgRefs[i]));
                 sj.add(String.valueOf(varRegs[i]));
+            }
+            return Mnemonics.getMnem(opcode) + " " + sj.toString();
+        }
+    }
+
+    /**
+     * {@code {@link InstructionCompensate}} represents the COMPENSATE instruction in Ballerina bytecode.
+     */
+    public static class InstructionCompensate extends Instruction {
+        public String scopeName;
+        public ArrayList<String> childScopes = new ArrayList<>();
+        public int retRegIndex;
+
+        InstructionCompensate(int opcode, String scopeName, ArrayList<String> childScopes, int retRegIndex) {
+            super(opcode);
+            this.scopeName = scopeName;
+            this.childScopes = childScopes;
+            this.retRegIndex = retRegIndex;
+        }
+
+        @Override
+        public String toString() {
+            StringJoiner sj = new StringJoiner(" ");
+            sj.add(String.valueOf(scopeName));
+            for (String child : childScopes) {
+                sj.add(child);
+            }
+            return Mnemonics.getMnem(opcode) + " " + sj.toString() + " " + retRegIndex;
+        }
+    }
+
+    /**
+     * {@code {@link InstructionScopeEnd}} represents end of a SCOPE block in Ballerina bytecode.
+     */
+    public static class InstructionScopeEnd extends Instruction {
+
+        public FunctionInfo function;
+        public ArrayList<String> childScopes;
+        public String scopeName;
+        public FunctionRefCPEntry functionCP;
+
+        InstructionScopeEnd(int opcode, FunctionInfo function, ArrayList<String> childScopes,
+                String scopeName, FunctionRefCPEntry funcCP) {
+            super(opcode);
+            this.function = function;
+            this.childScopes = childScopes;
+            this.scopeName = scopeName;
+        }
+
+        @Override
+        public String toString() {
+            StringJoiner sj = new StringJoiner(" ");
+            sj.add(String.valueOf(scopeName));
+            for (String child : childScopes) {
+                sj.add(child);
             }
             return Mnemonics.getMnem(opcode) + " " + sj.toString();
         }

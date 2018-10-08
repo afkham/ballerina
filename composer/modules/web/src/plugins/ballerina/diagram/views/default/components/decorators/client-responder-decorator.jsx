@@ -19,14 +19,13 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import _ from 'lodash';
 import breakpointHoc from 'src/plugins/debugger/views/BreakpointHoc';
-import ActionBox from './action-box';
 import SimpleBBox from './../../../../../model/view/simple-bounding-box';
 import './statement-decorator.css';
 import Breakpoint from './breakpoint';
-import ActiveArbiter from './active-arbiter';
 import Node from '../../../../../model/tree/node';
-import DropZone from '../../../../../drag-drop/DropZone';
 import ArrowDecorator from './arrow-decorator';
+import SizingUtils from '../../sizing-util';
+import TreeUtil from '../../../../../model/tree-util';
 
 /**
  * Wraps other UI elements and provide box with a heading.
@@ -53,8 +52,6 @@ class ClientResponderDecorator extends React.Component {
      */
     constructor(props) {
         super();
-        this.setActionVisibilityFalse = this.setActionVisibility.bind(this, false);
-        this.setActionVisibilityTrue = this.setActionVisibility.bind(this, true);
 
         this.state = {
             active: 'hidden',
@@ -71,38 +68,10 @@ class ClientResponderDecorator extends React.Component {
     }
 
     /**
-     * Removes self on delete button click.
-     * @returns {void}
-     */
-    onDelete() {
-        this.props.model.remove();
-    }
-
-    /**
-     * Navigates to code line in the source view from the design view node
-     */
-    onJumpToCodeLine() {
-        const { editor } = this.context;
-        editor.goToSource(this.props.model);
-    }
-
-    /**
      * Call-back for when a new value is entered via expression editor.
      */
     onUpdate() {
         // TODO: implement validate logic.
-    }
-
-    /**
-     * Shows the action box.
-     * @param {boolean} show - Display action box if true or else hide.
-     */
-    setActionVisibility(show) {
-        if (show) {
-            this.context.activeArbiter.readyToActivate(this);
-        } else {
-            this.context.activeArbiter.readyToDeactivate(this);
-        }
     }
 
     /**
@@ -131,23 +100,16 @@ class ClientResponderDecorator extends React.Component {
      * @returns {XML} rendered component.
      */
     render() {
-        const { viewState, isBreakpoint } = this.props;
-        const statementBox = viewState.components['statement-box'];
-        const dropZone = viewState.components['drop-zone'];
-        const text = viewState.components.text;
-
-        const actionBoxBbox = new SimpleBBox();
-
+        const { viewState, model, isBreakpoint } = this.props;
         const { designer } = this.context;
-        actionBoxBbox.w = (3 * designer.config.actionBox.width) / 4;
-        actionBoxBbox.h = designer.config.actionBox.height;
-        actionBoxBbox.x = statementBox.x + ((statementBox.w - actionBoxBbox.w) / 2);
-        actionBoxBbox.y = statementBox.y + statementBox.h + designer.config.actionBox.padding.top;
+
+        let expression = viewState.displayParameterText;
 
         const fullExp = _.trimEnd(this.props.viewState.fullExpression, ';').trim();
 
         let backwardArrowStart;
         let backwardArrowEnd;
+
         if (viewState.isClientResponder) {
             if (viewState.components.invocation) {
                 backwardArrowStart = Object.assign({}, viewState.components.invocation.end);
@@ -156,35 +118,59 @@ class ClientResponderDecorator extends React.Component {
                 backwardArrowEnd = Object.assign({}, viewState.components.invocation.start);
                 backwardArrowEnd.y = backwardArrowStart.y;
             }
+
+            if (TreeUtil.isVariableDef(model) ||
+                TreeUtil.isAssignment(model) ||
+                TreeUtil.isExpressionStatement(model)) {
+                let exp;
+
+                if (TreeUtil.isVariableDef(model)) {
+                    exp = model.getVariable().getInitialExpression();
+                } else {
+                    exp = model.getExpression();
+                }
+
+                if (TreeUtil.isMatchExpression(exp) || TreeUtil.isCheckExpr(exp)) {
+                    exp = exp.getExpression();
+                }
+
+                const functionNameWidth = new SizingUtils().getTextWidth(exp.getFunctionName(), 0);
+                const nodeWidth = designer.config.clientLine.width + designer.config.lifeLine.gutter.h;
+
+                if (functionNameWidth.w > nodeWidth) {
+                    const truncatedFunctionNameWidth = new SizingUtils().getTextWidth(
+                        exp.getFunctionName(), 0, nodeWidth);
+                    expression = (<tspan>
+                        {truncatedFunctionNameWidth.text}
+                    </tspan>);
+                } else {
+                    const displayExpressionWidth = nodeWidth - functionNameWidth.w;
+                    const expressionDisplayText = new SizingUtils().getTextWidth(model.viewState.displayParameterText, 0,
+                        displayExpressionWidth).text;
+                    expression = (<tspan>
+                        {exp.getFunctionName()}
+                        (<tspan className='client-responder-parameter-text'>{expressionDisplayText}</tspan>)
+                    </tspan>);
+                }
+            }
         }
 
         return (
             <g
                 className='statement'
-                onMouseOut={this.setActionVisibilityFalse}
-                onMouseOver={this.setActionVisibilityTrue}
                 ref={(group) => {
                     this.myRoot = group;
                 }}
             >
                 <g>
                     <text
-                        x={viewState.components.invocation.end.x
-                            + this.context.designer.config.statement.gutter.h}
+                        x={viewState.components.invocation.end.x + this.context.designer.config.statement.gutter.h}
                         y={viewState.components.invocation.end.y - 5}
                     >
-                        {viewState.displayText}
+                        {expression}
                         <title>{fullExp}</title>
                     </text>
                 </g>
-                <ActionBox
-                    bBox={actionBoxBbox}
-                    show={this.state.active}
-                    isBreakpoint={isBreakpoint}
-                    onDelete={() => this.onDelete()}
-                    onJumptoCodeLine={() => this.onJumpToCodeLine()}
-                    onBreakpointClick={() => this.props.onBreakpointClick()}
-                />
                 <g>
                     <ArrowDecorator
                         start={viewState.components.invocation.start}
@@ -211,6 +197,7 @@ ClientResponderDecorator.propTypes = {
     }).isRequired,
     children: PropTypes.node,
     model: PropTypes.instanceOf(Node).isRequired,
+    displayText: PropTypes.string.isRequired,
     onBreakpointClick: PropTypes.func.isRequired,
     isBreakpoint: PropTypes.bool.isRequired,
 };
@@ -219,7 +206,6 @@ ClientResponderDecorator.contextTypes = {
     getOverlayContainer: PropTypes.instanceOf(Object).isRequired,
     editor: PropTypes.instanceOf(Object).isRequired,
     environment: PropTypes.instanceOf(Object).isRequired,
-    activeArbiter: PropTypes.instanceOf(ActiveArbiter).isRequired,
     mode: PropTypes.string,
     designer: PropTypes.instanceOf(Object),
 };

@@ -445,7 +445,16 @@ public class BallerinaDebugProcess extends XDebugProcess {
                             name = file.getName();
                         }
 
-                        stringBuilder.append("{\"packagePath\":\"").append(packagePath).append("\", ");
+                        stringBuilder.append("{\"packagePath\":\"");
+                        String orgName = BallerinaDebuggerUtils.getOrgName(project);
+                        if (orgName != null && !".".equals(packagePath)) {
+                            stringBuilder.append(orgName).append("/");
+                        }
+                        stringBuilder.append(packagePath);
+                        if (!".".equals(packagePath)) {
+                            stringBuilder.append(":").append(BallerinaDebuggerUtils.getVersion(project));
+                        }
+                        stringBuilder.append("\", ");
                         stringBuilder.append("\"fileName\":\"").append(name).append("\", ");
                         stringBuilder.append("\"lineNumber\":").append(line + 1).append("}");
                         if (i < size - 1) {

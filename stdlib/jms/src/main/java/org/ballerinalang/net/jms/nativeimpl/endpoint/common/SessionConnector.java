@@ -53,6 +53,8 @@ public class SessionConnector implements BallerinaTransactionContext {
 
     /**
      * Getter for session.
+     *
+     * @return connector session
      */
     public Session getSession() {
         return session;
@@ -73,7 +75,7 @@ public class SessionConnector implements BallerinaTransactionContext {
     public void rollback() {
         try {
             if (session.getAcknowledgeMode() == Session.SESSION_TRANSACTED) {
-                session.commit();
+                session.rollback();
             }
         } catch (JMSException e) {
             throw new BallerinaException("transaction rollback failed: " + e.getLocalizedMessage(), e);
@@ -82,11 +84,6 @@ public class SessionConnector implements BallerinaTransactionContext {
 
     @Override
     public void close() {
-        // do nothing
-    }
-
-    @Override
-    public void done() {
         // do nothing
     }
 

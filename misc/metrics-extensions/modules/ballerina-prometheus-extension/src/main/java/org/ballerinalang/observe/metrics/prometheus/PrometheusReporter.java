@@ -34,6 +34,8 @@ import java.util.Map;
 
 /**
  * This is the reporter extension for the Prometheus.
+ *
+ * @since 0.980.0
  */
 @JavaSPIService("org.ballerinalang.util.metrics.spi.MetricReporter")
 public class PrometheusReporter implements MetricReporter {
@@ -56,8 +58,8 @@ public class PrometheusReporter implements MetricReporter {
                 PROMETHEUS_PACKAGE);
         Path repoterBalxPath = Paths.get(ballerinaHome, BALX_LIB_DIRECTORY, BLangConstants.BLANG_EXEC_FILE_EXT,
                 PROMETHEUS_PACKAGE, REPORTER_BALX_FILE_NAME);
-        LauncherUtils.runProgram(reporterSourcePath, repoterBalxPath, true,
-                loadCurrentConfigs(), null, new String[0], true, false);
+        LauncherUtils.runProgram(reporterSourcePath, repoterBalxPath, loadCurrentConfigs(), null, new String[0],
+                                 true, false);
         String hostname = ConfigRegistry.getInstance().
                 getConfigOrDefault(PROMETHEUS_HOST_CONFIG, DEFAULT_PROMETHEUS_HOST);
         String port = ConfigRegistry.getInstance().getConfigOrDefault(PROMETHEUS_PORT_CONFIG,

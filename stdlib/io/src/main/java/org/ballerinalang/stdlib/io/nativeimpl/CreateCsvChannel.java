@@ -35,7 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Native function ballerina/io#createCsvChannel.
+ * Extern function ballerina/io#createCsvChannel.
  *
  * @since 0.970.0-alpha1
  */
@@ -55,7 +55,7 @@ import org.slf4j.LoggerFactory;
         isPublic = true
 )
 public class CreateCsvChannel extends BlockingNativeCallableUnit {
-    private static final Logger log = LoggerFactory.getLogger(CreateDelimitedRecordChannel.class);
+    private static final Logger log = LoggerFactory.getLogger(CreateCsvChannel.class);
 
     /**
      * The index od the text record channel in ballerina/io#createDelimitedRecordChannel().

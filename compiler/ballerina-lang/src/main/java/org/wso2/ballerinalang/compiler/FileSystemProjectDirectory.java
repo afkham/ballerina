@@ -28,6 +28,7 @@ import org.wso2.ballerinalang.util.RepoUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.AccessDeniedException;
@@ -55,7 +56,8 @@ import static org.wso2.ballerinalang.util.LambdaExceptionUtils.rethrow;
 public class FileSystemProjectDirectory extends FileSystemProgramDirectory {
     private final Path projectDirPath;
     private List<String> packageNames;
-    private boolean scanned = false;
+    protected boolean scanned = false;
+    private static PrintStream outStream = System.out;
 
     public FileSystemProjectDirectory(Path projectDirPath) {
         super(projectDirPath);
@@ -138,6 +140,7 @@ public class FileSystemProjectDirectory extends FileSystemProgramDirectory {
     public Path saveCompiledProgram(InputStream source, String fileName) {
         Path targetFilePath = ensureAndGetTargetDirPath().resolve(fileName);
         try {
+            outStream.println("    ./target/" + fileName);
             Files.copy(source, targetFilePath, StandardCopyOption.REPLACE_EXISTING);
             return targetFilePath;
         } catch (DirectoryNotEmptyException e) {

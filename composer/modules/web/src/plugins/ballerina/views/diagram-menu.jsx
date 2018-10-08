@@ -32,38 +32,62 @@ class DiagramMenu extends React.Component {
 
     render() {
         return (
-            <Menu className={'top-menu ' + (this.props.width > RESPOSIVE_MENU_TRIGGER.HIDDEN_MODE ? '' : 'hidden' )} style={{ width: this.props.width }}>
-                { !this.props.fitToWidth &&
+            <Menu className={'top-menu ' + (this.props.width > RESPOSIVE_MENU_TRIGGER.HIDDEN_MODE ? '' : 'hidden' ) +
+                (this.props.width > RESPOSIVE_MENU_TRIGGER.ICON_MODE ? '' : ' mobile-top-bar')}
+                style={{ width: this.props.width }}>
                 <Menu.Menu position='left'>
+                    { !this.props.editMode &&
+                    <Menu.Item onClick={() => { this.props.onModeChange({ editMode: true }); }}
+                        className='menu-button ui button secondary'
+                    >
+                        <Icon name='fw fw-uneditable menu-icon-right' />
+                        <span className='text'>Close Edit</span>
+                    </Menu.Item>
+                    }
+                    { this.props.editMode &&
+                        <Menu.Item onClick={() => { this.props.onModeChange({ editMode: false }); }}
+                            className='menu-button ui button primary'
+                        >
+                            <Icon name='fw fw-edit menu-icon-right' />
+                            <span className='text'>Edit</span>
+                        </Menu.Item>
+                    }
+                    { this.props.mode === 'action' &&
+                    <Button.Group>
+                        <Button icon onClick={() => { this.props.onCodeExpandToggle({ mode: 'default' }); }}>
+                            <Icon name='fw fw-expand' title='Expand Code' />
+                        </Button>
+                    </Button.Group>
+                    }
+                    { this.props.mode === 'default' &&
+                    <Button.Group>
+                        <Button icon onClick={() => { this.props.onCodeExpandToggle({ mode: 'action' }); }}>
+                            <Icon name='fw fw-collapse' title='Collapse Code' />
+                        </Button>
+                    </Button.Group>
+                    }
+                    { this.props.editMode &&
+                    <Button.Group>
+                        <Button icon onClick={(e) => { this.props.zoomInHandle(e); }}>
+                            <Icon name='fw fw-zoom-in' title='Zoom In' />
+                        </Button>
+                        <Button icon onClick={(e) => { this.props.zoomOutHandle(e); }}>
+                            <Icon name='fw fw-zoom-out' title='Zoom Out' />
+                        </Button>
+                        <Button icon onClick={(e) => { this.props.zoomFitHandle(e); }}>
+                            <Icon name='fw fw-fit' title='Zoom Fit' />
+                        </Button>
+                    </Button.Group>
+                    }
+                    { !this.props.editMode &&
                     <Menu.Item>
                         <AddDefinitionMenu model={this.props.model} />
                     </Menu.Item>
-                    <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'action', fitToWidth: true }); }}>
-                        <Icon name='fw fw-uneditable menu-icon' title='Disable Edit' />
-                    </Menu.Item>
-                    { this.props.mode === 'action' &&
-                    <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'default', fitToWidth: false }); }}>
-                        <Icon name='fw fw-zoom-in menu-icon-right' title='Collapse' />
-                    </Menu.Item>}
-                    { this.props.mode === 'default' &&
-                    <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'action', fitToWidth: false }); }}>
-                        <Icon name='fw fw-zoom-out menu-icon-right' title='Expand' />
-                    </Menu.Item>}
+                    }
                 </Menu.Menu>
-                }
-                { !this.props.fitToWidth &&
-                <Menu.Menu position='right'>
+                <Menu.Menu position='right' className='definitions-menu'>
                     <DefinitionViewMenu on model={this.props.model} width={this.props.width} />
                 </Menu.Menu>
-                }
-                { this.props.fitToWidth &&
-                <Menu.Menu position='left'>
-                    <Menu.Item onClick={() => { this.props.onModeChange({ mode: 'action', fitToWidth: false }); }} className='menu-button ui button primary'>
-                        <Icon name='fw fw-edit' />
-                        Edit
-                    </Menu.Item>
-                </Menu.Menu>
-                }
             </Menu>
         );
     }
@@ -72,6 +96,7 @@ class DiagramMenu extends React.Component {
 DiagramMenu.propTypes = {
     width: PropTypes.number.isRequired,
     model: PropTypes.instanceOf(CompilationUnitNode).isRequired,
+    mode: PropTypes.string.isRequired,
 };
 
 DiagramMenu.defaultProps = {
@@ -87,4 +112,3 @@ DiagramMenu.childContextTypes = {
 };
 
 export default DiagramMenu;
-
