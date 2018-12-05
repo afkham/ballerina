@@ -1,44 +1,42 @@
 type Department record {
-    string dptName;
-    Person[] employees;
+    string dptName = "";
+    Person[] employees = [];
 };
 
 type Person record {
     string name = "default first name";
-    string lname;
-    map adrs;
+    string lname = "";
+    map<any> adrs = {};
     int age = 999;
-    Family family;
+    Family family = {};
 };
 
 type Family record {
-    string spouse;
-    int noOfChildren;
-    string[] children;
+    string spouse = "";
+    int noOfChildren = 0;
+    string[] children = [];
 };
 
-function testCreateStruct () returns (string, map, int) {
-    map address1;
-    map address = {"country":"USA", "state":"CA"};
+function testCreateStruct () returns (string?, map<any>?, int?) {
+    map<any> address1 = {};
+    map<any> address = {"country":"USA", "state":"CA"};
     Person emp = {name:"Jack", adrs:address, age:25};
     return (emp["name"], emp["adrs"], emp["age"]);
 }
 
 function testStructOfStruct () returns (string) {
-
-    map address = {"country":"USA", "state":"CA"};
+    map<any> address = {"country":"USA", "state":"CA"};
     Person emp1 = {name:"Jack", adrs:address, age:25};
     Person emp2 = {};
     Person[] emps = [emp1, emp2];
     Department dpt = {employees:emps};
 
-    string country;
-    country = dpt["employees"][0]["adrs"]["country"] but { () => "", any a => <string> a};
-    return country;
+    var result = dpt["employees"][0]["adrs"]["country"];
+    return result is () ? "" : <string> result;
 }
 
-function testReturnStructAttributes () returns (string) {
-    map address = {"country":"USA", "state":"CA"};
+function testReturnStructAttributes () returns string? {
+    map<any> address = {"country":"USA", "state":"CA"};
     string[] chldrn = [];
     Family fmly = {children:chldrn};
     Person emp1 = {name:"Jack", adrs:address, age:25, family:fmly};
@@ -59,13 +57,13 @@ function testExpressionAsIndex () returns (string) {
     return family.children[a * b - 8];
 }
 
-function testStructExpressionAsIndex () returns (string) {
-    string country;
+function testStructExpressionAsIndex () returns string? {
+    string country = "";
     Department dpt = {};
     Family fmly = {};
     fmly.children = [];
     Person emp2 = {};
-    map address = {"country":"USA", "state":"CA"};
+    map<any> address = {"country":"USA", "state":"CA"};
     Person emp1 = {name:"Jack", adrs:address, age:25, family:fmly};
 
     emp1["adrs"]["street"] = "20";
@@ -75,22 +73,22 @@ function testStructExpressionAsIndex () returns (string) {
     dpt["employees"][0]["family"]["children"][0] = "emily";
     dpt["employees"][0]["family"]["noOfChildren"] = 1;
 
-    return dpt["employees"][0]["family"]["children"][dpt["employees"][0]["family"]["noOfChildren"] - 1];
+    return dpt["employees"][0]["family"]["children"][(dpt["employees"][0]["family"]["noOfChildren"] ?: 1) - 1];
 }
 
-function testDefaultVal () returns (string, string, int) {
+function testDefaultVal () returns (string?, string?, int?) {
     Person p = {};
     return (p["name"], p["lname"], p["age"]);
 }
 
-function testNestedFieldDefaultVal () returns (string, string, int) {
+function testNestedFieldDefaultVal () returns (string?, string?, int?) {
     Department dpt = {};
     dpt["employees"] = [];
     dpt["employees"][0] = {lname:"Smith"};
     return (dpt["employees"][0]["name"], dpt["employees"][0]["lname"], dpt["employees"][0]["age"]);
 }
 
-function testGetNonInitAttribute () returns (string) {
+function testGetNonInitAttribute () returns string? {
     Person emp1 = {};
     Person emp2 = {};
     Person[] emps = [emp1, emp2];
@@ -98,12 +96,12 @@ function testGetNonInitAttribute () returns (string) {
     return dpt["employees"][0]["family"]["children"][0];
 }
 
-function testGetNonInitArrayAttribute () returns (string) {
+function testGetNonInitArrayAttribute () returns string? {
     Department dpt = {dptName:"HR"};
     return dpt["employees"][0]["family"]["children"][0];
 }
 
-function testGetNonInitLastAttribute () returns (Person) {
+function testGetNonInitLastAttribute () returns Person? {
     Department dpt = {};
     return dpt["employees"][0];
 }

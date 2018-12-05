@@ -15,8 +15,6 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
 
 type Teacher record {
     int timestamp;
@@ -33,8 +31,8 @@ type TeacherOutput record{
 };
 
 int index = 0;
-stream<Teacher> inputStream;
-stream<TeacherOutput > outputStream;
+stream<Teacher> inputStreamExternalTimeBatchTest2 = new;
+stream<TeacherOutput > outputStreamExternalTimeBatchTest2 = new;
 TeacherOutput[] globalEmployeeArray = [];
 
 function startExternalTimeBatchwindowTest2() returns (TeacherOutput[]) {
@@ -54,24 +52,33 @@ function startExternalTimeBatchwindowTest2() returns (TeacherOutput[]) {
 
     testExternalTimeBatchwindow2();
 
-    outputStream.subscribe(printTeachers);
-    foreach t in teachers {
-        inputStream.publish(t);
+    outputStreamExternalTimeBatchTest2.subscribe(function(TeacherOutput e) {printTeachers(e);});
+    foreach var t in teachers {
+        inputStreamExternalTimeBatchTest2.publish(t);
     }
 
-    runtime:sleep(1000);
-    io:println(globalEmployeeArray);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalEmployeeArray.length()) == 2 || count == 10) {
+            break;
+        }
+    }
     return globalEmployeeArray;
 }
 
 function testExternalTimeBatchwindow2() {
 
     forever {
-        from inputStream window externalTimeBatchWindow("inputStream.timestamp", 1000, timeOut = 1200)
-        select inputStream.timestamp, inputStream.name, count() as count
-        group by inputStream.school
-        => (TeacherOutput [] emp) {
-            outputStream.publish(emp);
+        from inputStreamExternalTimeBatchTest2 window externalTimeBatchWindow(
+                            inputStreamExternalTimeBatchTest2.timestamp, 1000, (), 1200)
+        select inputStreamExternalTimeBatchTest2.timestamp, inputStreamExternalTimeBatchTest2.name, count() as count
+        group by inputStreamExternalTimeBatchTest2.school
+        => (TeacherOutput [] teachers) {
+            foreach var t in teachers {
+                outputStreamExternalTimeBatchTest2.publish(t);
+            }
         }
     }
 }

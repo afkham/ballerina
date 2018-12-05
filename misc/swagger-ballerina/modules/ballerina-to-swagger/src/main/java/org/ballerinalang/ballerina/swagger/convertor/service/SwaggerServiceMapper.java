@@ -35,6 +35,7 @@ import org.ballerinalang.net.http.HttpConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachment;
+import org.wso2.ballerinalang.compiler.tree.BLangService;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangArrayLiteral;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangRecordLiteral;
@@ -58,8 +59,8 @@ public class SwaggerServiceMapper {
     /**
      * Initializes a service parser for swagger.
      *
-     * @param httpAlias    The alias for ballerina/http package.
-     * @param swaggerAlias The alias for ballerina.swagger package.
+     * @param httpAlias    The alias for ballerina/http module.
+     * @param swaggerAlias The alias for ballerina.swagger module.
      */
     public SwaggerServiceMapper(String httpAlias, String swaggerAlias) {
         // Default object mapper is JSON mapper available in swagger utils.
@@ -89,7 +90,7 @@ public class SwaggerServiceMapper {
      * @param service ballerina @Service object to be map to swagger definition
      * @return Swagger object which represent current service.
      */
-    public Swagger convertServiceToSwagger(ServiceNode service) {
+    public Swagger convertServiceToSwagger(BLangService service) {
         Swagger swagger = new Swagger();
         return convertServiceToSwagger(service, swagger);
     }
@@ -101,7 +102,7 @@ public class SwaggerServiceMapper {
      * @param swagger Swagger model to populate
      * @return Swagger object which represent current service.
      */
-    public Swagger convertServiceToSwagger(ServiceNode service, Swagger swagger) {
+    public Swagger convertServiceToSwagger(BLangService service, Swagger swagger) {
         // Setting default values.
         swagger.setBasePath('/' + service.getName().getValue());
         this.parseServiceInfoAnnotationAttachment(service, swagger);

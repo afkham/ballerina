@@ -36,7 +36,7 @@ public enum CompilerOptionName {
 
     TRANSACTION_EXISTS("transactionBlockExists"),
 
-    BUILD_COMPILED_PACKAGE("buildCompiledPackage"),
+    BUILD_COMPILED_MODULE("buildCompiledModule"),
 
     GEN_NATIVE_BINARY("genNativeBinary"),
 
@@ -44,7 +44,9 @@ public enum CompilerOptionName {
 
     TARGET_BINARY_PATH("targetBinaryPath"),
 
-    LOCK_ENABLED("testEnabled");
+    LOCK_ENABLED("lockEnabled"),
+
+    EXPERIMENTAL_FEATURES_ENABLED("experimentalFeaturesEnabled");
 
     public final String name;
 

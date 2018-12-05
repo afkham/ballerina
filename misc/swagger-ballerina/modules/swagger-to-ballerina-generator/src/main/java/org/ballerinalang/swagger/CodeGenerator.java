@@ -56,7 +56,7 @@ public class CodeGenerator {
 
     /**
      * Generates ballerina source for provided Open API Definition in {@code definitionPath}.
-     * Generated source will be written to a ballerina package at {@code outPath}
+     * Generated source will be written to a ballerina module at {@code outPath}
      * <p>Method can be user for generating Ballerina mock services and clients</p>
      *
      * @param type           Output type. Following types are supported
@@ -140,7 +140,7 @@ public class CodeGenerator {
      * @deprecated This method is now deprecated. Use {@link #generate(GeneratorConstants.GenType, String) generate}
      * and implement a file write functionality your self, if you need to customize file writing steps.
      * Otherwise use {@link #generate(GeneratorConstants.GenType, String, String) generate}
-     * to directly write generated source to a ballerina package.
+     * to directly write generated source to a ballerina module.
      */
     @Deprecated
     public void writeBallerina(Object object, String templateDir, String templateName, String outPath)
@@ -235,11 +235,12 @@ public class CodeGenerator {
         List<GenSrcFile> sourceFiles = new ArrayList<>();
         String srcFile = context.getInfo().getTitle().toLowerCase(Locale.ENGLISH).replaceAll(" ", "_") + ".bal";
 
+        // Generate ballerina service and resources.
         String mainContent = getContent(context, GeneratorConstants.DEFAULT_CLIENT_DIR,
                 GeneratorConstants.CLIENT_TEMPLATE_NAME);
         sourceFiles.add(new GenSrcFile(GenFileType.GEN_SRC, srcPackage, srcFile, mainContent));
 
-        // Generate ballerina structs
+        // Generate ballerina records to represent schemas.
         String schemaContent = getContent(context, GeneratorConstants.DEFAULT_MODEL_DIR,
                 GeneratorConstants.SCHEMA_TEMPLATE_NAME);
         sourceFiles.add(new GenSrcFile(GenFileType.MODEL_SRC, srcPackage, GeneratorConstants.SCHEMA_FILE_NAME,
@@ -265,21 +266,21 @@ public class CodeGenerator {
         String srcFile = concatTitle + ".bal";
         String implFile = concatTitle + "_impl.bal";
 
+        // Generate ballerina service and resources with endpoints.
         String mainContent = getContent(context, GeneratorConstants.DEFAULT_MOCK_DIR,
                 GeneratorConstants.MOCK_TEMPLATE_NAME);
         sourceFiles.add(new GenSrcFile(GenFileType.GEN_SRC, srcPackage, srcFile, mainContent));
 
-        // Generate ballerina structs
+        // Generate ballerina records for schemas.
         String schemaContent = getContent(context, GeneratorConstants.DEFAULT_MODEL_DIR,
                 GeneratorConstants.SCHEMA_TEMPLATE_NAME);
         sourceFiles.add(new GenSrcFile(GenFileType.MODEL_SRC, srcPackage, GeneratorConstants.SCHEMA_FILE_NAME,
                 schemaContent));
 
-        // Generate resource implementation source
+        // Generate resource implementation source.
         String implContent = getContent(context, GeneratorConstants.DEFAULT_MOCK_DIR,
                 GeneratorConstants.IMPL_TEMPLATE_NAME);
         sourceFiles.add(new GenSrcFile(GenFileType.IMPL_SRC, srcPackage, implFile, implContent));
-
 
         return sourceFiles;
     }

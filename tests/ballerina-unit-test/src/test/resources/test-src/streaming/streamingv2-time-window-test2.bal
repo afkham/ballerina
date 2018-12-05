@@ -15,10 +15,15 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
 
 type Teacher record {
+    string name;
+    int age;
+    string status;
+    string school;
+};
+
+type Person record {
     string name;
     int age;
     string status;
@@ -27,8 +32,8 @@ type Teacher record {
 };
 
 int index = 0;
-stream<Teacher> inputStream;
-stream<Teacher > outputStream;
+stream<Teacher> inputStreamTimeWindowTest2 = new;
+stream<Person> outputStreamTimeWindowTest2 = new;
 Teacher[] globalEmployeeArray = [];
 
 function startTimeWindowTest2() returns (Teacher[]) {
@@ -51,33 +56,44 @@ function startTimeWindowTest2() returns (Teacher[]) {
 
     testTimeWindow();
 
-    outputStream.subscribe(printTeachers);
-    foreach t in teachers {
-        inputStream.publish(t);
+    outputStreamTimeWindowTest2.subscribe(function(Person e) {printTeachers(e);});
+    foreach var t in teachers {
+        inputStreamTimeWindowTest2.publish(t);
         runtime:sleep(1200);
     }
 
-    io:println(globalEmployeeArray);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalEmployeeArray.length()) == 6 || count == 10) {
+            break;
+        }
+    }
+
     return globalEmployeeArray;
 }
 
 function testTimeWindow() {
 
     forever {
-        from inputStream window timeWindow(2000)
-        select inputStream.name, inputStream.age, inputStream.status, inputStream.school, count() as count
-        group by inputStream.school
-        => (Teacher [] emp) {
-            outputStream.publish(emp);
+        from inputStreamTimeWindowTest2 window timeWindow(2000)
+        select inputStreamTimeWindowTest2.name, inputStreamTimeWindowTest2.age, inputStreamTimeWindowTest2.status, inputStreamTimeWindowTest2
+        .school, count() as count
+        group by inputStreamTimeWindowTest2.school
+        => (Person [] emp) {
+            foreach var e in emp {
+                outputStreamTimeWindowTest2.publish(e);
+            }
         }
     }
 }
 
-function printTeachers(Teacher e) {
+function printTeachers(Person e) {
     addToGlobalEmployeeArray(e);
 }
 
-function addToGlobalEmployeeArray(Teacher e) {
+function addToGlobalEmployeeArray(Person e) {
     globalEmployeeArray[index] = e;
     index = index + 1;
 }

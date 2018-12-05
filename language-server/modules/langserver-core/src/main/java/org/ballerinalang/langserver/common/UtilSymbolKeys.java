@@ -27,7 +27,9 @@ public class UtilSymbolKeys {
 
     public static final String CLOSE_BRACE_KEY = "}";
 
-    public static final String OPEN_BRACKET_KEY = "(";
+    public static final String OPEN_PARENTHESES_KEY = "(";
+
+    public static final String CLOSE_PARENTHESES_KEY = ")";
 
     public static final String PKG_DELIMITER_KEYWORD = ":";
 
@@ -39,7 +41,9 @@ public class UtilSymbolKeys {
 
     public static final String SEMI_COLON_SYMBOL_KEY = ";";
 
-    public static final String ACTION_INVOCATION_SYMBOL_KEY = "->";
+    public static final String RIGHT_ARROW_SYMBOL_KEY = "->";
+
+    public static final String LEFT_ARROW_SYMBOL_KEY = "<-";
 
     public static final String BANG_SYMBOL_KEY = "!";
 
@@ -54,6 +58,10 @@ public class UtilSymbolKeys {
 
 
     public static final String ITR_OP_LAMBDA_PARAM_REPLACE_TOKEN = "%params%";
+
+    public static final String ITR_OP_LAMBDA_KEY_REPLACE_TOKEN = "%key%";
+
+    public static final String ITR_OP_LAMBDA_VALUE_REPLACE_TOKEN = "%value%";
 
     public static final String ACTION_KEYWORD_KEY = "action";
 

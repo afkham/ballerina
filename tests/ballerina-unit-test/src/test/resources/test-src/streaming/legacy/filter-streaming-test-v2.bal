@@ -15,7 +15,6 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
 
 type Employee record {
     string name;
@@ -40,15 +39,17 @@ function testFilterQuery(stream<Teacher> teacherStream6, stream<Employee> employ
         where age > 30
         select name, age, status
         => (Employee[] emp) {
-            employeeStream.publish(emp);
+            foreach var e in emp {
+                employeeStream.publish(e);
+            }
         }
     }
 }
 
 function startFilterQuery() returns (Employee[]) {
 
-    stream<Teacher> teacherStream6;
-    stream<Employee> employeeStream;
+    stream<Teacher> teacherStream6 = new;
+    stream<Employee> employeeStream = new;
     testFilterQuery(teacherStream6, employeeStream);
 
     Teacher t1 = {name:"Raja", age:25, status:"single", batch:"LK2014", school:"Hindu College"};

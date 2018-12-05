@@ -15,9 +15,6 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
-import ballerina/reflect;
 
 type Teacher record {
     string name;
@@ -35,8 +32,8 @@ type TeacherOutput record {
 };
 
 int index = 0;
-stream<Teacher> inputStream;
-stream<TeacherOutput> outputStream;
+stream<Teacher> inputStream = new;
+stream<TeacherOutput> outputStream = new;
 
 TeacherOutput[] globalTeacherOutputArray = [];
 
@@ -59,11 +56,18 @@ function startAggregationWithGroupByQuery() returns TeacherOutput[] {
 
     foo();
 
-    outputStream.subscribe(printTeachers);
-    foreach t in teachers {
+    outputStream.subscribe(function(TeacherOutput e) {printTeachers(e);});
+    foreach var t in teachers {
         inputStream.publish(t);
     }
-    runtime:sleep(1000);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalTeacherOutputArray.length()) == 7 || count == 10) {
+            break;
+        }
+    }
     return globalTeacherOutputArray;
 }
 
@@ -82,8 +86,10 @@ function foo() {
         from inputStream where inputStream.age > 25 window lengthWindow(5) as input
         select input.name, input.age, sum (input.age) as sumAge, count() as count
         group by input.name
-        => (TeacherOutput [] o) {
-            outputStream.publish(o);
+        => (TeacherOutput[] teachers) {
+            foreach var t in teachers {
+                outputStream.publish(t);
+            }
         }
     }
 }

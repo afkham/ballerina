@@ -31,6 +31,7 @@ import picocli.CommandLine;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -204,7 +205,7 @@ public class Main {
         private List<String> argList;
 
         @CommandLine.Option(names = {"--sourceroot"},
-                description = "path to the directory containing source files and packages")
+                description = "path to the directory containing source files and modules")
         private String sourceRoot;
 
         @CommandLine.Option(names = {"--help", "-h", "?"}, hidden = true)
@@ -231,6 +232,9 @@ public class Main {
         @CommandLine.Option(names = "-B", description = "Ballerina VM options")
         private Map<String, String> vmOptions = new HashMap<>();
 
+        @CommandLine.Option(names = "--experimental", description = "enable experimental language features")
+        private boolean experimentalFlag;
+
         public void execute() {
             if (helpFlag) {
                 printUsageInfo(BallerinaCliCommands.RUN);
@@ -251,16 +255,16 @@ public class Main {
 
             String programArg = argList.get(0);
             String functionName = MAIN_FUNCTION_NAME;
-            Path sourcePath;
-            if (programArg.contains(COLON)) {
-                String[] programArgConstituents = programArg.split(COLON);
-                functionName = programArgConstituents[programArgConstituents.length - 1];
-                if (functionName.isEmpty() || programArg.endsWith(COLON)) {
-                    throw LauncherUtils.createUsageExceptionWithHelp("expected function name after final ':'");
+            Path sourcePath = Paths.get(programArg);
+            if (programArg.contains(COLON) && !Files.exists(sourceRootPath.resolve(programArg))) {
+                int splitIndex = getSourceFunctionSplitIndex(sourceRootPath, programArg);
+                if (splitIndex != -1) {
+                    sourcePath = Paths.get(programArg.substring(0, splitIndex));
+                    functionName = programArg.substring(splitIndex + 1);
+                    if (functionName.isEmpty() || programArg.endsWith(COLON)) {
+                        throw LauncherUtils.createUsageExceptionWithHelp("expected function name after final ':'");
+                    }
                 }
-                sourcePath = Paths.get(programArg.replace(COLON.concat(functionName), ""));
-            } else {
-                sourcePath = Paths.get(argList.get(0));
             }
 
             // Filter out the list of arguments given to the ballerina program.
@@ -275,7 +279,7 @@ public class Main {
 
             // Normalize the source path to remove './' or '.\' characters that can appear before the name
             LauncherUtils.runProgram(sourceRootPath, sourcePath.normalize(), functionName, runtimeParams,
-                                     configFilePath, programArgs, offline, observeFlag, printReturn);
+                    configFilePath, programArgs, offline, observeFlag, printReturn, experimentalFlag);
         }
 
         @Override
@@ -287,7 +291,7 @@ public class Main {
         public void printLongDesc(StringBuilder out) {
             out.append("Run command runs a compiled Ballerina program. \n");
             out.append("\n");
-            out.append("If a Ballerina source file or a source package is given, \n");
+            out.append("If a Ballerina source file or a module is given, \n");
             out.append("run command compiles and runs it. \n");
             out.append("\n");
             out.append("By default, 'ballerina run' executes the main function. \n");
@@ -299,7 +303,7 @@ public class Main {
 
         @Override
         public void printUsage(StringBuilder out) {
-            out.append("  ballerina run [flags] <balfile | packagename | balxfile> [args...] \n");
+            out.append("  ballerina run [flags] <balfile | module-name | balxfile> [args...] \n");
         }
 
         @Override
@@ -308,6 +312,41 @@ public class Main {
 
         @Override
         public void setSelfCmdParser(CommandLine selfCmdParser) {
+        }
+
+        /**
+         * Retrieve the position of the colon to split at to separate source path and the name of the function to run if
+         * specified.
+         *
+         * Returns the index of the colon, on which when split, the first part is a valid path and the second could
+         * correspond to the function.
+         *
+         * @param sourceRootPath the path to the source root
+         * @param programArg     the program argument specified
+         * @return  the index of the colon to split at
+         */
+        private int getSourceFunctionSplitIndex(Path sourceRootPath, String programArg) {
+            String[] programArgConstituents = programArg.split(COLON);
+            int index = programArgConstituents.length - 1;
+
+            String potentialFunction = programArgConstituents[index];
+            String potentialPath = programArg.replace(COLON.concat(potentialFunction), "");
+            if (Files.exists(sourceRootPath.resolve(potentialPath))) {
+                return potentialPath.length();
+            }
+            index--;
+
+            while (index != -1) {
+                potentialFunction = programArgConstituents[index].concat(COLON).concat(potentialFunction);
+                potentialPath = programArg.replace(COLON.concat(potentialFunction), "");
+
+                if (Files.exists(sourceRootPath.resolve(potentialPath))) {
+                    return potentialPath.length();
+                }
+
+                index--;
+            }
+            return index;
         }
     }
 

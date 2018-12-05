@@ -5,17 +5,17 @@ any[] outputs = [];
 int count = 0;
 // This is the mock function which will replace the real function
 @test:Mock {
-    packageName: "ballerina/io",
+    moduleName: "ballerina/io",
     functionName: "println"
 }
 public function mockPrint(any... s) {
     outputs[count] = s[0];
-    count++;
+    count += 1;
 }
 
 @test:Config
 function testFunc() {
-    // Calling the main fuction with ampty args array
+    // Calling the main fuction with empty args array
     main();
     test:assertEquals(outputs[0], 5);
     test:assertEquals(outputs[1], 15);

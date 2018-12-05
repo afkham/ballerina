@@ -27,7 +27,6 @@ import org.ballerinalang.model.types.BUnionType;
 import org.ballerinalang.model.types.TypeKind;
 import org.ballerinalang.model.types.TypeTags;
 import org.ballerinalang.model.values.BBoolean;
-import org.ballerinalang.model.values.BByteArray;
 import org.ballerinalang.model.values.BFloat;
 import org.ballerinalang.model.values.BInteger;
 import org.ballerinalang.model.values.BMap;
@@ -35,6 +34,7 @@ import org.ballerinalang.model.values.BNewArray;
 import org.ballerinalang.model.values.BRefType;
 import org.ballerinalang.model.values.BString;
 import org.ballerinalang.model.values.BValue;
+import org.ballerinalang.model.values.BValueArray;
 import org.ballerinalang.stdlib.time.util.TimeUtils;
 import org.ballerinalang.util.TableIterator;
 import org.ballerinalang.util.TableResourceManager;
@@ -86,7 +86,7 @@ public class SQLDataIterator extends TableIterator {
 
     public SQLDataIterator(TableResourceManager rm, ResultSet rs, Calendar utcCalendar,
             List<ColumnDefinition> columnDefs, BStructureType structType, StructureTypeInfo timeStructInfo,
-                           StructureTypeInfo zoneStructInfo, String databaseProductName) {
+            StructureTypeInfo zoneStructInfo, String databaseProductName) {
         super(rm, rs, structType, columnDefs);
         this.utcCalendar = utcCalendar;
         this.timeStructInfo = timeStructInfo;
@@ -95,24 +95,24 @@ public class SQLDataIterator extends TableIterator {
     }
 
     @Override
-    public void close(boolean isInTransaction) {
+    public void close() {
         try {
             if (rs != null && !(rs instanceof CachedRowSet) && !rs.isClosed()) {
                 rs.close();
             }
-            resourceManager.gracefullyReleaseResources(isInTransaction);
+            resourceManager.gracefullyReleaseResources();
             rs = null;
         } catch (SQLException e) {
             throw new BallerinaException(e.getMessage(), e);
         }
     }
 
-    public void reset(boolean isInTransaction) {
+    public void reset() {
         try {
             if (rs instanceof CachedRowSet) {
                 rs.beforeFirst();
             } else {
-                close(isInTransaction);
+                close();
             }
         } catch (SQLException e) {
             throw new BallerinaException(e.getMessage(), e);
@@ -139,7 +139,7 @@ public class SQLDataIterator extends TableIterator {
         String columnName = null;
         int sqlType = -1;
         try {
-            BField[] structFields = this.type.getFields();
+            BField[] structFields = this.type.getFields().values().toArray(new BField[0]);
             for (ColumnDefinition columnDef : columnDefs) {
                 if (columnDef instanceof SQLColumnDefinition) {
                     SQLColumnDefinition def = (SQLColumnDefinition) columnDef;
@@ -296,7 +296,7 @@ public class SQLDataIterator extends TableIterator {
         if (structValue == null) {
             return null;
         }
-        BField[] internalStructFields = structType.getFields();
+        BField[] internalStructFields = structType.getFields().values().toArray(new BField[0]);
         BMap<String, BValue> struct = new BMap<>(structType);
         try {
             Object[] dataArray = structValue.getAttributes();
@@ -483,7 +483,7 @@ public class SQLDataIterator extends TableIterator {
             if (nonNillType.getTag() == TypeTags.ARRAY_TAG) {
                 int elementTypeTag = ((BArrayType) nonNillType).getElementType().getTag();
                 if (elementTypeTag == TypeTags.BYTE_TAG) {
-                    BRefType refValue = bytes == null ? null : new BByteArray(bytes);
+                    BRefType refValue = bytes == null ? null : new BValueArray(bytes);
                     bStruct.put(fieldName, refValue);
                 } else {
                     handleUnAssignableUnionTypeAssignment();
@@ -493,7 +493,7 @@ public class SQLDataIterator extends TableIterator {
             }
         } else {
             if (bytes != null) {
-                bStruct.put(fieldName, new BByteArray(bytes));
+                bStruct.put(fieldName, new BValueArray(bytes));
             } else {
                 handleNilToNonNillableFieldAssignment();
             }
@@ -550,7 +550,7 @@ public class SQLDataIterator extends TableIterator {
             if (elementTypeTag == TypeTags.BYTE_TAG) {
                 Blob blobValue = rs.getBlob(index);
                 byte[] bytes = blobValue.getBytes(1L, (int) blobValue.length());
-                bStruct.put(fieldName, bytes == null ? null : new BByteArray(bytes));
+                bStruct.put(fieldName, bytes == null ? null : new BValueArray(bytes));
             } else {
                 errorHandlerFunction.apply();
             }

@@ -38,7 +38,7 @@ public class BLangIndexBasedAccess extends BLangAccessExpression implements Inde
     }
 
     @Override
-    public BLangVariableReference getExpression() {
+    public BLangExpression getExpression() {
         return expr;
     }
 
@@ -156,12 +156,15 @@ public class BLangIndexBasedAccess extends BLangAccessExpression implements Inde
      */
     public static class BLangStructFieldAccessExpr extends BLangIndexBasedAccess {
 
+        public boolean except;
+
         public BLangStructFieldAccessExpr(DiagnosticPos pos, BLangVariableReference varRef, BLangExpression keyExpr,
-                BVarSymbol fieldSymbol) {
+                                          BVarSymbol fieldSymbol, boolean except) {
             this.pos = pos;
             this.expr = varRef;
             this.indexExpr = keyExpr;
             this.symbol = fieldSymbol;
+            this.except = except;
         }
 
         @Override

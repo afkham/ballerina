@@ -17,43 +17,60 @@
  * under the License.
  *
  */
-import {
-	ExtensionContext, debug,
-	DebugConfigurationProvider, WorkspaceFolder, DebugConfiguration, ProviderResult
-} from 'vscode';
-import { } from 'vscode-debugadapter';
-import { BallerinaPluginConfig, getPluginConfig } from './config';
-import { activate as activateRenderer } from './renderer';
-import { activate as activateSamples } from './examples';
-import BallerinaExtension from './core/ballerina-extension';
+import { ExtensionContext } from 'vscode';
+import { ballerinaExtInstance } from './core';
+import { activate as activateAPIEditor } from './api-editor';
+import { activate as activateDiagram } from './diagram'; 
+import { activate as activateBBE } from './bbe';
+import { activate as activateDocs } from './docs';
+import { activate as activateTraceLogs } from './trace-logs';
+import { activateDebugConfigProvider } from './debugger';
+import { activateTestRunner } from './test-runner';
+import { StaticFeature, ClientCapabilities, DocumentSelector, ServerCapabilities } from 'vscode-languageclient';
+import { ExtendedLangClient } from './core/extended-language-client';
 
-const debugConfigResolver: DebugConfigurationProvider = {
-	resolveDebugConfiguration(folder: WorkspaceFolder, config: DebugConfiguration)
-		: ProviderResult<DebugConfiguration> {
-		if (!config['ballerina.home']) {
-			// If ballerina.home is not defined in in debug config get it from workspace configs
-			const workspaceConfig: BallerinaPluginConfig = getPluginConfig();
-			if (workspaceConfig.home) {
-				config['ballerina.home'] = workspaceConfig.home;
-			} else {
-				config['ballerina.home'] = BallerinaExtension.getBallerinaHome();
-			}
-		}
-		return config;
-	}
-};
+// TODO initializations should be contributions from each component
+function onBeforeInit(langClient: ExtendedLangClient) {
+    class TraceLogsFeature implements StaticFeature {
+        fillClientCapabilities(capabilities: ClientCapabilities): void {
+            capabilities.experimental = capabilities.experimental || {};
+            capabilities.experimental.introspection = true;
+        }
+        initialize(capabilities: ServerCapabilities, documentSelector: DocumentSelector | undefined): void {
+        }
+    }
+
+    class ShowFileFeature implements StaticFeature {
+        fillClientCapabilities(capabilities: ClientCapabilities): void {
+            capabilities.experimental = capabilities.experimental || {};
+            capabilities.experimental.showTextDocument = true;
+        }
+        initialize(capabilities: ServerCapabilities, documentSelector: DocumentSelector | undefined): void {
+        }
+    }
+
+    langClient.registerFeature(new TraceLogsFeature());
+    langClient.registerFeature(new ShowFileFeature());
+}
 
 export function activate(context: ExtensionContext): void {
-
-	BallerinaExtension.setContext(context);
-	BallerinaExtension.init();
-	// start the features.
-	activateRenderer(context, BallerinaExtension.langClient!);
-	activateSamples(context, BallerinaExtension.langClient!);
-
-	/*if (!config.debugLog) {
-		clientOptions.outputChannel = dropOutputChannel;
-	}*/
-
-	context.subscriptions.push(debug.registerDebugConfigurationProvider('ballerina', debugConfigResolver));
+    ballerinaExtInstance.setContext(context);
+    ballerinaExtInstance.init(onBeforeInit).then(() => {
+        // start the features.
+        // Enable Ballerina diagram
+        activateDiagram(ballerinaExtInstance);
+        // Enable Ballerina by examples
+        activateBBE(ballerinaExtInstance);
+        // Enable Network logs
+        activateTraceLogs(ballerinaExtInstance);
+        // Enable Ballerina Debug Config Provider
+        activateDebugConfigProvider(ballerinaExtInstance);
+        // Enable Test Runner
+        activateTestRunner(ballerinaExtInstance);
+        // Enable API Docs Live Preview
+        activateDocs(ballerinaExtInstance);
+        activateDebugConfigProvider(ballerinaExtInstance);
+		// Enable Ballerina API Designer
+		activateAPIEditor(ballerinaExtInstance);
+    });
 }

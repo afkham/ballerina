@@ -21,7 +21,6 @@ import org.ballerinalang.langserver.common.utils.CommonUtil;
 import org.ballerinalang.langserver.compiler.LSServiceOperationContext;
 import org.ballerinalang.langserver.completions.CompletionKeys;
 import org.ballerinalang.langserver.completions.SymbolInfo;
-import org.ballerinalang.langserver.completions.util.ItemResolverConstants;
 import org.ballerinalang.langserver.completions.util.Snippet;
 import org.ballerinalang.langserver.completions.util.filters.DelimiterBasedContentFilter;
 import org.ballerinalang.langserver.completions.util.filters.StatementTemplateFilter;
@@ -43,9 +42,9 @@ public class StatementContextResolver extends AbstractItemResolver {
     @Override
     public List<CompletionItem> resolveItems(LSServiceOperationContext context) {
         Either<List<CompletionItem>, List<SymbolInfo>> itemList;
-        if (isInvocationOrFieldAccess(context)) {
+        if (isInvocationOrInteractionOrFieldAccess(context)) {
             itemList = SymbolFilters.get(DelimiterBasedContentFilter.class).filterItems(context);
-            return itemList.isLeft() ? itemList.getLeft() : this.getCompletionItemList(itemList.getRight());
+            return itemList.isLeft() ? itemList.getLeft() : this.getCompletionItemList(itemList.getRight(), context);
         } else {
             boolean supportSnippet = context.get(CompletionKeys.CLIENT_CAPABILITIES_KEY)
                     .getCompletionItem()
@@ -54,17 +53,16 @@ public class StatementContextResolver extends AbstractItemResolver {
 
             // Add the xmlns snippet
             CompletionItem xmlns = new CompletionItem();
-            Snippet.STMT_NAMESPACE_DECLARATION.getBlock().populateCompletionItem(xmlns, supportSnippet);
-            xmlns.setLabel(ItemResolverConstants.XMLNS);
-            xmlns.setDetail(ItemResolverConstants.SNIPPET_TYPE);
+            Snippet.STMT_NAMESPACE_DECLARATION.get().build(xmlns, supportSnippet);
             completionItems.add(xmlns);
 
             // Add the var keyword
-            CompletionItem varKeyword = new CompletionItem();
-            Snippet.KW_VAR.getBlock().populateCompletionItem(varKeyword, supportSnippet);
-            varKeyword.setLabel(ItemResolverConstants.VAR_KEYWORD);
-            varKeyword.setDetail(ItemResolverConstants.KEYWORD_TYPE);
+            CompletionItem varKeyword = Snippet.KW_VAR.get().build(new CompletionItem(), supportSnippet);
             completionItems.add(varKeyword);
+
+            // Add the error snippet
+            CompletionItem error = Snippet.DEF_ERROR.get().build(new CompletionItem(), supportSnippet);
+            completionItems.add(error);
 
             // Add the statement templates
             itemList = SymbolFilters.get(StatementTemplateFilter.class).filterItems(context);
@@ -76,7 +74,7 @@ public class StatementContextResolver extends AbstractItemResolver {
                 BSymbol bSymbol = symbolInfo.getScopeEntry().symbol;
                 return bSymbol instanceof BInvokableSymbol && ((bSymbol.flags & Flags.ATTACHED) == Flags.ATTACHED);
             });
-            completionItems.addAll(this.getCompletionItemList(filteredList));
+            completionItems.addAll(this.getCompletionItemList(filteredList, context));
             completionItems.addAll(this.getPackagesCompletionItems(context));
             // Now we need to sort the completion items and populate the completion items specific to the scope owner
             // as an example, resource, action, function scopes are different from the if-else, while, and etc

@@ -46,12 +46,11 @@ public class BallerinaStreamsV2TimeBatchWindowTest {
     }
 
     @Test(description = "Test TimeBatch window query")
-    public void testExternalTimeBatchQuery1() {
+    public void testTimeBatchQuery1() {
         BValue[] outputEmployeeEvents = BRunUtil.invoke(result1, "startTimeBatchwindowTest1");
         System.setProperty("enable.siddhiRuntime", "true");
 
         Assert.assertNotNull(outputEmployeeEvents);
-
         Assert.assertEquals(outputEmployeeEvents.length, 1, "Expected events are not received");
 
         BMap<String, BValue> employee0 = (BMap<String, BValue>) outputEmployeeEvents[0];
@@ -62,12 +61,11 @@ public class BallerinaStreamsV2TimeBatchWindowTest {
     }
 
     @Test(description = "Test TimeBatch window query")
-    public void testExternalTimeBatchQuery2() {
+    public void testTimeBatchQuery2() {
         BValue[] outputEmployeeEvents = BRunUtil.invoke(result2, "startTimeBatchwindowTest2");
         System.setProperty("enable.siddhiRuntime", "true");
 
         Assert.assertNotNull(outputEmployeeEvents);
-
         Assert.assertEquals(outputEmployeeEvents.length, 3, "Expected events are not received");
 
         BMap<String, BValue> employee0 = (BMap<String, BValue>) outputEmployeeEvents[0];

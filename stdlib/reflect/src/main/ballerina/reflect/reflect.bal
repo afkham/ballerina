@@ -22,18 +22,20 @@
 # + return - TRUE if values are deeply equal, else FALSE.
 public extern function equals(any value1, any value2) returns (boolean);
 
-public type anyStruct record {};
+public type anyStruct record {
+    any...
+};
 
 public type annotationData record {
     string name;
-    string pkgName;
-    string pkgVersion;
+    string moduleName;
+    string moduleVersion;
     anyStruct value;
 };
 
-public extern function getServiceAnnotations(typedesc serviceType) returns (annotationData[]);
+public extern function getServiceAnnotations(service serviceType) returns (annotationData[]);
 
-public extern function getResourceAnnotations(typedesc serviceType, string resourceName) returns (annotationData[]);
+public extern function getResourceAnnotations(service serviceType, string resourceName) returns (annotationData[]);
 
 public extern function getStructAnnotations(typedesc structType) returns (annotationData[]);
 

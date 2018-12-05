@@ -17,6 +17,7 @@
  */
 package org.ballerinalang.test.types.map;
 
+import org.ballerinalang.launcher.util.BAssertUtil;
 import org.ballerinalang.launcher.util.BCompileUtil;
 import org.ballerinalang.launcher.util.BRunUtil;
 import org.ballerinalang.launcher.util.CompileResult;
@@ -90,7 +91,7 @@ public class MapAccessExprTest {
     @Test(description = "Test nested map access")
     public void testNestedMapAccess() {
         CompileResult incorrectCompileResult = BCompileUtil.compile("test-src/types/map/nested-map-access.bal");
-        Assert.assertTrue(incorrectCompileResult.getDiagnostics().length == 2);
+        Assert.assertEquals(incorrectCompileResult.getDiagnostics().length, 2);
         Assert.assertEquals(incorrectCompileResult.getDiagnostics()[0].getMessage(),
                 "invalid operation: type 'any' does not support field access");
         Assert.assertEquals(incorrectCompileResult.getDiagnostics()[1].getMessage(),
@@ -155,15 +156,21 @@ public class MapAccessExprTest {
 
     @Test(description = "Map access negative scenarios")
     public void negativeTest() {
-        Assert.assertEquals(incorrectCompileResult.getDiagnostics().length, 2);
+        Assert.assertEquals(incorrectCompileResult.getDiagnostics().length, 6);
 
+        int index = 0;
         // testMapAccessWithIndex
-        Assert.assertEquals(incorrectCompileResult.getDiagnostics()[0].getMessage(),
-                "incompatible types: expected 'string', found 'int'");
+        BAssertUtil.validateError(incorrectCompileResult, index++, "incompatible types: expected 'string', found 'int'",
+                                  4, 20);
 
         // accessAllFields
-        Assert.assertEquals(incorrectCompileResult.getDiagnostics()[1].getMessage(),
-                "cannot get all fields from a map");
+        BAssertUtil.validateError(incorrectCompileResult, index++, "cannot get all fields from a map", 9, 13);
+
+        // uninitialized map access
+        BAssertUtil.validateError(incorrectCompileResult, index++, "variable 'ints' is not initialized", 16, 5);
+        BAssertUtil.validateError(incorrectCompileResult, index++, "variable 'ints' is not initialized", 18, 41);
+        BAssertUtil.validateError(incorrectCompileResult, index++, "variable 'globalM' is not initialized", 22, 5);
+        BAssertUtil.validateError(incorrectCompileResult, index, "variable 'm4' is not initialized", 43, 12);
     }
 
     @Test(description = "Test map remove key positive.")
@@ -195,7 +202,7 @@ public class MapAccessExprTest {
         Assert.assertEquals(((BBoolean) returns[1]).value(), new Boolean(false));
         Assert.assertEquals(((BBoolean) returns[2]).value(), new Boolean(false));
     }
-    
+
     @Test(description = "Test concurrent map access.")
     public void testMapConcurrentAccess() {
         BValue[] args = {};
@@ -206,7 +213,7 @@ public class MapAccessExprTest {
 
         Assert.assertEquals(((BInteger) returns[0]).value(), new Long(1));
     }
-    
+
     @Test(description = "Test concurrent map get keys.")
     public void testConcurrentMapGetKeys() {
         BValue[] args = {};

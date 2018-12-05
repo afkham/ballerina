@@ -15,8 +15,6 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
 
 type Teacher record {
     string name;
@@ -27,8 +25,8 @@ type Teacher record {
 };
 
 int index = 0;
-stream<Teacher> inputStream;
-stream<Teacher> outputStream;
+stream<Teacher> inputStream = new;
+stream<Teacher> outputStream = new;
 Teacher[] globalEmployeeArray = [];
 
 function startFilterQuery() returns (Teacher[]) {
@@ -43,13 +41,19 @@ function startFilterQuery() returns (Teacher[]) {
 
     testFilterQuery();
 
-    outputStream.subscribe(printTeachers);
-    foreach t in teachers {
+    outputStream.subscribe(function(Teacher e) {printTeachers(e);});
+    foreach var t in teachers {
         inputStream.publish(t);
     }
 
-    runtime:sleep(1000);
-    io:println(globalEmployeeArray);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalEmployeeArray.length()) == 2 || count == 10) {
+            break;
+        }
+    }
     return globalEmployeeArray;
 }
 
@@ -58,8 +62,10 @@ function testFilterQuery() {
     forever {
         from inputStream where inputStream.age > 25
         select inputStream.name, inputStream.age, inputStream.status, inputStream.batch, inputStream.school
-        => (Teacher[] emp) {
-            outputStream.publish(emp);
+        => (Teacher[] teachers) {
+            foreach var t in teachers {
+                outputStream.publish(t);
+            }
         }
     }
 }

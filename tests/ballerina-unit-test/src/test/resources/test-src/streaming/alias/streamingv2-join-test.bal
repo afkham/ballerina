@@ -15,8 +15,6 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
 
 type Stock record {
     string symbol;
@@ -31,17 +29,17 @@ type Twitter record {
 };
 
 type StockWithPrice record {
-    string symbol;
-    string tweet;
-    float price;
+    string? symbol;
+    string? tweet;
+    float? price;
 };
 
 StockWithPrice[] globalEventsArray = [];
 int index = 0;
 
-stream<Stock> stockStream;
-stream<Twitter> twitterStream;
-stream<StockWithPrice> stockWithPriceStream;
+stream<Stock> stockStream = new;
+stream<Twitter> twitterStream = new;
+stream<StockWithPrice> stockWithPriceStream = new;
 
 function testJoinQuery() {
 
@@ -50,8 +48,10 @@ function testJoinQuery() {
         join twitterStream window lengthWindow(1) as twitter
         on stock.symbol == twitter.company
         select stock.symbol as symbol, twitter.tweet as tweet, stock.price as price
-        => (StockWithPrice[] emp) {
-            stockWithPriceStream.publish(emp);
+        => (StockWithPrice[] prices) {
+            foreach var p in prices {
+                stockWithPriceStream.publish(p);
+            }
         }
     }
 }
@@ -66,7 +66,7 @@ function startJoinQuery() returns (StockWithPrice[]) {
 
     Twitter t1 = { user: "User1", tweet: "Hello WSO2, happy to be a user.", company: "WSO2" };
 
-    stockWithPriceStream.subscribe(printCompanyStockPrice);
+    stockWithPriceStream.subscribe(function(StockWithPrice e) {printCompanyStockPrice(e);});
 
     stockStream.publish(s1);
     runtime:sleep(100);
@@ -75,9 +75,15 @@ function startJoinQuery() returns (StockWithPrice[]) {
     stockStream.publish(s2);
     runtime:sleep(100);
     stockStream.publish(s3);
-    runtime:sleep(1000);
 
-    io:println(globalEventsArray);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalEventsArray.length()) == 2 || count == 10) {
+            break;
+        }
+    }
     return globalEventsArray;
 }
 

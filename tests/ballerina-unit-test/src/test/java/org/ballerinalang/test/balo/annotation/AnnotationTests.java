@@ -44,19 +44,30 @@ public class AnnotationTests {
         Assert.assertNotNull(returns);
         Assert.assertEquals(returns.length, 1);
         Assert.assertNotNull(returns[0]);
-        Assert.assertEquals(returns[0].stringValue(), "{name:\"ConfigAnnotation\", pkgName:\"testorg/foo\", " +
-                "pkgVersion:\"v1\", value:{numVal:10, textVal:\"text\", conditionVal:false, recordVal:{nestNumVal:20," +
-                " nextTextVal:\"nestText\"}}}");
+        Assert.assertEquals(returns[0].stringValue(), "{name:\"ConfigAnnotation\", moduleName:\"testorg/foo\", " +
+                "moduleVersion:\"v1\", value:{numVal:10, textVal:\"text\", conditionVal:false, " +
+                "recordVal:{nestNumVal:20, nextTextVal:\"nestText\"}}}");
     }
 
     @Test
-    public void testBallerinaAnnotations() {
-        BValue[] returns = BRunUtil.invoke(result, "testBallerinaAnnotations");
+    public void testBallerinaServiceAnnotations() {
+        BValue[] returns = BRunUtil.invoke(result, "testBallerinaServiceAnnotations");
         Assert.assertNotNull(returns);
         Assert.assertEquals(returns.length, 1);
         Assert.assertNotNull(returns[0]);
-        Assert.assertTrue(returns[0].stringValue().contains("name:\"ServiceConfig\", pkgName:\"ballerina/http\", " +
-                "pkgVersion:\"\""));
+        Assert.assertTrue(returns[0].stringValue().contains("name:\"ServiceConfig\", moduleName:\"ballerina/http\", " +
+                "moduleVersion:\"\""));
         Assert.assertTrue(returns[0].stringValue().contains("/myService"));
+    }
+
+    @Test
+    public void testBallerinaResourceAnnotations() {
+        BValue[] returns = BRunUtil.invoke(result, "testBallerinaResourceAnnotations");
+        Assert.assertNotNull(returns);
+        Assert.assertEquals(returns.length, 1);
+        Assert.assertNotNull(returns[0]);
+        Assert.assertTrue(returns[0].stringValue()
+                .contains("name:\"ResourceConfig\", moduleName:\"ballerina/http\", " + "moduleVersion:\"\""));
+        Assert.assertTrue(returns[0].stringValue().contains("/bar"));
     }
 }

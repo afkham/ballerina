@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/io;
 import ballerina/runtime;
 
 type Employee record {
@@ -34,8 +33,8 @@ type Teacher record {
 Employee[] globalEmployeeArray = [];
 int employeeIndex = 0;
 
-stream<Employee> employeeStream8;
-stream<Teacher> teacherStream9;
+stream<Employee> employeeStream8 = new;
+stream<Teacher> teacherStream9 = new;
 
 function testOutputRateLimitQuery() {
 
@@ -44,7 +43,9 @@ function testOutputRateLimitQuery() {
         select name, age, status
         output first every 3 seconds
         => (Employee[] emp) {
-            employeeStream8.publish(emp);
+            foreach var e in emp {
+                employeeStream8.publish(e);
+            }
         }
     }
 }

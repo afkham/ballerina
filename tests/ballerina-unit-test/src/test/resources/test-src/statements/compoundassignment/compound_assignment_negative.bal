@@ -1,26 +1,26 @@
-function testMapElementIncrement()  returns (int){
-    map namesMap = {fname:1};
-    namesMap.fname++;
+function testMapElementIncrement()  returns (int|error){
+    map<any> namesMap = {fname:1};
+    namesMap.fname += 1;
     int x;
-    x = check <int>namesMap.fname;
+    x = check int.convert(namesMap.fname);
     return x;
 }
 
-function testMapElementDecrement() returns (int){
-    map namesMap = {fname:1};
-    namesMap.fname--;
+function testMapElementDecrement() returns (int|error){
+    map<any> namesMap = {fname:1};
+    namesMap.fname -= 1;
     int x;
-    x = check <int>namesMap.fname;
+    x = check int.convert(namesMap.fname);
     return x;
 }
 
 function testInvalidExpressionIncrement() returns  (int) {
-    getInt()++;
+    getInt() += 1;
     return getInt();
 }
 
 function testInvalidExpressionDecrement() returns  (int) {
-    getInt()--;
+    getInt() -= 1;
     return getInt();
 }
 
@@ -30,19 +30,19 @@ function getInt() returns (int){
 
 function testStringVarRefIncrement() returns (string){
     string x = "compound";
-    x++;
+    x += 1;
     return x;
 }
 
 function testStringVarRefDecrement() returns (string){
     string x = "compound";
-    x--;
+    x -= 1;
     return x;
 }
 
 function testMultiReturnWithCompound() returns (int){
     int x = 4;
-    x += <int>"NotAInteger";
+    x += int.convert("NotAInteger");
     return x;
 }
 
@@ -116,5 +116,35 @@ function testCompoundAssignmentRightShift() returns (int){
 function testCompoundAssignmentLogicalShift() returns (int){
     int x = 8;
     x >>>= "Ballerina";
+    return x;
+}
+
+type Company record {
+   int count = 0;
+   int count2 = 0;
+};
+
+function testCompoundAssignmentAdditionStructElementRecursive() returns int? {
+    Company ibm = {};
+    ibm["count"] = 100;
+    ibm["count"] += ibm["count"];
+    return ibm["count"];
+}
+
+function testCompoundAssignmentAdditionStructElements() returns int? {
+    Company ibm = {};
+    ibm["count"] = 100;
+    ibm["count2"] = 400;
+    ibm["count"] += ibm["count2"];
+    return ibm["count"];
+}
+
+function testCompoundAssignmentAdditionWithStructAccess() returns int {
+    Company ibm = {};
+    ibm["count"] = 100;
+    int[] arr = [];
+    arr[0] = 200;
+    int x = 5;
+    x += (ibm["count"] + arr[0]);
     return x;
 }

@@ -21,7 +21,7 @@
     <parent>
         <groupId>org.ballerinalang</groupId>
         <artifactId>ballerina-parent</artifactId>
-        <version>0.982.1-SNAPSHOT</version>
+        <version>0.990.1-SNAPSHOT</version>
         <relativePath>../../../pom.xml</relativePath>
     </parent>
 
@@ -100,7 +100,7 @@
         </dependency>
         <dependency>
             <groupId>org.ballerinalang</groupId>
-            <artifactId>ballerina-jdbc</artifactId>
+            <artifactId>ballerina-socket</artifactId>
             <type>zip</type>
             <classifier>ballerina-sources</classifier>
         </dependency>
@@ -119,12 +119,6 @@
         <dependency>
             <groupId>org.ballerinalang</groupId>
             <artifactId>ballerina-math</artifactId>
-            <type>zip</type>
-            <classifier>ballerina-sources</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.ballerinalang</groupId>
-            <artifactId>ballerina-mb</artifactId>
             <type>zip</type>
             <classifier>ballerina-sources</classifier>
         </dependency>
@@ -219,16 +213,6 @@
             <type>zip</type>
             <classifier>ballerina-sources</classifier>
         </dependency>
-
-        <dependency>
-            <groupId>org.ballerinalang</groupId>
-            <artifactId>composer-server-distribution</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.ballerinalang</groupId>
-            <artifactId>ballerina-composer-web</artifactId>
-            <type>zip</type>
-        </dependency>
         <dependency>
             <groupId>org.ballerinalang</groupId>
             <artifactId>testerina-core</artifactId>
@@ -245,10 +229,10 @@
             <groupId>org.ballerinalang</groupId>
             <artifactId>swagger-to-ballerina-generator</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.ballerinalang</groupId>
-            <artifactId>ballerina-codegen</artifactId>
-        </dependency>
+        <!--<dependency>-->
+            <!--<groupId>org.ballerinalang</groupId>-->
+            <!--<artifactId>ballerina-codegen</artifactId>-->
+        <!--</dependency>-->
         <dependency>
             <groupId>org.ballerinalang</groupId>
             <artifactId>protobuf-ballerina</artifactId>
@@ -294,6 +278,18 @@
             <groupId>org.ballerinalang</groupId>
             <artifactId>language-server-core</artifactId>
             <type>zip</type>
+        </dependency>
+        <dependency>
+            <groupId>org.ballerinalang</groupId>
+            <artifactId>language-server-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.ballerinalang</groupId>
+            <artifactId>language-server-compiler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.ballerinalang</groupId>
+            <artifactId>language-server-stdio-launcher</artifactId>
         </dependency>
         <dependency>
             <groupId>org.ballerinalang</groupId>
@@ -395,11 +391,10 @@
                                 ballerina-http,
                                 ballerina-internal,
                                 ballerina-io,
-                                ballerina-jdbc,
+                                ballerina-socket,
                                 ballerina-jms,
                                 ballerina-log-api,
                                 ballerina-math,
-                                ballerina-mb,
                                 ballerina-mime,
                                 ballerina-mysql,
                                 ballerina-observability,
@@ -417,11 +412,11 @@
                                 ballerina-bir,
                                 <!-- other artifacts -->
                                 ballerina,
-                                ballerina-composer-web,
-                                composer-server-distribution,
                                 testerina-core,
                                 ballerina-packerina,
-                                language-server-core
+                                language-server-compiler,
+                                language-server-core,
+                                language-server-stdio-launcher
                             </includeArtifactIds>
                             <outputDirectory>${project.build.directory}/extracted-distributions
                             </outputDirectory>
@@ -506,7 +501,7 @@
                                 </resource>
                                 <resource>
                                     <directory>
-                                        ${project.build.directory}/extracted-distributions/ballerina-jdbc-ballerina-sources-zip/ballerina
+                                        ${project.build.directory}/extracted-distributions/ballerina-socket-ballerina-sources-zip/ballerina
                                     </directory>
                                 </resource>
                                 <resource>
@@ -522,11 +517,6 @@
                                 <resource>
                                     <directory>
                                         ${project.build.directory}/extracted-distributions/ballerina-math-ballerina-sources-zip/ballerina
-                                    </directory>
-                                </resource>
-                                <resource>
-                                    <directory>
-                                        ${project.build.directory}/extracted-distributions/ballerina-mb-ballerina-sources-zip/ballerina
                                     </directory>
                                 </resource>
                                 <resource>

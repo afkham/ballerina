@@ -15,20 +15,18 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
 
 type Teacher record {
     string name;
     int age;
     string status;
     string school;
-    int count;
+    int count = 0;
 };
 
 int index = 0;
-stream<Teacher> inputStream;
-stream<Teacher > outputStream;
+stream<Teacher> inputStreamLengthWindowTest = new;
+stream<Teacher > outputStreamLengthWindowTest = new;
 Teacher[] globalEmployeeArray = [];
 
 function startLengthWindowTest() returns (Teacher[]) {
@@ -50,24 +48,33 @@ function startLengthWindowTest() returns (Teacher[]) {
 
     testLengthWindow();
 
-    outputStream.subscribe(printTeachers);
-    foreach t in teachers {
-        inputStream.publish(t);
+    outputStreamLengthWindowTest.subscribe(function(Teacher e) {printTeachers(e);});
+    foreach var t in teachers {
+        inputStreamLengthWindowTest.publish(t);
     }
 
-    runtime:sleep(1000);
-    io:println(globalEmployeeArray);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalEmployeeArray.length()) == 6 || count == 10) {
+            break;
+        }
+    }
     return globalEmployeeArray;
 }
 
 function testLengthWindow() {
 
     forever {
-        from inputStream window lengthWindow(2)
-        select inputStream.name, inputStream.age, inputStream.status, inputStream.school, count() as count
-        group by inputStream.school
+        from inputStreamLengthWindowTest window lengthWindow(2)
+        select inputStreamLengthWindowTest.name, inputStreamLengthWindowTest.age, inputStreamLengthWindowTest.status, inputStreamLengthWindowTest
+        .school, count() as count
+        group by inputStreamLengthWindowTest.school
         => (Teacher [] emp) {
-            outputStream.publish(emp);
+            foreach var e in emp {
+                outputStreamLengthWindowTest.publish(e);
+            }
         }
     }
 }

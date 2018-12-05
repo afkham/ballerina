@@ -1,9 +1,9 @@
 
-@final float ^"const IL" = 88.90;
+final float ^"const IL" = 88.90;
 
 string ^"global var" = "this is a IL with global var";
 
-json ^"global json";
+json ^"global json" = {};
 
 function getGlobalVarWithIL() returns (string) {
     return ^"global var";
@@ -107,7 +107,7 @@ function ^"test function for identifier"(string val) returns (string) {
 //    return value;
 //}
 
-function useILInStructName() returns (string, string, int, string) {
+function useILInStructName() returns (string, string, int, string?) {
     ^"family person" ^"person one" = {^"first name": "Tom", ^"last name":"hank", ^"current age": 50};
     return (^"person one".^"first name", ^"person one".^"last name", ^"person one".^"current age", ^"person one"["first name"]);
 }

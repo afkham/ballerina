@@ -21,7 +21,7 @@ function testAggregationQuery(
     stream<Teacher> teacherStream) {
     // Create a forever statement block with an appropriate streaming query.
     // Write a query to filter teachers who are older than 18 years, wait for the stream to collect three teacher
-    // objects, group the 3 teachers based on their marital status, and then obtain the 
+    // objects, group the 3 teachers based on their marital status, and then obtain the
     // unique marital status counts.
     // Once the query is executed, publish the result to the `filteredStatusCountStream` stream.
     forever {
@@ -30,17 +30,19 @@ function testAggregationQuery(
         group by status
         having totalCount > 1
         => (StatusCount[] status) {
-            filteredStatusCountStream.publish(status);
+            foreach var s in status {
+                filteredStatusCountStream.publish(s);
+            }
         }
     }
 }
 
 public function main() {
     // Create a stream that is constrained by the `StatusCount` record type.
-    stream<StatusCount> filteredStatusCountStream;
+    stream<StatusCount> filteredStatusCountStream = new;
 
     // Create a stream that is constrained by the `Teacher` record type.
-    stream<Teacher> teacherStream;
+    stream<Teacher> teacherStream = new;
 
     //Invoke the method that contains the forever streaming statement.
     testAggregationQuery(filteredStatusCountStream, teacherStream);

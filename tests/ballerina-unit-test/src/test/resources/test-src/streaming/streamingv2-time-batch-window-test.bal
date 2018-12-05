@@ -15,8 +15,6 @@
 // under the License.
 
 import ballerina/runtime;
-import ballerina/io;
-import ballerina/streams;
 
 type Teacher record {
     string name;
@@ -31,8 +29,8 @@ type TeacherOutput record{
 };
 
 int index = 0;
-stream<Teacher> inputStream;
-stream<TeacherOutput > outputStream;
+stream<Teacher> inputStreamTimeBatchTest1 = new;
+stream<TeacherOutput > outputStreamTimeBatchTest1 = new;
 TeacherOutput[] globalEmployeeArray = [];
 
 function startTimeBatchwindowTest1() returns (TeacherOutput[]) {
@@ -46,24 +44,33 @@ function startTimeBatchwindowTest1() returns (TeacherOutput[]) {
 
     testTimeBatchwindow();
 
-    outputStream.subscribe(printTeachers);
-    foreach t in teachers {
-        inputStream.publish(t);
+    outputStreamTimeBatchTest1.subscribe(function(TeacherOutput e) {printTeachers(e);});
+    foreach var t in teachers {
+        inputStreamTimeBatchTest1.publish(t);
     }
 
-    runtime:sleep(1500);
-    io:println(globalEmployeeArray);
+    int count = 0;
+    while(true) {
+        runtime:sleep(500);
+        count += 1;
+        if((globalEmployeeArray.length()) == 1 || count == 10) {
+            break;
+        }
+    }
+
     return globalEmployeeArray;
 }
 
 function testTimeBatchwindow() {
 
     forever {
-        from inputStream window timeBatchWindow(1000)
-        select inputStream.name, count() as count
-        group by inputStream.school
+        from inputStreamTimeBatchTest1 window timeBatchWindow(1000)
+        select inputStreamTimeBatchTest1.name, count() as count
+        group by inputStreamTimeBatchTest1.school
         => (TeacherOutput [] emp) {
-            outputStream.publish(emp);
+            foreach var e in emp {
+                outputStreamTimeBatchTest1.publish(e);
+            }
         }
     }
 }
