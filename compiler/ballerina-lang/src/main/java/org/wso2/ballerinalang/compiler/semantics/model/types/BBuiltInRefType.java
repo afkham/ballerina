@@ -20,16 +20,15 @@ package org.wso2.ballerinalang.compiler.semantics.model.types;
 import org.ballerinalang.model.types.ReferenceType;
 import org.ballerinalang.model.types.TypeKind;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
 
 import static org.wso2.ballerinalang.compiler.util.TypeTags.ANY;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.ANYDATA;
-import static org.wso2.ballerinalang.compiler.util.TypeTags.CHANNEL;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.FUTURE;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.JSON;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.MAP;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.STREAM;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.TABLE;
+import static org.wso2.ballerinalang.compiler.util.TypeTags.TYPEDESC;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.XML;
 
 /**
@@ -41,24 +40,8 @@ public class BBuiltInRefType extends BType implements ReferenceType {
         super(tag, tsymbol);
     }
 
-    @Override
-    public String getDesc() {
-        switch (tag) {
-            case JSON:
-            case XML:
-            case TABLE:
-            case STREAM:
-            case MAP:
-            case FUTURE:
-            case CHANNEL:
-                return TypeDescriptor.SIG_REFTYPE + getKind().typeName() + ";";
-            case ANY:
-                return TypeDescriptor.SIG_ANY;
-            case ANYDATA:
-                return TypeDescriptor.SIG_ANYDATA;
-            default:
-                return null;
-        }
+    public BBuiltInRefType(int tag, BTypeSymbol tsymbol, int flags) {
+        super(tag, tsymbol, flags);
     }
 
     @Override
@@ -73,10 +56,10 @@ public class BBuiltInRefType extends BType implements ReferenceType {
                 return TypeKind.JSON;
             case XML:
                 return TypeKind.XML;
-            case TABLE:
-                return TypeKind.TABLE;
             case STREAM:
                 return TypeKind.STREAM;
+            case TABLE:
+                return TypeKind.TABLE;
             case ANY:
                 return TypeKind.ANY;
             case ANYDATA:
@@ -85,8 +68,8 @@ public class BBuiltInRefType extends BType implements ReferenceType {
                 return TypeKind.MAP;
             case FUTURE:
                 return TypeKind.FUTURE;
-            case CHANNEL:
-                return TypeKind.CHANNEL;
+            case TYPEDESC:
+                return TypeKind.TYPEDESC;
             default:
                 return TypeKind.OTHER;
         }

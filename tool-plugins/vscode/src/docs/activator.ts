@@ -24,6 +24,8 @@ import * as _ from 'lodash';
 import { render } from './renderer';
 import { BallerinaAST, ExtendedLangClient } from '../core/extended-language-client';
 import { BallerinaExtension } from '../core';
+import { getCommonWebViewOptions } from '../utils';
+import { TM_EVENT_OPEN_DOC_PREVIEW, CMP_DOCS_PREVIEW } from '../telemetry';
 
 const DEBOUNCE_WAIT = 500;
 
@@ -40,7 +42,7 @@ function updateWebView(ast: BallerinaAST, docUri: Uri): void {
 	}
 }
 
-function showDocs(context: ExtensionContext, langClient: ExtendedLangClient): void {
+function showDocs(context: ExtensionContext, langClient: ExtendedLangClient, nodeName: string): void {
 	const didChangeDisposable = workspace.onDidChangeTextDocument(
 		_.debounce((e: TextDocumentChangeEvent) => {
 			if (activeEditor && (e.document === activeEditor.document) &&
@@ -73,6 +75,7 @@ function showDocs(context: ExtensionContext, langClient: ExtendedLangClient): vo
 
 	if (previewPanel) {
 		previewPanel.reveal(ViewColumn.Two, true);
+		scrollToTitle(previewPanel, nodeName);
 		return;
 	}
 	// Create and show a new webview
@@ -80,10 +83,7 @@ function showDocs(context: ExtensionContext, langClient: ExtendedLangClient): vo
 		'ballerinaDocs',
 		"Ballerina Docs",
 		{ viewColumn: ViewColumn.Two, preserveFocus: true },
-		{
-			enableScripts: true,
-			retainContextWhenHidden: true,
-		}
+		getCommonWebViewOptions()
 	);
 	const editor = window.activeTextEditor;
 	if (!editor) {
@@ -91,17 +91,27 @@ function showDocs(context: ExtensionContext, langClient: ExtendedLangClient): vo
 	}
 	activeEditor = editor;
 
-	const html = render(context);
+	const html = render(context, langClient);
+	
 	if (previewPanel && html) {
 		previewPanel.webview.html = html;
 	}
 
-	langClient.getAST(editor.document.uri)
+	const disposeLoaded = previewPanel.webview.onDidReceiveMessage((e) => {
+		if (e.message !== "loaded-doc-preview") {
+			return;
+		}
+		disposeLoaded.dispose();
+		langClient.getAST(editor.document.uri)
 		.then((resp) => {
 			if (resp.ast) {
 				updateWebView(resp.ast, editor.document.uri);
+				if (previewPanel) {
+					scrollToTitle(previewPanel, nodeName);
+				}
 			}
 		});
+	});
 
 	previewPanel.onDidDispose(() => {
 		previewPanel = undefined;
@@ -111,9 +121,11 @@ function showDocs(context: ExtensionContext, langClient: ExtendedLangClient): vo
 }
 
 export function activate(ballerinaExtInstance: BallerinaExtension) {
-	let context = <ExtensionContext>ballerinaExtInstance.context;
-	let langClient = <ExtendedLangClient>ballerinaExtInstance.langClient;
-	const docsRenderDisposable = commands.registerCommand('ballerina.showDocs', () => {
+	const reporter = ballerinaExtInstance.telemetryReporter;
+	const context = <ExtensionContext>ballerinaExtInstance.context;
+	const langClient = <ExtendedLangClient>ballerinaExtInstance.langClient;
+	const docsRenderDisposable = commands.registerCommand('ballerina.showDocs', nodeNameArg => {
+		reporter.sendTelemetryEvent(TM_EVENT_OPEN_DOC_PREVIEW, { component: CMP_DOCS_PREVIEW });
 		return ballerinaExtInstance.onReady()
 			.then(() => {
 				const { experimental } = langClient.initializeResult!.capabilities;
@@ -123,7 +135,7 @@ export function activate(ballerinaExtInstance: BallerinaExtension) {
 					ballerinaExtInstance.showMessageServerMissingCapability();
 					return {};
 				}
-				showDocs(context, langClient);
+				showDocs(context, langClient, (nodeNameArg) ? nodeNameArg.argumentV : "");				
 			})
 			.catch((e) => {
 				if (!ballerinaExtInstance.isValidBallerinaHome()) {
@@ -131,8 +143,18 @@ export function activate(ballerinaExtInstance: BallerinaExtension) {
 				} else {
 					ballerinaExtInstance.showPluginActivationError();
 				}
+				reporter.sendTelemetryException(e, { component: CMP_DOCS_PREVIEW });
 			});
 	});
 
 	context.subscriptions.push(docsRenderDisposable);
+}
+
+function scrollToTitle(previewPanel:WebviewPanel, anchorId: string){
+	if (previewPanel && anchorId) {
+		previewPanel.webview.postMessage({
+			command: 'scroll',
+			anchor: anchorId
+		});
+	}
 }

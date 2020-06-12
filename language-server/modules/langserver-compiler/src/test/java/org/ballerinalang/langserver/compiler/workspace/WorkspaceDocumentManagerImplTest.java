@@ -17,6 +17,7 @@
  */
 package org.ballerinalang.langserver.compiler.workspace;
 
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
@@ -40,6 +42,11 @@ public class WorkspaceDocumentManagerImplTest {
 
     private WorkspaceDocumentManagerImpl documentManager;
     private Path filePath;
+    private Path docUpdatePath1;
+    private Path docUpdatePath2;
+    private Path docUpdatePath3;
+
+    public static final Path RES_DIR = Paths.get("src/test/resources/").toAbsolutePath();
 
     @BeforeClass
     public void setUp() {
@@ -47,14 +54,20 @@ public class WorkspaceDocumentManagerImplTest {
         documentManager.clearAllFilePaths();
         filePath = new File(getClass().getClassLoader().getResource("source").getFile()).toPath()
                 .resolve("singlepackage").resolve("io-sample.bal");
+        docUpdatePath1 = RES_DIR.resolve("source").resolve("docUpdateSource1.bal");
+        docUpdatePath2 = RES_DIR.resolve("source").resolve("docUpdateSource2.bal");
+        docUpdatePath3 = RES_DIR.resolve("source").resolve("docUpdateSource3.bal");
     }
 
     @Test
     public void testOpenFile() throws IOException, WorkspaceDocumentException {
         // Call open file
-        Optional<Lock> lock = Optional.empty();
+        Optional<Lock> lock = documentManager.lockFile(filePath);
         try {
-            lock = documentManager.openFile(filePath, readAll(filePath.toFile()));
+            documentManager.openFile(filePath, readAll(filePath.toFile()));
+            documentManager.openFile(docUpdatePath1, new String(Files.readAllBytes(docUpdatePath1)));
+            documentManager.openFile(docUpdatePath2, new String(Files.readAllBytes(docUpdatePath2)));
+            documentManager.openFile(docUpdatePath3, new String(Files.readAllBytes(docUpdatePath3)));
         } finally {
             lock.ifPresent(Lock::unlock);
         }
@@ -79,7 +92,7 @@ public class WorkspaceDocumentManagerImplTest {
     public void testGetAllFilePaths() {
         Set<Path> allFilePaths = documentManager.getAllFilePaths();
         //  Test returned list size is one
-        Assert.assertEquals(allFilePaths.size(), 1);
+        Assert.assertEquals(allFilePaths.size(), 4);
         // Test list contains the already opened file
         boolean foundFile = allFilePaths.stream().anyMatch(path -> {
             try {
@@ -115,9 +128,9 @@ public class WorkspaceDocumentManagerImplTest {
     public void testUpdateFile() throws IOException, WorkspaceDocumentException {
         String updateContent = readAll(filePath.toFile()) + "\nfunction foo(){\n}\n";
         // Update the file
-        Optional<Lock> lock = Optional.empty();
+        Optional<Lock> lock = documentManager.lockFile(filePath);
         try {
-            lock = documentManager.updateFile(filePath, updateContent);
+            documentManager.updateFile(filePath, updateContent);
         } finally {
             lock.ifPresent(Lock::unlock);
         }

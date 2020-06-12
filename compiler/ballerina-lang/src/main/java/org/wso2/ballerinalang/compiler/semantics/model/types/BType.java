@@ -17,10 +17,13 @@
  */
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
+import org.ballerinalang.model.Name;
 import org.ballerinalang.model.types.TypeKind;
 import org.ballerinalang.model.types.ValueType;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
+import org.wso2.ballerinalang.compiler.util.Names;
+import org.wso2.ballerinalang.compiler.util.TypeTags;
 
 import static org.wso2.ballerinalang.compiler.util.TypeTags.BOOLEAN;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.BYTE;
@@ -28,6 +31,7 @@ import static org.wso2.ballerinalang.compiler.util.TypeTags.DECIMAL;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.ERROR;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.FLOAT;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.INT;
+import static org.wso2.ballerinalang.compiler.util.TypeTags.NEVER;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.NIL;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.STRING;
 import static org.wso2.ballerinalang.compiler.util.TypeTags.TYPEDESC;
@@ -40,30 +44,33 @@ public class BType implements ValueType {
     public int tag;
     public BTypeSymbol tsymbol;
 
+    // Add name, flag fields to hold typeparam data.
+    // TypeParam is a part of the TSymbol, but not part of the type. We have to add this because,
+    // Current compiler use both types (for built-in types) and TSymbols for semantic analysis. Because of this,
+    // sometimes we loose type param information down the line. which is a problem.
+    // TODO: Refactor this after JBallerina 1.0.
+    public Name name;
+    public int flags;
+
     public BType(int tag, BTypeSymbol tsymbol) {
         this.tag = tag;
         this.tsymbol = tsymbol;
+        this.name = Names.EMPTY;
+        this.flags = 0;
     }
 
-    public String getDesc() {
-        switch (tag) {
-            case INT:
-                return TypeDescriptor.SIG_INT;
-            case BYTE:
-                return TypeDescriptor.SIG_BYTE;
-            case FLOAT:
-                return TypeDescriptor.SIG_FLOAT;
-            case DECIMAL:
-                return TypeDescriptor.SIG_DECIMAL;
-            case STRING:
-                return TypeDescriptor.SIG_STRING;
-            case BOOLEAN:
-                return TypeDescriptor.SIG_BOOLEAN;
-            case TYPEDESC:
-                return TypeDescriptor.SIG_TYPEDESC;
-            default:
-                return null;
-        }
+    public BType(int tag, BTypeSymbol tsymbol, int flags) {
+        this.tag = tag;
+        this.tsymbol = tsymbol;
+        this.name = Names.EMPTY;
+        this.flags = flags;
+    }
+
+    public BType(int tag, BTypeSymbol tsymbol, Name name, int flags) {
+        this.tag = tag;
+        this.tsymbol = tsymbol;
+        this.name = name;
+        this.flags = flags;
     }
 
     public BType getReturnType() {
@@ -97,11 +104,18 @@ public class BType implements ValueType {
                 return TypeKind.TYPEDESC;
             case NIL:
                 return TypeKind.NIL;
+            case NEVER:
+                return TypeKind.NEVER;
             case ERROR:
                 return TypeKind.ERROR;
             default:
                 return TypeKind.OTHER;
         }
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 
     @Override
@@ -111,5 +125,31 @@ public class BType implements ValueType {
 
     protected String getQualifiedTypeName() {
         return tsymbol.pkgID.toString() + ":" + tsymbol.name;
+    }
+
+    /**
+     * A data holder to hold the type associated with an expression.
+     */
+    public static class NarrowedTypes {
+        public BType trueType;
+        public BType falseType;
+
+        public NarrowedTypes(BType trueType, BType falseType) {
+            this.trueType = trueType;
+            this.falseType = falseType;
+        }
+
+        @Override
+        public String toString() {
+            return "(" + trueType + ", " + falseType + ")";
+        }
+    }
+
+    public boolean isAnydata() {
+        return this.tag <= TypeTags.ANYDATA;
+    }
+
+    public boolean isPureType() {
+        return this.tag == TypeTags.ERROR || this.isAnydata();
     }
 }

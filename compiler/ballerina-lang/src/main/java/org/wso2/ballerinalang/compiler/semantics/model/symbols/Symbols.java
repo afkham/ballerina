@@ -17,22 +17,18 @@
 */
 package org.wso2.ballerinalang.compiler.semantics.model.symbols;
 
+import org.ballerinalang.model.elements.AttachPoint;
 import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.model.symbols.SymbolKind;
 import org.wso2.ballerinalang.compiler.semantics.model.Scope;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolTable;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BInvokableType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
-import org.wso2.ballerinalang.compiler.semantics.model.types.BUnionType;
 import org.wso2.ballerinalang.compiler.util.Name;
 import org.wso2.ballerinalang.compiler.util.Names;
 import org.wso2.ballerinalang.compiler.util.TypeTags;
-import org.wso2.ballerinalang.programfile.InstructionCodes;
 import org.wso2.ballerinalang.util.Flags;
-import org.wso2.ballerinalang.util.Lists;
 
-import java.util.LinkedHashSet;
-import java.util.List;
+import java.util.Set;
 
 /**
  * @since 0.94
@@ -54,7 +50,8 @@ public class Symbols {
 
     private static BPackageSymbol createPackageSymbolScope(SymbolTable symTable,
                                                            BPackageSymbol pkgSymbol) {
-        if (pkgSymbol.name.value.startsWith(Names.BUILTIN_PACKAGE.value)) {
+
+        if (pkgSymbol.pkgID.equals(PackageID.ANNOTATIONS)) {
             pkgSymbol.scope = symTable.rootScope;
         } else {
             pkgSymbol.scope = new Scope(pkgSymbol);
@@ -88,9 +85,17 @@ public class Symbols {
         return typeSymbol;
     }
 
-    public static BAnnotationSymbol createAnnotationSymbol(int flags, int attachPoints, Name name, PackageID pkgID,
-                                                           BType type, BSymbol owner) {
-        BAnnotationSymbol annotationSymbol = new BAnnotationSymbol(name, flags, attachPoints, pkgID, type, owner);
+    @Deprecated
+    public static BAnnotationSymbol createAnnotationSymbol(int flags, int maskedPoints, Name name,
+                                                           PackageID pkgID, BType type, BSymbol owner) {
+        BAnnotationSymbol annotationSymbol = new BAnnotationSymbol(name, flags, maskedPoints, pkgID, type, owner);
+        annotationSymbol.kind = SymbolKind.ANNOTATION;
+        return annotationSymbol;
+    }
+
+    public static BAnnotationSymbol createAnnotationSymbol(int flags, Set<AttachPoint> points, Name name,
+                                                           PackageID pkgID, BType type, BSymbol owner) {
+        BAnnotationSymbol annotationSymbol = new BAnnotationSymbol(name, flags, points, pkgID, type, owner);
         annotationSymbol.kind = SymbolKind.ANNOTATION;
         return annotationSymbol;
     }
@@ -133,7 +138,18 @@ public class Symbols {
                                                PackageID pkgID,
                                                BType type,
                                                BSymbol owner) {
+        if (type != null && type.tag == TypeTags.INVOKABLE) {
+            return createInvokableTypeSymbol(symTag, flags, pkgID, type, owner);
+        }
         return new BTypeSymbol(symTag, flags, name, pkgID, type, owner);
+    }
+
+    public static BInvokableTypeSymbol createInvokableTypeSymbol(int symTag,
+                                                                 int flags,
+                                                                 PackageID pkgID,
+                                                                 BType type,
+                                                                 BSymbol owner) {
+        return new BInvokableTypeSymbol(symTag, flags, pkgID, type, owner);
     }
 
     public static BInvokableSymbol createInvokableSymbol(int kind,
@@ -152,61 +168,6 @@ public class Symbols {
         return new BXMLNSSymbol(name, nsURI, pkgID, owner);
     }
 
-    public static BConversionOperatorSymbol createConversionOperatorSymbol(final BType sourceType,
-                                                                           final BType targetType,
-                                                                           final BType errorType,
-                                                                           boolean implicit,
-                                                                           boolean safe,
-                                                                           int opcode,
-                                                                           PackageID pkgID,
-                                                                           BSymbol owner) {
-        List<BType> paramTypes = Lists.of(sourceType, targetType);
-        BType retType;
-        if (safe) {
-            retType = targetType;
-        } else if (targetType.tag == TypeTags.UNION && targetType instanceof BUnionType) {
-            BUnionType unionType = (BUnionType) targetType;
-            unionType.memberTypes.add(errorType);
-            retType = unionType;
-        } else {
-            LinkedHashSet<BType> memberTypes = new LinkedHashSet<>();
-            memberTypes.add(targetType);
-            memberTypes.add(errorType);
-            retType = new BUnionType(null, memberTypes, false);
-        }
-
-        BInvokableType opType = new BInvokableType(paramTypes, retType, null);
-        return new BConversionOperatorSymbol(pkgID, opType, sourceType, owner, implicit, safe, opcode);
-    }
-
-    public static BConversionOperatorSymbol createUnboxValueTypeOpSymbol(BType sourceType, BType targetType) {
-        int opcode;
-        switch (targetType.tag) {
-            case TypeTags.INT:
-                opcode = InstructionCodes.ANY2I;
-                break;
-            case TypeTags.BYTE:
-                opcode = InstructionCodes.ANY2BI;
-                break;
-            case TypeTags.FLOAT:
-                opcode = InstructionCodes.ANY2F;
-                break;
-            case TypeTags.STRING:
-                opcode = InstructionCodes.ANY2S;
-                break;
-            case TypeTags.DECIMAL:
-                opcode = InstructionCodes.ANY2D;
-                break;
-            default:
-                opcode = InstructionCodes.ANY2B;
-                break;
-        }
-
-        List<BType> paramTypes = Lists.of(sourceType, targetType);
-        BInvokableType opType = new BInvokableType(paramTypes, targetType, null);
-        return new BConversionOperatorSymbol(null, opType, sourceType, null, false, true, opcode);
-    }
-
     public static String getAttachedFuncSymbolName(String typeName, String funcName) {
         return typeName + Names.DOT.value + funcName;
     }
@@ -223,6 +184,10 @@ public class Symbols {
         return (sym.flags & Flags.PRIVATE) == Flags.PRIVATE;
     }
 
+    public static boolean isRemote(BSymbol sym) {
+        return (sym.flags & Flags.REMOTE) == Flags.REMOTE;
+    }
+
     public static boolean isFlagOn(int mask, int flag) {
         return (mask & flag) == flag;
     }
@@ -235,9 +200,11 @@ public class Symbols {
         return (sym.flags & Flags.OPTIONAL) == Flags.OPTIONAL;
     }
 
-    public static BTypeSymbol createScopeSymbol(Name name, PackageID pkgID, BType type, BSymbol owner) {
-        BTypeSymbol typeSymbol = createTypeSymbol(SymTag.SCOPE, 0, name, pkgID, type, owner);
-        typeSymbol.kind = SymbolKind.SCOPE;
-        return typeSymbol;
+    public static boolean isFunctionDeclaration(BSymbol sym) {
+        return (sym.flags & Flags.INTERFACE) == Flags.INTERFACE;
+    }
+
+    public static boolean isTagOn(BSymbol symbol, int symTag) {
+        return (symbol.tag & symTag) == symTag;
     }
 }

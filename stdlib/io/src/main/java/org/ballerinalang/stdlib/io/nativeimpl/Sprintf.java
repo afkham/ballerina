@@ -17,19 +17,15 @@
  */
 package org.ballerinalang.stdlib.io.nativeimpl;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
-import org.ballerinalang.model.types.BArrayType;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.types.TypeTags;
-import org.ballerinalang.model.values.BRefType;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.model.values.BValueArray;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.ReturnType;
-import org.ballerinalang.util.exceptions.BLangExceptionHelper;
-import org.ballerinalang.util.exceptions.RuntimeErrors;
+import org.ballerinalang.jvm.TypeChecker;
+import org.ballerinalang.jvm.types.BArrayType;
+import org.ballerinalang.jvm.types.BType;
+import org.ballerinalang.jvm.types.TypeTags;
+import org.ballerinalang.jvm.util.exceptions.BLangExceptionHelper;
+import org.ballerinalang.jvm.util.exceptions.RuntimeErrors;
+import org.ballerinalang.jvm.values.ArrayValue;
+import org.ballerinalang.jvm.values.api.BString;
+import org.ballerinalang.jvm.values.utils.StringUtils;
 
 import java.util.IllegalFormatConversionException;
 
@@ -38,26 +34,22 @@ import java.util.IllegalFormatConversionException;
  *
  * @since 0.964.0
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "io",
-        functionName = "sprintf",
-        args = {@Argument(name = "format", type = TypeKind.STRING),
-                @Argument(name = "args", type = TypeKind.ARRAY)},
-        returnType = {@ReturnType(type = TypeKind.STRING)},
-        isPublic = true
-)
+public class Sprintf {
 
-/*
- * sprintf accept a format specifier and a list of arguments in an array and returns a formatted
- * string. Examples:
- *      sprintf("%s is awesome!", ["Ballerina"]) -> "Ballerina is awesome!"
- *      sprintf("%10.2f", [12.5678]) -> "     12.57"
- */
-public class Sprintf extends BlockingNativeCallableUnit {
-    @Override
-    public final void execute(final Context context) {
-        String format = context.getStringArgument(0);
-        BValueArray args = (BValueArray) context.getRefArgument(0);
+    private Sprintf() {
+    }
+
+    /**
+     * sprintf accept a format specifier and a list of arguments in an array and returns a formatted
+     * string. Examples:
+     * sprintf("%s is awesome!", ["Ballerina"]) = "Ballerina is awesome!"
+     * sprintf("%10.2f", [12.5678]) = "     12.57"
+     *
+     * @param format A format string
+     * @param args   Arguments referenced by the format specifiers in the format string
+     * @return a formatted string that specified as in format
+     */
+    public static BString sprintf(BString format, Object... args) {
         StringBuilder result = new StringBuilder();
 
         /* Special chars in case additional formatting is required later
@@ -79,50 +71,61 @@ public class Sprintf extends BlockingNativeCallableUnit {
         // j reads format specifier to apply
         // k records number of format specifiers seen so far, used to read respective array element
         for (int i = 0, j, k = 0; i < format.length(); i++) {
-            if (format.charAt(i) == '%' && ((i + 1) < format.length())) {
+            if (format.getValue().charAt(i) == '%' && ((i + 1) < format.length())) {
 
                 // skip % character
                 j = i + 1;
 
-                if (k >= args.size()) {
+                if (k >= args.length) {
                     // there's not enough arguments
                     throw BLangExceptionHelper.getRuntimeException(RuntimeErrors.NOT_ENOUGH_FORMAT_ARGUMENTS);
                 }
                 StringBuilder padding = new StringBuilder();
-                while (Character.isDigit(format.charAt(j)) || format.charAt(j) == '.') {
-                    padding.append(format.charAt(j));
+                while (Character.isDigit(format.getValue().charAt(j)) || format.getValue().charAt(j) == '.') {
+                    padding.append(format.getValue().charAt(j));
                     j += 1;
                 }
                 try {
-                    char formatSpecifier = format.charAt(j);
+                    char formatSpecifier = format.getValue().charAt(j);
+                    Object ref = args[k];
                     switch (formatSpecifier) {
                         case 'b':
                         case 'B':
                         case 'd':
                         case 'f':
-                            result.append(String.format("%" + padding + formatSpecifier, args.getRefValue(k).value()));
+                            if (ref == null) {
+                                throw BLangExceptionHelper.getRuntimeException(RuntimeErrors.ILLEGAL_FORMAT_CONVERSION,
+                                                                               format.getValue().charAt(j) + " != ()");
+                            }
+                            result.append(String.format("%" + padding + formatSpecifier, ref));
                             break;
                         case 'x':
                         case 'X':
-                            formatHexString(args, result, k, padding, formatSpecifier);
+                            if (ref == null) {
+                                throw BLangExceptionHelper.getRuntimeException(RuntimeErrors.ILLEGAL_FORMAT_CONVERSION,
+                                                                               format.getValue().charAt(j) + " != ()");
+                            }
+                            formatHexString(result, k, padding, formatSpecifier, args);
                             break;
                         case 's':
-                            result.append(String.format("%" + padding + "s", args.getRefValue(k).stringValue()));
+                            if (ref != null) {
+                                result.append(String.format("%" + padding + "s", StringUtils.getStringValue(ref)));
+                            }
                             break;
                         case '%':
                             result.append("%");
                             break;
                         default:
                             // format string not supported
-                            throw BLangExceptionHelper.getRuntimeException(
-                                    RuntimeErrors.INVALID_FORMAT_SPECIFIER, format.charAt(j));
+                            throw BLangExceptionHelper.getRuntimeException(RuntimeErrors.INVALID_FORMAT_SPECIFIER,
+                                                                           format.getValue().charAt(j));
                     }
                 } catch (IllegalFormatConversionException e) {
-                    throw BLangExceptionHelper.getRuntimeException(
-                            RuntimeErrors.ILLEGAL_FORMAT_CONVERSION,
-                            format.charAt(j) + " != " + args.getRefValue(k).getType());
+                    throw BLangExceptionHelper.getRuntimeException(RuntimeErrors.ILLEGAL_FORMAT_CONVERSION,
+                                                                   format.getValue().charAt(j) + " != " +
+                                                                           TypeChecker.getType(args[k]));
                 }
-                if (format.charAt(j) == '%') {
+                if (format.getValue().charAt(j) == '%') {
                     // special case %%, don't count as a format specifier
                     i++;
                 } else {
@@ -132,21 +135,21 @@ public class Sprintf extends BlockingNativeCallableUnit {
                 continue;
             }
             // no match, copy and continue
-            result.append(format.charAt(i));
+            result.append(format.getValue().charAt(i));
         }
-        context.setReturnValues(new BString(result.toString()));
+        return org.ballerinalang.jvm.StringUtils.fromString(result.toString());
     }
 
-    private void formatHexString(BValueArray args, StringBuilder result, int k, StringBuilder padding, char x) {
-        BRefType ref = args.getRefValue(k);
-        if (TypeTags.ARRAY_TAG == ref.getType().getTag() &&
-                TypeTags.BYTE_TAG == ((BArrayType) ref.getType()).getElementType().getTag()) {
-            BValueArray byteArray = ((BValueArray) ref);
+    private static void formatHexString(StringBuilder result, int k, StringBuilder padding, char x, Object... args) {
+        final Object argsValues = args[k];
+        final BType type = TypeChecker.getType(argsValues);
+        if (TypeTags.ARRAY_TAG == type.getTag() && TypeTags.BYTE_TAG == ((BArrayType) type).getElementType().getTag()) {
+            ArrayValue byteArray = ((ArrayValue) argsValues);
             for (int i = 0; i < byteArray.size(); i++) {
                 result.append(String.format("%" + padding + x, byteArray.getByte(i)));
             }
         } else {
-            result.append(String.format("%" + padding + x, args.getRefValue(k).value()));
+            result.append(String.format("%" + padding + x, argsValues));
         }
     }
 }

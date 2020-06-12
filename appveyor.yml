@@ -39,9 +39,12 @@ install:
   - cmd: java -version
   - cmd: node --version
   - cmd: npm --version
+  - cmd: git submodule update --init --recursive
 build_script:
   - SET MAVEN_OPTS="-Xms1024m"
-  - mvn clean install -B -V -DskipTests
+  - gradlew.bat build -x test --info -scan --stacktrace --console=plain --no-daemon --no-build-cache
 cache:
   - C:\maven\ -> appveyor.yml
   - C:\Users\appveyor\.m2\ -> pom.xml
+  - C:\Users\appveyor\.gradle
+  - '%APPDATA%\npm-cache'

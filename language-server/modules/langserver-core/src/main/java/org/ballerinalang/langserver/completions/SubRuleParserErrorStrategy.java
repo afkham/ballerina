@@ -21,7 +21,9 @@ import org.antlr.v4.runtime.DefaultErrorStrategy;
 import org.antlr.v4.runtime.InputMismatchException;
 import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.Parser;
-import org.ballerinalang.langserver.compiler.LSContext;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.completion.CompletionKeys;
 import org.wso2.ballerinalang.compiler.parser.antlr4.BallerinaParser;
 
 /**
@@ -30,6 +32,8 @@ import org.wso2.ballerinalang.compiler.parser.antlr4.BallerinaParser;
 public class SubRuleParserErrorStrategy extends DefaultErrorStrategy {
 
     private LSContext context;
+    
+    private boolean terminate = false;
 
     public SubRuleParserErrorStrategy(LSContext context) {
         this.context = context;
@@ -37,27 +41,48 @@ public class SubRuleParserErrorStrategy extends DefaultErrorStrategy {
 
     @Override
     public void reportInputMismatch(Parser parser, InputMismatchException e) {
-        fillContext(parser);
+        fillContext(parser.getContext());
     }
 
     @Override
     public void reportMissingToken(Parser parser) {
-        fillContext(parser);
+        fillContext(parser.getContext());
     }
 
     @Override
     public void reportNoViableAlternative(Parser parser, NoViableAltException e) {
-        fillContext(parser);
+        fillContext(parser.getContext());
     }
 
     @Override
     public void reportUnwantedToken(Parser parser) {
-        fillContext(parser);
+        fillContext(parser.getContext());
     }
 
-    private void fillContext(Parser parser) {
-        if (!(parser.getContext() instanceof BallerinaParser.CallableUnitBodyContext)) {
-            this.context.put(CompletionKeys.PARSER_RULE_CONTEXT_KEY, parser.getContext());
+    private void fillContext(ParserRuleContext parserRuleContext) {
+        if (parserRuleContext == null || this.terminate) {
+            return;
         }
+        if (isInvalidExpressionContext(parserRuleContext)
+                || parserRuleContext instanceof BallerinaParser.AnyIdentifierNameContext
+                || parserRuleContext instanceof BallerinaParser.BlockFunctionBodyContext
+                || parserRuleContext instanceof BallerinaParser.PackageNameContext
+                || parserRuleContext instanceof BallerinaParser.TypeNameContext
+                || parserRuleContext instanceof BallerinaParser.TypeInitExprContext
+                || parserRuleContext instanceof BallerinaParser.PeerWorkerContext
+                || parserRuleContext instanceof BallerinaParser.ConstantExpressionContext
+                || parserRuleContext instanceof BallerinaParser.SimpleVariableReferenceContext
+                || parserRuleContext instanceof BallerinaParser.VariableReferenceExpressionContext) {
+            this.fillContext(parserRuleContext.getParent());
+        } else {
+            this.context.put(CompletionKeys.PARSER_RULE_CONTEXT_KEY, parserRuleContext);
+            this.terminate = true;
+        }
+    }
+    
+    private boolean isInvalidExpressionContext(ParserRuleContext context) {
+        return !(context instanceof BallerinaParser.WorkerSendSyncExpressionContext)
+                && !(context instanceof BallerinaParser.WorkerReceiveExpressionContext) 
+                && context instanceof BallerinaParser.ExpressionContext;
     }
 }

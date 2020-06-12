@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,36 +21,12 @@ import java.util.List;
 import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
 
-public interface BallerinaAttachmentPoint extends BallerinaCompositeElement {
+public interface BallerinaAttachmentPoint extends PsiElement {
 
   @Nullable
-  PsiElement getTypeParameter();
+  BallerinaDualAttachPoint getDualAttachPoint();
 
   @Nullable
-  PsiElement getAnnotation();
-
-  @Nullable
-  PsiElement getClient();
-
-  @Nullable
-  PsiElement getFunction();
-
-  @Nullable
-  PsiElement getListener();
-
-  @Nullable
-  PsiElement getObject();
-
-  @Nullable
-  PsiElement getRemote();
-
-  @Nullable
-  PsiElement getResource();
-
-  @Nullable
-  PsiElement getService();
-
-  @Nullable
-  PsiElement getType();
+  BallerinaSourceOnlyAttachPoint getSourceOnlyAttachPoint();
 
 }

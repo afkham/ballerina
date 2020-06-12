@@ -19,17 +19,13 @@ package org.wso2.ballerinalang.compiler.tree;
 
 import org.ballerinalang.model.elements.Flag;
 import org.ballerinalang.model.tree.AnnotationAttachmentNode;
-import org.ballerinalang.model.tree.DeprecatedNode;
 import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.MarkdownDocumentationNode;
 import org.ballerinalang.model.tree.NodeKind;
 import org.ballerinalang.model.tree.ServiceNode;
-import org.ballerinalang.model.tree.expressions.SimpleVariableReferenceNode;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangRecordLiteral;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangSimpleVariableDef;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -46,12 +42,13 @@ public class BLangService extends BLangNode implements ServiceNode {
     public Set<Flag> flagSet;
     public List<BLangAnnotationAttachment> annAttachments;
     public BLangMarkdownDocumentation markdownDocumentationAttachment;
-    public List<BLangDeprecatedNode> deprecatedAttachments;
 
     public BSymbol symbol;
     public BLangIdentifier name;
     public BLangTypeDefinition serviceTypeDefinition;
     public List<BLangExpression> attachedExprs;
+
+    // Reference to global variable of this is a module level service.
     public BLangVariable variableNode;
     public boolean isAnonymousServiceValue;
 
@@ -59,22 +56,9 @@ public class BLangService extends BLangNode implements ServiceNode {
     public BType listenerType;
     public List<BLangFunction> resourceFunctions;
 
-    // Old values. TODO : Remove this.
-    @Deprecated
-    public List<BLangResource> resources = new ArrayList<>();
-    @Deprecated
-    public List<BLangSimpleVariableDef> vars = new ArrayList<>();
-    @Deprecated
-    public List<BLangEndpoint> endpoints = new ArrayList<>();
-    @Deprecated
-    public BLangRecordLiteral anonymousEndpointBind = null;
-    @Deprecated
-    public List<? extends SimpleVariableReferenceNode> boundEndpoints = new ArrayList<>();
-
     public BLangService() {
         this.flagSet = EnumSet.noneOf(Flag.class);
         this.annAttachments = new ArrayList<>();
-        this.deprecatedAttachments = new ArrayList<>();
         this.resourceFunctions = new ArrayList<>();
         this.attachedExprs = new ArrayList<>();
     }
@@ -135,16 +119,6 @@ public class BLangService extends BLangNode implements ServiceNode {
     @Override
     public void setMarkdownDocumentationAttachment(MarkdownDocumentationNode documentationNode) {
         this.markdownDocumentationAttachment = (BLangMarkdownDocumentation) documentationNode;
-    }
-
-    @Override
-    public List<BLangDeprecatedNode> getDeprecatedAttachments() {
-        return deprecatedAttachments;
-    }
-
-    @Override
-    public void addDeprecatedAttachment(DeprecatedNode deprecatedNode) {
-        this.deprecatedAttachments.add((BLangDeprecatedNode) deprecatedNode);
     }
 
     @Override

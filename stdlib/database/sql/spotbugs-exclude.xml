@@ -1,5 +1,5 @@
 <!--
-  ~ Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+  ~ Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
   ~
   ~ WSO2 Inc. licenses this file to you under the Apache License,
   ~ Version 2.0 (the "License"); you may not use this file except
@@ -17,12 +17,15 @@
   -->
 <FindBugsFilter>
     <Match>
-        <Package name="org.ballerinalang.database.sql.actions"/>
+        <class name="org.ballerinalang.sql.utils.Utils"/>
+        <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
     </Match>
     <Match>
-        <Package name="org.ballerinalang.database.h2"/>
+        <class name="org.ballerinalang.sql.utils.QueryUtils"/>
+        <Bug pattern="SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING"/>
     </Match>
     <Match>
-        <Package name="org.ballerinalang.database.mysql"/>
+        <class name="org.ballerinalang.sql.utils.ExecuteUtils"/>
+        <Bug pattern="NP_GUARANTEED_DEREF_ON_EXCEPTION_PATH"/>
     </Match>
 </FindBugsFilter>

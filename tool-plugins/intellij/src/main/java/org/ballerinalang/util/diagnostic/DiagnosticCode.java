@@ -188,6 +188,7 @@ public enum DiagnosticCode {
     DUPLICATE_KEY_IN_RECORD_LITERAL("duplicate.key.in.record.literal"),
     INVALID_ARRAY_LITERAL("invalid.array.literal"),
     INVALID_TUPLE_LITERAL("invalid.tuple.literal"),
+    INVALID_LIST_CONSTRUCTOR("invalid.list.constructor"),
     MISMATCHING_ARRAY_LITERAL_VALUES("mismatching.array.literal.values"),
     SEALED_ARRAY_TYPE_NOT_INITIALIZED("sealed.array.type.not.initialized"),
     SEALED_ARRAY_TYPE_CAN_NOT_INFER_SIZE("sealed.array.type.can.not.infer.size"),
@@ -272,13 +273,7 @@ public enum DiagnosticCode {
     INVALID_SHIFT_OPERATOR("invalid.shift.operator"),
 
     // Streaming related codes
-    UNDEFINED_STREAM_REFERENCE("undefined.stream.reference"),
-    UNDEFINED_STREAM_ATTRIBUTE("undefined.stream.attribute"),
-    INCOMPATIBLE_STREAM_ACTION_ARGUMENT("incompatible.stream.action.argument"),
-    INVALID_STREAM_ACTION_ARGUMENT_COUNT("invalid.stream.action.argument.count"),
-    INVALID_STREAM_ACTION_ARGUMENT_TYPE("invalid.stream.action.argument.type"),
-    INVALID_STREAM_ATTRIBUTE_TYPE("invalid.stream.attribute.type"),
-    STREAMING_INCOMPATIBLE_TYPES("streaming.incompatible.types"),
+    INVALID_STREAM_CONSTRUCTOR("invalid.stream.constructor"),
 
     // Taint checking related codes
     ENTRY_POINT_PARAMETERS_CANNOT_BE_SENSITIVE("entry.point.parameters.cannot.be.sensitive"),

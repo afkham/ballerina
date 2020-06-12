@@ -1,71 +1,52 @@
-# Ballerina
-  [![Jenkins Build Status](https://wso2.org/jenkins/view/All%20Builds/job/ballerina-platform/job/ballerina/badge/icon)](https://wso2.org/jenkins/view/All%20Builds/job/ballerina-platform/job/ballerina/)
-  [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/97xlytm8di5l0pmb/branch/master?svg=true)](https://ci.appveyor.com/project/WSO2/ballerina-lang/branch/master)
+  [![Build Status](https://travis-ci.com/ballerina-platform/ballerina-lang.svg?branch=master)](https://travis-ci.com/ballerina-platform/ballerina-lang)
   [![GitHub (pre-)release](https://img.shields.io/github/release/ballerina-platform/ballerina-lang/all.svg)](https://github.com/ballerina-platform/ballerina-lang/releases)
   [![GitHub (Pre-)Release Date](https://img.shields.io/github/release-date-pre/ballerina-platform/ballerina-lang.svg)](https://github.com/ballerina-platform/ballerina-lang/releases)
   [![GitHub last commit](https://img.shields.io/github/last-commit/ballerina-platform/ballerina-lang.svg)](https://github.com/ballerina-platform/ballerina-lang/commits/master)
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+  ![](https://github.com/ballerina-platform/ballerina-lang/workflows/Ballerina%20daily%20build/badge.svg)
 
-Ballerina is a compiled, type safe, concurrent programming language designed to make it simple to write microservices that integrate APIs.
+# The Ballerina Programming Language
 
-#### Integration Syntax
-A compiled, transactional, statically and strongly typed programming language with textual and graphical syntaxes. Ballerina incorporates fundamental concepts of distributed system integration and offers a type safe, concurrent environment to implement microservices.
+Ballerina is an open source programming language and platform for cloud-era application programmers to easily write software that just works.
 
-#### Networked Type System
-A type system that embraces network payload variability with primitive, object, union, and tuple types.
+#### Providing and consuming services
+It has inherently concurrent first-class language constructs for providing and consuming services.
 
-#### Concurrency
-An execution model composed of lightweight parallel worker units that are non-blocking where no function can lock an executing thread manifesting sequence concurrency. 
- 
-## Table of contents
+#### Sequence diagrams
+Sequence diagram based graphical view shows the most fundamental aspect of the semantics of a network distributed application.
 
-- [Getting started](#getting-started)
-- [Download and install](#download-and-install)
-- [Contributing to Ballerina](#contributing-to-ballerina)
-- [License](#license)
-- [Useful links](#useful-links)
+#### Structural typing
+It allows for looser coupling between distributed components and eliminates the friction of data binding.
+
+#### Metadata
+Extensible metadata enables easy integration of Ballerina programs with cloud platforms. 
 
 ## Getting started
 
 You can use one of the following options to try out Ballerina.
 
-* [Getting Started](https://ballerina.io/learn/getting-started/)
-* [Quick Tour](https://ballerina.io/learn/quick-tour/)
+* [Quick Tour](https://ballerina.io/v1-2/learn/quick-tour/)
 * [Ballerina by Example](https://ballerina.io/learn/by-example/) 
-* [Ballerina by Guide](https://ballerina.io/learn/by-guide/)
+* [Playground](https://play.ballerina.io/)
 
-## Download and install
+## Downloading and installing
 
-### Download the binary
+For instructions on downloading and installing, see [Installing Ballerina](https://ballerina.io/v1-2/learn/installing-ballerina/).
 
-You can download the Ballerina distribution at http://ballerina.io.
+## Building from source
 
-### Install from source
+For prerequisites and instructions on building from source, see [Installing from source](https://ballerina.io/v1-2/learn/installing-ballerina/#installing-from-source).
 
-Alternatively, you can install Ballerina from the source using the following instructions.
+## Reporting issues and security flaws
 
-#### Prerequisites
+Report an issue in the relevant repo out of the GitHub repos listed below. 
 
-* [Oracle JDK 8](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html) or [OpenJDK 8](http://openjdk.java.net/install/)
-* [Maven 3.5.0 or later](https://maven.apache.org/download.cgi)
-* [Node (v8.9.x) + npm (v5.6.0 or later)](https://nodejs.org/en/download/)
-* [Docker](https://www.docker.com/get-docker)
+>**Tip:** If you are unsure whether you have found a bug, search existing issues in the corresponding repo on GitHub and raise it in the [Ballerina-Dev Google Group](#https://groups.google.com/forum/#!forum/ballerina-dev).
+  - Compiler, runtime, standard library, or tooling: <a href="https://github.com/ballerina-platform/ballerina-lang/issues">ballerina-lang</a> repo
+  - Language specification: <a href="https://github.com/ballerina-platform/ballerina-spec/issues">ballerina-spec</a> repo
+  - Website: <a href="https://github.com/ballerina-platform/ballerina-dev-website/issues">ballerina-dev-website</a> repo
+  - Security flaw: send an email to security@ballerina.io. For details, see the <a href="https://ballerina.io/security/">security policy</a>.
 
-#### Building the source
-
-1. Clone this repository using the following command.
-
-    ```bash
-    git clone --recursive https://github.com/ballerina-platform/ballerina-lang
-    ```
-
-    If you download the sources, you need to update the git submodules using the following command.
-    
-    ```bash
-    git submodule update --init 
-    ```
-2. Run the Maven command ``mvn clean install`` from the repository root directory.
-3. Extract the Ballerina distribution created at `distribution/zip/ballerina-tools/target/ballerina-tools-<version>-SNAPSHOT.zip`.
 
 ## Contributing to Ballerina
 
@@ -80,6 +61,6 @@ Ballerina code is distributed under [Apache license 2.0](https://github.com/ball
 ## Useful links
 
 * The ballerina-dev@googlegroups.com mailing list is for discussing code changes to the Ballerina project.
-* Chat live with us on our [Slack channel](https://ballerina.io/open-source/slack/).
+* Chat live with us on our [Slack channel](https://ballerina.io/community/slack/).
 * Technical questions should be posted on Stack Overflow with the [#ballerina](https://stackoverflow.com/questions/tagged/ballerina) tag.
 * Ballerina performance test results are available [here](performance/benchmarks/summary.md).

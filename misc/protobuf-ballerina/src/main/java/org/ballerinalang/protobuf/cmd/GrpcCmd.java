@@ -17,10 +17,10 @@
  */
 package org.ballerinalang.protobuf.cmd;
 
-import org.ballerinalang.launcher.BLauncherCmd;
 import org.ballerinalang.net.grpc.builder.BallerinaFileBuilder;
-import org.ballerinalang.net.grpc.exception.BalGenerationException;
-import org.ballerinalang.protobuf.exception.BalGenToolException;
+import org.ballerinalang.net.grpc.exception.CodeBuilderException;
+import org.ballerinalang.protobuf.exception.CodeGeneratorException;
+import org.ballerinalang.tool.BLauncherCmd;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -39,11 +39,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.ballerinalang.net.grpc.proto.ServiceProtoConstants.TMP_DIRECTORY_PATH;
-import static org.ballerinalang.protobuf.BalGenerationConstants.BUILD_COMMAND_NAME;
 import static org.ballerinalang.protobuf.BalGenerationConstants.COMPONENT_IDENTIFIER;
 import static org.ballerinalang.protobuf.BalGenerationConstants.EMPTY_STRING;
 import static org.ballerinalang.protobuf.BalGenerationConstants.META_LOCATION;
@@ -51,6 +50,7 @@ import static org.ballerinalang.protobuf.BalGenerationConstants.NEW_LINE_CHARACT
 import static org.ballerinalang.protobuf.BalGenerationConstants.PROTOC_PLUGIN_EXE_PREFIX;
 import static org.ballerinalang.protobuf.BalGenerationConstants.PROTOC_PLUGIN_EXE_URL_SUFFIX;
 import static org.ballerinalang.protobuf.BalGenerationConstants.PROTO_SUFFIX;
+import static org.ballerinalang.protobuf.BalGenerationConstants.TEMP_API_DIRECTORY;
 import static org.ballerinalang.protobuf.BalGenerationConstants.TEMP_COMPILER_DIRECTORY;
 import static org.ballerinalang.protobuf.BalGenerationConstants.TEMP_GOOGLE_DIRECTORY;
 import static org.ballerinalang.protobuf.BalGenerationConstants.TEMP_PROTOBUF_DIRECTORY;
@@ -60,23 +60,27 @@ import static org.ballerinalang.protobuf.utils.BalFileGenerationUtils.grantPermi
 
 /**
  * Class to implement "grpc" command for ballerina.
- * Ex: ballerina grpc  --proto_path (proto-file-path)  --exe_path (protoc-executor-path)
+ * Ex: ballerina grpc  --input (proto-file-path)  --output (output-directory-path)
  */
 @CommandLine.Command(
         name = "grpc",
         description = "generate Ballerina gRPC client stub for gRPC service for a given gRPC protoc " +
                 "definition.")
 public class GrpcCmd implements BLauncherCmd {
+
     private static final Logger LOG = LoggerFactory.getLogger(GrpcCmd.class);
-    
+
     private static final PrintStream outStream = System.out;
-    
+    private static final String PROTO_EXTENSION = "proto";
+    private static final String WHITESPACE_CHARACTOR = " ";
+    private static final String WHITESPACE_REPLACEMENT = "\\ ";
+
     private CommandLine parentCmdParser;
-    
-    @CommandLine.Option(names = {"--input"},
-            description = "Input .proto file",
-            required = true
-    )
+
+    @CommandLine.Option(names = {"-h", "--help"}, hidden = true)
+    private boolean helpFlag;
+
+    @CommandLine.Option(names = {"--input"}, description = "Input .proto file")
     private String protoPath;
 
     @CommandLine.Option(names = {"--mode"},
@@ -88,21 +92,25 @@ public class GrpcCmd implements BLauncherCmd {
             description = "Generated Ballerina source files location"
     )
     private String balOutPath;
-    
+
     private String protocExePath;
-    
-    private String protocVersion = "3.4.0";
-    
-    @CommandLine.Option(names = {"-h", "--help"}, hidden = true)
-    private boolean helpFlag;
-    
-    @CommandLine.Option(names = "--debug", hidden = true)
-    private String debugPort;
+
+    @CommandLine.Option(names = {"--protocVersion"}, hidden = true)
+    private String protocVersion = "3.9.1";
 
     @Override
     public void execute() {
+        //Help flag check
+        if (helpFlag) {
+            String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(getName());
+            outStream.println(commandUsageInfo);
+            return;
+        }
+
         // check input protobuf file path
-        if (protoPath == null || !protoPath.toLowerCase(Locale.ENGLISH).endsWith(PROTO_SUFFIX)) {
+        Optional<String> pathExtension = getFileExtension(protoPath);
+        if (!pathExtension.isPresent() ||
+                !PROTO_EXTENSION.equalsIgnoreCase(pathExtension.get())) {
             String errorMessage = "Invalid proto file path. Please input valid proto file location.";
             outStream.println(errorMessage);
             return;
@@ -114,15 +122,10 @@ public class GrpcCmd implements BLauncherCmd {
             return;
         }
 
-        if (helpFlag) {
-            String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(BUILD_COMMAND_NAME);
-            outStream.println(commandUsageInfo);
-            return;
-        }
         // download protoc executor.
         try {
             downloadProtocexe();
-        } catch (IOException | BalGenToolException e) {
+        } catch (IOException | CodeGeneratorException e) {
             String errorMessage = "Error while generating protoc executable. " + e.getMessage();
             LOG.error("Error while generating protoc executable.", e);
             outStream.println(errorMessage);
@@ -136,14 +139,15 @@ public class GrpcCmd implements BLauncherCmd {
         Set<byte[]> dependant;
         try {
             ClassLoader classLoader = this.getClass().getClassLoader();
-            List<String> protoFiles = readProperties(classLoader);
-            for (String file : protoFiles) {
-                try {
+            try {
+                List<String> protoFiles = readProperties(classLoader);
+                for (String file : protoFiles) {
                     exportResource(file, classLoader);
-                } catch (Exception e) {
-                    msg.append("Error extracting resource file ").append(file).append(NEW_LINE_CHARACTER);
-                    LOG.error("Error extracting resource file ", e);
                 }
+            } catch (Exception e) {
+                LOG.error("Error extracting resource file ", e);
+                outStream.println("Error while reading proto library files. " + e.getMessage());
+                return;
             }
             if (msg.toString().isEmpty()) {
                 outStream.println("Successfully extracted library files.");
@@ -152,9 +156,9 @@ public class GrpcCmd implements BLauncherCmd {
                 return;
             }
             try {
-                root = DescriptorsGenerator.generateRootDescriptor(this.protocExePath, new File(protoPath)
-                        .getAbsolutePath(), descFile.getAbsolutePath());
-            } catch (BalGenToolException e) {
+                root = DescriptorsGenerator.generateRootDescriptor(this.protocExePath,
+                        escapeSpaceCharacter(protoPath), descFile.getAbsolutePath());
+            } catch (CodeGeneratorException e) {
                 String errorMessage = "Error occurred when generating proto descriptor. " + e.getMessage();
                 LOG.error("Error occurred when generating proto descriptor.", e);
                 outStream.println(errorMessage);
@@ -168,9 +172,9 @@ public class GrpcCmd implements BLauncherCmd {
             }
             LOG.debug("Successfully generated root descriptor.");
             try {
-                dependant = DescriptorsGenerator.generateDependentDescriptor(this.protocExePath, new File(protoPath)
-                                .getAbsolutePath(), descFile.getAbsolutePath());
-            } catch (BalGenToolException e) {
+                dependant = DescriptorsGenerator.generateDependentDescriptor(this.protocExePath,
+                        escapeSpaceCharacter(protoPath), descFile.getAbsolutePath());
+            } catch (CodeGeneratorException e) {
                 String errorMessage = "Error occurred when generating dependent proto descriptor. " + e.getMessage();
                 LOG.error(errorMessage, e);
                 outStream.println(errorMessage);
@@ -194,7 +198,7 @@ public class GrpcCmd implements BLauncherCmd {
         }
         try {
             ballerinaFileBuilder.build(this.mode);
-        } catch (BalGenerationException e) {
+        } catch (CodeBuilderException e) {
             LOG.error("Error generating ballerina file.", e);
             msg.append("Error generating ballerina file.").append(e.getMessage()).append(NEW_LINE_CHARACTER);
             outStream.println(msg.toString());
@@ -221,6 +225,8 @@ public class GrpcCmd implements BLauncherCmd {
         createTempDirectory(protobufHome);
         File compilerHome = new File(protobufHome, TEMP_COMPILER_DIRECTORY);
         createTempDirectory(compilerHome);
+        File apiHome = new File(googleHome, TEMP_API_DIRECTORY);
+        createTempDirectory(apiHome);
         return new File(metadataHome, getProtoFileName() + "-descriptor.desc");
     }
 
@@ -230,17 +236,26 @@ public class GrpcCmd implements BLauncherCmd {
         }
     }
 
+    private Optional<String> getFileExtension(String filename) {
+        return Optional.ofNullable(filename)
+                .filter(f -> f.contains("."))
+                .map(f -> f.substring(filename.lastIndexOf(".") + 1));
+    }
+
+    private String escapeSpaceCharacter(String protoPath) {
+        return Paths.get(protoPath.replace(WHITESPACE_CHARACTOR, WHITESPACE_REPLACEMENT)).toAbsolutePath().toString();
+    }
+
     /**
      * Export a resource embedded into a Jar file to the local file path.
      *
      * @param resourceName ie.: "/wrapper.proto"
      */
-    private static void exportResource(String resourceName, ClassLoader classLoader) {
+    private static void exportResource(String resourceName, ClassLoader classLoader) throws CodeGeneratorException {
         try (InputStream initialStream = classLoader.getResourceAsStream(resourceName);
-             OutputStream resStreamOut = new FileOutputStream(new File(TMP_DIRECTORY_PATH, resourceName.replace
-                     ("stdlib", "protobuf")))) {
+             OutputStream resStreamOut = new FileOutputStream(new File(TMP_DIRECTORY_PATH, resourceName))) {
             if (initialStream == null) {
-                throw new BalGenToolException("Cannot get resource \"" + resourceName + "\" from Jar file.");
+                throw new CodeGeneratorException("Cannot get resource \"" + resourceName + "\" from Jar file.");
             }
             int readBytes;
             byte[] buffer = new byte[4096];
@@ -248,36 +263,40 @@ public class GrpcCmd implements BLauncherCmd {
                 resStreamOut.write(buffer, 0, readBytes);
             }
         } catch (IOException e) {
-            throw new BalGenToolException("Cannot find '" + resourceName + "' resource  at the jar.", e);
+            throw new CodeGeneratorException("Cannot find '" + resourceName + "' resource  at the jar.", e);
         }
     }
     
     /**
      * Download the protoc executor.
      */
-    private void downloadProtocexe() throws IOException {
+    private void downloadProtocexe() throws IOException, CodeGeneratorException {
         if (protocExePath == null) {
-            File protocExeFile = new File(TMP_DIRECTORY_PATH, "protoc-" + OSDetector.getDetectedClassifier() + ".exe");
+            String protocFilename = "protoc-" + OSDetector.getDetectedClassifier() + ".exe";
+            File protocExeFile = new File(TMP_DIRECTORY_PATH, protocFilename);
             protocExePath = protocExeFile.getAbsolutePath(); // if file already exists will do nothing
             if (!protocExeFile.exists()) {
-                outStream.println("Downloading proc executor.");
+                outStream.println("Downloading protoc executor file - " + protocFilename);
                 String protocDownloadurl = PROTOC_PLUGIN_EXE_URL_SUFFIX + protocVersion + "/protoc-" + protocVersion
                         + "-" + OSDetector.getDetectedClassifier() + PROTOC_PLUGIN_EXE_PREFIX;
+                File tempDownloadFile = new File(TMP_DIRECTORY_PATH,
+                        "protoc-" + OSDetector.getDetectedClassifier() + ".exe.download");
                 try {
-                    downloadFile(new URL(protocDownloadurl), protocExeFile);
+                    downloadFile(new URL(protocDownloadurl), tempDownloadFile);
+                    Files.move(tempDownloadFile.toPath(), protocExeFile.toPath());
                     //set application user permissions to 455
                     grantPermission(protocExeFile);
-                } catch (BalGenToolException e) {
+                } catch (CodeGeneratorException e) {
                     Files.deleteIfExists(Paths.get(protocExePath));
                     throw e;
                 }
-                outStream.println("Download successfully completed.");
+                outStream.println("Download successfully completed. Executor file path - " + protocExeFile.getPath());
             } else {
                 grantPermission(protocExeFile);
-                outStream.println("Continue with existing protoc executor.");
+                outStream.println("Continue with existing protoc executor file at " + protocExeFile.getPath());
             }
         } else {
-            outStream.println("Continue with provided protoc executor at " + protocExePath);
+            outStream.println("Continue with provided protoc executor file at " + protocExePath);
         }
     }
     
@@ -296,7 +315,6 @@ public class GrpcCmd implements BLauncherCmd {
     
     @Override
     public void printUsage(StringBuilder stringBuilder) {
-        
         stringBuilder.append("  ballerina " + COMPONENT_IDENTIFIER + " --input chat.proto\n");
     }
     
@@ -310,12 +328,7 @@ public class GrpcCmd implements BLauncherCmd {
         this.parentCmdParser = parentCmdParser;
     }
     
-    @Override
-    public void setSelfCmdParser(CommandLine selfCmdParser) {
-    
-    }
-    
-    private List<String> readProperties(ClassLoader classLoader) {
+    private List<String> readProperties(ClassLoader classLoader) throws CodeGeneratorException {
         String fileName;
         List<String> protoFilesList = new ArrayList<>();
         try (InputStream initialStream = classLoader.getResourceAsStream("standardProtos.properties");
@@ -324,7 +337,7 @@ public class GrpcCmd implements BLauncherCmd {
                 protoFilesList.add(fileName);
             }
         } catch (IOException e) {
-            throw new BalGenToolException("Error in reading standardProtos.properties.", e);
+            throw new CodeGeneratorException("Error while reading property file.", e);
         }
         return protoFilesList;
     }

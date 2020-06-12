@@ -22,10 +22,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
-import org.ballerinalang.langserver.common.utils.CommonUtil;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentException;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
 import org.ballerinalang.langserver.completion.util.CompletionTestUtil;
-import org.ballerinalang.langserver.completion.util.FileUtils;
+import org.ballerinalang.langserver.util.FileUtils;
 import org.ballerinalang.langserver.util.TestUtil;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.Position;
@@ -42,6 +41,8 @@ import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.ballerinalang.langserver.util.FileUtils.RES_DIR;
+
 /**
  * Completion Test Interface.
  */
@@ -49,7 +50,7 @@ public abstract class CompletionTest {
 
     private Endpoint serviceEndpoint;
 
-    private Path sourcesPath = FileUtils.RES_DIR.resolve("completion");
+    private Path sourcesPath = RES_DIR.resolve("completion");
 
     private JsonParser parser = new JsonParser();
 
@@ -75,9 +76,18 @@ public abstract class CompletionTest {
 
         boolean result = CompletionTestUtil.isSubList(expectedList, responseItemList);
         if (!result) {
-            String diff = CommonUtil.LINE_SEPARATOR + "Expected: " + expectedList.toString()
-                    + CommonUtil.LINE_SEPARATOR + "Actual: " + responseItemList.toString();
-            Assert.fail("Failed Test for: " + configJsonPath + diff);
+            // Fix test cases replacing expected using responses
+//            JsonObject obj = new JsonObject();
+//            obj.add("position", configJsonObject.get("position"));
+//            obj.add("source", configJsonObject.get("source"));
+//            obj.add("items", resultList);
+//            java.nio.file.Files.write(RES_DIR.resolve(configJsonPath),
+//                                      obj.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+//
+//             //This will print nice comparable text in IDE
+//            Assert.assertEquals(responseItemList.toString(), expectedList.toString(),
+//                        "Failed Test for: " + configJsonPath);
+            Assert.fail("Failed Test for: " + configJsonPath);
         }
     }
 

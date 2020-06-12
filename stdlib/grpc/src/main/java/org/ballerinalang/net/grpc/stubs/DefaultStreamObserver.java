@@ -15,31 +15,31 @@
  */
 package org.ballerinalang.net.grpc.stubs;
 
-import org.ballerinalang.bre.bvm.CallableUnitCallback;
-import org.ballerinalang.connector.api.Executor;
-import org.ballerinalang.connector.api.ParamDetail;
-import org.ballerinalang.connector.api.Resource;
-import org.ballerinalang.connector.api.Service;
-import org.ballerinalang.model.types.BErrorType;
-import org.ballerinalang.model.types.BType;
-import org.ballerinalang.model.values.BError;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.net.grpc.GrpcCallableUnitCallBack;
+import org.ballerinalang.jvm.BRuntime;
+import org.ballerinalang.jvm.types.AttachedFunction;
+import org.ballerinalang.jvm.types.BType;
+import org.ballerinalang.jvm.values.ErrorValue;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.connector.CallableUnitCallback;
 import org.ballerinalang.net.grpc.GrpcConstants;
 import org.ballerinalang.net.grpc.Message;
 import org.ballerinalang.net.grpc.MessageUtils;
+import org.ballerinalang.net.grpc.ServiceResource;
+import org.ballerinalang.net.grpc.Status;
 import org.ballerinalang.net.grpc.StreamObserver;
-import org.ballerinalang.net.grpc.exception.ClientRuntimeException;
+import org.ballerinalang.net.grpc.callback.ClientCallableUnitCallBack;
 import org.ballerinalang.net.grpc.exception.GrpcClientException;
+import org.ballerinalang.net.grpc.exception.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
-import static org.ballerinalang.net.grpc.MessageUtils.getHeaderStruct;
+import static org.ballerinalang.net.grpc.GrpcConstants.MESSAGE_HEADERS;
+import static org.ballerinalang.net.grpc.MessageUtils.getHeaderObject;
 
 /**
  * This is Stream Observer Implementation for gRPC Client Call.
@@ -48,76 +48,121 @@ import static org.ballerinalang.net.grpc.MessageUtils.getHeaderStruct;
  */
 public class DefaultStreamObserver implements StreamObserver {
     private static final Logger LOG = LoggerFactory.getLogger(DefaultStreamObserver.class);
-    private Map<String, Resource> resourceMap = new HashMap<>();
+    private Map<String, ServiceResource> resourceMap = new HashMap<>();
+    private Semaphore semaphore;
     
-    public DefaultStreamObserver(Service callbackService) throws
+    public DefaultStreamObserver(BRuntime runtime, ObjectValue callbackService, Semaphore semaphore) throws
             GrpcClientException {
         if (callbackService == null) {
             throw new GrpcClientException("Error while building the connection. Listener Service does not exist");
         }
-        for (Resource resource : callbackService.getResources()) {
-            resourceMap.put(resource.getName(), resource);
+        for (AttachedFunction function : callbackService.getType().getAttachedFunctions()) {
+            resourceMap.put(function.getName(), new ServiceResource(runtime, callbackService, function));
         }
+        this.semaphore = semaphore;
     }
     
     @Override
     public void onNext(Message value) {
-        Resource resource = resourceMap.get(GrpcConstants.ON_MESSAGE_RESOURCE);
+        ServiceResource resource = resourceMap.get(GrpcConstants.ON_MESSAGE_RESOURCE);
         if (resource == null) {
             String message = "Error in listener service definition. onNext resource does not exists";
             LOG.error(message);
-            throw new ClientRuntimeException(message);
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL.toStatus().getCode()).withDescription(message)));
         }
-        List<ParamDetail> paramDetails = resource.getParamDetails();
-        BValue[] signatureParams = new BValue[paramDetails.size()];
-        BMap<String, BValue> headerStruct = getHeaderStruct(resource);
-        BValue requestParam = value.getbMessage();
+        List<BType> signatureParams = resource.getParamTypes();
+        Object[] paramValues = new Object[signatureParams.size() * 2];
+
+        ObjectValue headerObject = null;
+        if (resource.isHeaderRequired()) {
+            headerObject = getHeaderObject();
+            headerObject.addNativeData(MESSAGE_HEADERS, value.getHeaders());
+        }
+        Object requestParam = value.getbMessage();
         if (requestParam != null) {
-            signatureParams[0] = requestParam;
+            paramValues[0] = requestParam;
+            paramValues[1] = true;
         }
-        if (headerStruct != null) {
-            signatureParams[signatureParams.length - 1] = headerStruct;
+        if (headerObject != null && signatureParams.size() == 2) {
+            paramValues[2] = headerObject;
+            paramValues[3] = true;
         }
-        CallableUnitCallback callback = new GrpcCallableUnitCallBack(null);
-        Executor.submit(resource, callback, null, null, signatureParams);
+        try {
+            semaphore.acquire();
+            CallableUnitCallback callback = new ClientCallableUnitCallBack(semaphore);
+            resource.getRuntime().invokeMethodAsync(resource.getService(), resource.getFunctionName(), callback,
+                    null, paramValues);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            String message = "Internal error occurred. The current thread got interrupted";
+            LOG.error(message);
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL.toStatus().getCode()).withDescription(message)));
+        }
     }
     
     @Override
     public void onError(Message error) {
-        Resource onError = resourceMap.get(GrpcConstants.ON_ERROR_RESOURCE);
+        ServiceResource onError = resourceMap.get(GrpcConstants.ON_ERROR_RESOURCE);
         if (onError == null) {
             String message = "Error in listener service definition. onError resource does not exists";
             LOG.error(message);
-            throw new ClientRuntimeException(message);
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL.toStatus().getCode()).withDescription(message)));
         }
-        List<ParamDetail> paramDetails = onError.getParamDetails();
-        BValue[] signatureParams = new BValue[paramDetails.size()];
-        BType errorType = paramDetails.get(0).getVarType();
-        BError errorStruct = MessageUtils.getConnectorError((BErrorType) errorType, error.getError());
-        signatureParams[0] = errorStruct;
-        BMap<String, BValue> headerStruct = getHeaderStruct(onError);
-        if (headerStruct != null && signatureParams.length == 2) {
-            signatureParams[1] = headerStruct;
+        List<BType> signatureParams = onError.getParamTypes();
+        Object[] paramValues = new Object[signatureParams.size() * 2];
+        ObjectValue headerObject = null;
+        if (onError.isHeaderRequired()) {
+            headerObject = getHeaderObject();
+            headerObject.addNativeData(MESSAGE_HEADERS, error.getHeaders());
         }
-        CallableUnitCallback callback = new GrpcCallableUnitCallBack(null);
-        Executor.submit(onError, callback, null, null, signatureParams);
+
+        ErrorValue errorStruct = MessageUtils.getConnectorError(error.getError());
+        paramValues[0] = errorStruct;
+        paramValues[1] = true;
+
+        if (headerObject != null && signatureParams.size() == 2) {
+            paramValues[2] = headerObject;
+            paramValues[3] = true;
+        }
+        try {
+            semaphore.acquire();
+            CallableUnitCallback callback = new ClientCallableUnitCallBack(semaphore);
+            onError.getRuntime().invokeMethodAsync(onError.getService(), onError.getFunctionName(), callback,
+                    null, paramValues);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            String message = "Internal error occurred. The current thread got interrupted";
+            LOG.error(message);
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL.toStatus().getCode()).withDescription(message)));
+        }
     }
     
     @Override
     public void onCompleted() {
-        Resource onCompleted = resourceMap.get(GrpcConstants.ON_COMPLETE_RESOURCE);
+        ServiceResource onCompleted = resourceMap.get(GrpcConstants.ON_COMPLETE_RESOURCE);
         if (onCompleted == null) {
             String message = "Error in listener service definition. onCompleted resource does not exists";
             LOG.error(message);
-            throw new ClientRuntimeException(message);
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL.toStatus().getCode()).withDescription(message)));
         }
-        List<ParamDetail> paramDetails = onCompleted.getParamDetails();
-        BValue[] signatureParams = new BValue[paramDetails.size()];
-        BMap<String, BValue> headerStruct = getHeaderStruct(onCompleted);
-        if (headerStruct != null && signatureParams.length == 1) {
-            signatureParams[0] = headerStruct;
+        List<BType> signatureParams = onCompleted.getParamTypes();
+        Object[] paramValues = new Object[signatureParams.size() * 2];
+        try {
+            semaphore.acquire();
+            CallableUnitCallback callback = new ClientCallableUnitCallBack(semaphore);
+            onCompleted.getRuntime().invokeMethodAsync(onCompleted.getService(), onCompleted.getFunctionName(),
+                    callback, null, paramValues);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            String message = "Internal error occurred. The current thread got interrupted";
+            LOG.error(message);
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL.toStatus().getCode()).withDescription(message)));
         }
-        CallableUnitCallback callback = new GrpcCallableUnitCallBack(null);
-        Executor.submit(onCompleted, callback, null, null, signatureParams);
     }
 }

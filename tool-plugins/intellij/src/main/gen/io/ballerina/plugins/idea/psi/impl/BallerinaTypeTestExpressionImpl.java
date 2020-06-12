@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,19 +44,19 @@ public class BallerinaTypeTestExpressionImpl extends BallerinaExpressionImpl imp
   @Override
   @NotNull
   public BallerinaExpression getExpression() {
-    return notNullChild(PsiTreeUtil.getChildOfType(this, BallerinaExpression.class));
+    return findNotNullChildByClass(BallerinaExpression.class);
   }
 
   @Override
-  @Nullable
+  @NotNull
   public BallerinaTypeName getTypeName() {
-    return PsiTreeUtil.getChildOfType(this, BallerinaTypeName.class);
+    return findNotNullChildByClass(BallerinaTypeName.class);
   }
 
   @Override
   @NotNull
   public PsiElement getIs() {
-    return notNullChild(findChildByType(IS));
+    return findNotNullChildByType(IS);
   }
 
 }

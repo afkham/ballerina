@@ -1,23 +1,28 @@
 
-// import { getCodePoint } from "@ballerina/font";
-import { getCodePoint } from "@ballerina/font";
+import { ASTNode } from "@ballerina/ast-model";
 import classNames from "classnames";
 import * as React from "react";
 import { DiagramConfig } from "../../config/default";
 import { DiagramUtils } from "../../diagram/diagram-utils";
+import { getCodePoint } from "../../utils";
 import { SimpleBBox } from "../../view-model/index";
+import { SourceLinkedLabel } from "./source-linked-label";
 
 const config: DiagramConfig = DiagramUtils.getConfig();
 
 export const LifeLine: React.StatelessComponent<{
     model: SimpleBBox,
     title: string,
-    icon: string
+    icon: string,
+    astModel?: ASTNode,
+    activeRange?: [number, number]
 }> = ({
     model,
     title,
     children,
-    icon
+    astModel,
+    icon,
+    activeRange
 }) => {
 
         const topLabel = { x: 0, y: 0 };
@@ -48,11 +53,18 @@ export const LifeLine: React.StatelessComponent<{
 
         return (
             <g className={classNames("life-line", `life-line-${icon}`)}>
-                <line {...lifeLine} />
+                <line {...lifeLine} strokeDasharray={(activeRange ? 4 : 0)} />
+                {activeRange && <line
+                    x1={lifeLine.x1} x2={lifeLine.x2}
+                    y1={activeRange[0]}
+                    y2={activeRange[1]}
+                /> }
                 <rect {...topBox} />
                 <rect {...bottomBox} />
-                <text {...topLabel}>{title}</text>
+                {!astModel && <text {...topLabel}>{title}</text>}
+                {astModel && <SourceLinkedLabel {...topLabel} target={astModel} text={title} />}
                 <text {...topIcon}>{getCodePoint(icon)}</text>
-                <text {...bottomLabel}>{title}</text>
+                {!astModel && <text {...bottomLabel}>{title}</text>}
+                {astModel && <SourceLinkedLabel {...bottomLabel} target={astModel} text={title} />}
             </g>);
     };

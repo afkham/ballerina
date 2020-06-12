@@ -1,6 +1,29 @@
-import { InitializeParams, InitializeResult } from "vscode-languageserver-protocol";
+import { InitializeParams, InitializeResult, Location, Position,
+    Range, TextDocumentPositionParams} from "vscode-languageserver-protocol";
 import { BallerinaAST, BallerinaASTNode, BallerinaEndpoint,
     BallerinaSourceFragment } from "./ast-models";
+
+export interface GetProjectASTParams {
+    sourceRoot: string;
+}
+
+export interface GetProjectASTResponse {
+    modules: ProjectAST;
+    parseSuccess: boolean;
+}
+
+export interface ProjectAST {
+    [moduleName: string]: {
+        name: string,
+        compilationUnits: {
+            [compilationUnitName: string]: {
+                name: string,
+                ast: BallerinaAST,
+                uri: string,
+            }
+        }
+    };
+}
 
 export interface GetASTParams {
     documentIdentifier: {
@@ -22,6 +45,20 @@ export interface ASTDidChangeParams {
         uri: string;
     };
     ast: BallerinaAST;
+}
+
+export interface GoToSourceParams {
+    textDocumentIdentifier: {
+        uri: string;
+    };
+    position: Position;
+}
+
+export interface RevealRangeParams {
+    textDocumentIdentifier: {
+        uri: string;
+    };
+    range: Range;
 }
 
 export interface BallerinaExample {
@@ -61,6 +98,8 @@ export interface IBallerinaLangClient {
 
     init: (params?: InitializeParams) => Thenable<InitializeResult>;
 
+    getProjectAST: (params: GetProjectASTParams) => Thenable<GetProjectASTResponse>;
+
     getAST: (params: GetASTParams) => Thenable<GetASTResponse>;
 
     astDidChange: (params: ASTDidChangeParams) => Thenable<ASTDidChangeResponse>;
@@ -73,7 +112,11 @@ export interface IBallerinaLangClient {
 
     getBallerinaProject: (params: GetBallerinaProjectParams) => Thenable<BallerinaProject>;
 
-    goToSource: (line: number, column: number) => void;
+    getDefinitionPosition: (params: TextDocumentPositionParams) => Thenable<Location>;
+
+    goToSource: (params: GoToSourceParams) => void;
+
+    revealRange: (params: RevealRangeParams) => void;
 
     close: () => void;
 }

@@ -18,9 +18,7 @@
 package org.ballerinalang.model.util;
 
 import org.apache.axiom.c14n.Canonicalizer;
-import org.apache.axiom.c14n.exceptions.AlgorithmAlreadyRegisteredException;
 import org.apache.axiom.c14n.exceptions.CanonicalizationException;
-import org.apache.axiom.c14n.exceptions.InvalidCanonicalizerException;
 import org.apache.axiom.om.DeferredParsingException;
 import org.apache.axiom.om.OMAbstractFactory;
 import org.apache.axiom.om.OMAttribute;
@@ -35,15 +33,12 @@ import org.apache.axiom.om.OMProcessingInstruction;
 import org.apache.axiom.om.OMText;
 import org.apache.axiom.om.OMXMLBuilderFactory;
 import org.apache.axiom.om.impl.dom.TextImpl;
-import org.apache.axiom.om.impl.llom.OMSourcedElementImpl;
 import org.apache.axiom.om.util.StAXParserConfiguration;
-import org.ballerinalang.model.TableOMDataSource;
 import org.ballerinalang.model.types.BArrayType;
 import org.ballerinalang.model.types.BTypes;
 import org.ballerinalang.model.values.BMap;
 import org.ballerinalang.model.values.BRefType;
 import org.ballerinalang.model.values.BString;
-import org.ballerinalang.model.values.BTable;
 import org.ballerinalang.model.values.BValue;
 import org.ballerinalang.model.values.BValueArray;
 import org.ballerinalang.model.values.BXML;
@@ -60,6 +55,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import javax.xml.XMLConstants;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
@@ -81,19 +77,21 @@ public class XMLUtils {
 
     static {
         Canonicalizer.init();
-        try {
-            Canonicalizer.register("http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
-                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315OmitComments");
-            Canonicalizer.register("http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments",
-                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315WithComments");
-            Canonicalizer.register("http://www.w3.org/2001/10/xml-exc-c14n#",
-                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315ExclOmitComments");
-            Canonicalizer.register("http://www.w3.org/2001/10/xml-exc-c14n#WithComments",
-                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315ExclWithComments");
-            canonicalizer = Canonicalizer.getInstance("http://www.w3.org/2001/10/xml-exc-c14n#WithComments");
-        } catch (InvalidCanonicalizerException | AlgorithmAlreadyRegisteredException e) {
-            throw new BallerinaException("Error initializing canonicalizer: " + e.getMessage());
-        }
+//        try {
+//            Canonicalizer.register("http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+//                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315OmitComments");
+//            Canonicalizer.register("http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments",
+//                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315WithComments");
+//            Canonicalizer.register("http://www.w3.org/2001/10/xml-exc-c14n#",
+//                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315ExclOmitComments");
+//            Canonicalizer.register("http://www.w3.org/2001/10/xml-exc-c14n#WithComments",
+//                                   "org.apache.axiom.c14n.impl.Canonicalizer20010315ExclWithComments");
+//            canonicalizer = Canonicalizer.getInstance("http://www.w3.org/2001/10/xml-exc-c14n#WithComments");
+//        } catch (AlgorithmAlreadyRegisteredException e) {
+//            // ignore
+//        } catch (InvalidCanonicalizerException e) {
+//            throw new BallerinaException("Error initializing canonicalizer: " + e.getMessage());
+//        }
     }
 
     /**
@@ -259,18 +257,19 @@ public class XMLUtils {
         return new BXMLSequence(concatSeq);
     }
 
-    /**
-     * Converts a {@link BTable} to {@link BXML}.
-     *
-     * @param table {@link BTable} to convert
-     * @return converted {@link BXML}
-     */
-    @SuppressWarnings("rawtypes")
-    public static BXML tableToXML(BTable table) {
-        OMSourcedElementImpl omSourcedElement = new OMSourcedElementImpl();
-        omSourcedElement.init(new TableOMDataSource(table, null, null));
-        return new BXMLItem(omSourcedElement);
-    }
+    //TODO Table remove - Fix
+//    /**
+//     * Converts a {@link BTable} to {@link BXML}.
+//     *
+//     * @param table {@link BTable} to convert
+//     * @return converted {@link BXML}
+//     */
+//    @SuppressWarnings("rawtypes")
+//    public static BXML tableToXML(BTable table) {
+//        OMSourcedElementImpl omSourcedElement = new OMSourcedElementImpl();
+//        omSourcedElement.init(new TableOMDataSource(table, null, null));
+//        return new BXMLItem(omSourcedElement);
+//    }
 
     /**
      * Create an element type BXML.
@@ -336,6 +335,11 @@ public class XMLUtils {
     public static BXML<?> createXMLText(String content) {
         // Remove carriage return on windows environments to eliminate additional &#xd; being added
         content = content.replace("\r\n", "\n");
+        // &gt; &lt; and &amp; in XML literal in Ballerina lang maps to >, <, and & in XML infoset.
+        content = content
+                .replace("&gt;", ">")
+                .replace("&lt;", "<")
+                .replace("&amp;", "&");
 
         OMText omText = OM_FACTORY.createOMText(content);
         return new BXMLItem(omText);
@@ -410,13 +414,11 @@ public class XMLUtils {
                 return isXmlItemEqual((BXMLItem) xmlOne, (BXMLItem) xmlTwo);
             } else {
                 if (xmlOneNodeType == XMLNodeType.SEQUENCE && xmlOne.isSingleton().booleanValue()) {
-                    return Arrays.equals(canonicalize((BXMLItem) ((BXMLSequence) xmlOne).getItem(0)),
-                                         canonicalize((BXMLItem) xmlTwo));
+                    return isXmlSingletonSequenceItemEqual((BXMLSequence) xmlOne, (BXMLItem) xmlTwo);
                 }
 
                 if (xmlTwoNodeType == XMLNodeType.SEQUENCE && xmlTwo.isSingleton().booleanValue()) {
-                    return Arrays.equals(canonicalize((BXMLItem) xmlOne),
-                                         canonicalize((BXMLItem) ((BXMLSequence) xmlTwo).getItem(0)));
+                    return isXmlSingletonSequenceItemEqual((BXMLSequence) xmlTwo, (BXMLItem) xmlOne);
                 }
             }
         } catch (Exception e) {
@@ -426,11 +428,11 @@ public class XMLUtils {
     }
 
     private static boolean isXmlSequenceEqual(BXMLSequence xmlSequenceOne, BXMLSequence xmlSequenceTwo) {
-        if (xmlSequenceOne.length() != xmlSequenceTwo.length()) {
+        if (xmlSequenceOne.size() != xmlSequenceTwo.size()) {
             return false;
         }
 
-        for (int i = 0; i < xmlSequenceOne.length(); i++) {
+        for (int i = 0; i < xmlSequenceOne.value().size(); i++) {
             if (!isEqual((BXML<?>) xmlSequenceOne.value().getRefValue(i), (BXML<?>) xmlSequenceTwo.value().
                     getRefValue(i))) {
                 return false;
@@ -445,6 +447,17 @@ public class XMLUtils {
                 return Arrays.equals(canonicalize(xmlItemOne), canonicalize(xmlItemTwo));
             default:
                 return xmlItemOne.stringValue().equals(xmlItemTwo.stringValue());
+        }
+    }
+
+    private static boolean isXmlSingletonSequenceItemEqual(BXMLSequence singletonXmlSequence, BXMLItem xmlItem)
+            throws CanonicalizationException {
+        switch (xmlItem.getNodeType()) {
+            case ELEMENT:
+                return Arrays.equals(canonicalize((BXMLItem) ((BXMLSequence) singletonXmlSequence).getItem(0)),
+                                     canonicalize(xmlItem));
+            default:
+                return ((BXMLSequence) singletonXmlSequence).getItem(0).stringValue().equals(xmlItem.stringValue());
         }
     }
 

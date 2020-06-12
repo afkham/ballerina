@@ -16,18 +16,16 @@
 
 package org.ballerinalang.net.http.actions.httpclient;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.CallableUnitCallback;
-import org.ballerinalang.connector.api.BLangConnectorSPIUtil;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
+import org.ballerinalang.jvm.BallerinaValues;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.scheduling.Scheduler;
+import org.ballerinalang.jvm.scheduling.Strand;
+import org.ballerinalang.jvm.util.exceptions.BallerinaException;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.connector.NonBlockingCallback;
 import org.ballerinalang.net.http.DataContext;
 import org.ballerinalang.net.http.HttpConstants;
 import org.ballerinalang.net.http.HttpUtil;
-import org.ballerinalang.util.exceptions.BallerinaException;
 import org.wso2.transport.http.netty.contract.HttpClientConnector;
 import org.wso2.transport.http.netty.contract.HttpClientConnectorListener;
 import org.wso2.transport.http.netty.message.Http2PushPromise;
@@ -37,28 +35,19 @@ import org.wso2.transport.http.netty.message.ResponseHandle;
  * {@code GetNextPromise} action can be used to get the next available push promise message associated with
  * a previous asynchronous invocation.
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "getNextPromise",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = HttpConstants.HTTP_CALLER,
-                structPackage = "ballerina/http")
-)
 public class GetNextPromise extends AbstractHTTPAction {
 
-    @Override
-    public void execute(Context context, CallableUnitCallback callback) {
-
-        DataContext dataContext = new DataContext(context, callback, null);
-        BMap<String, BValue> handleStruct = ((BMap<String, BValue>) context.getRefArgument(1));
-        ResponseHandle responseHandle = (ResponseHandle) handleStruct.getNativeData(HttpConstants.TRANSPORT_HANDLE);
+    public static Object getNextPromise(ObjectValue clientObj, ObjectValue handleObj) {
+        Strand strand = Scheduler.getStrand();
+        HttpClientConnector clientConnector = (HttpClientConnector) clientObj.getNativeData(HttpConstants.CLIENT);
+        DataContext dataContext = new DataContext(strand, clientConnector, new NonBlockingCallback(strand), handleObj,
+                                                  null);
+        ResponseHandle responseHandle = (ResponseHandle) handleObj.getNativeData(HttpConstants.TRANSPORT_HANDLE);
         if (responseHandle == null) {
             throw new BallerinaException("invalid http handle");
         }
-        BMap<String, BValue> bConnector = (BMap<String, BValue>) context.getRefArgument(0);
-        HttpClientConnector clientConnector = (HttpClientConnector) ((BMap<String, BValue>) bConnector.values()[0])
-                .getNativeData(HttpConstants.HTTP_CLIENT);
-        clientConnector.getNextPushPromise(responseHandle).
-                setPushPromiseListener(new PromiseListener(dataContext));
+        clientConnector.getNextPushPromise(responseHandle).setPushPromiseListener(new PromiseListener(dataContext));
+        return null;
     }
 
     private static class PromiseListener implements HttpClientConnectorListener {
@@ -71,11 +60,13 @@ public class GetNextPromise extends AbstractHTTPAction {
 
         @Override
         public void onPushPromise(Http2PushPromise pushPromise) {
-            BMap<String, BValue> pushPromiseStruct =
-                    BLangConnectorSPIUtil.createBStruct(dataContext.context, HttpConstants.PROTOCOL_PACKAGE_HTTP,
-                            HttpConstants.PUSH_PROMISE);
-            HttpUtil.populatePushPromiseStruct(pushPromiseStruct, pushPromise);
-            dataContext.notifyInboundResponseStatus(pushPromiseStruct, null);
+            ObjectValue pushPromiseObj =
+                    BallerinaValues.createObjectValue(HttpConstants.PROTOCOL_HTTP_PKG_ID,
+                                                      HttpConstants.PUSH_PROMISE,
+                                                      StringUtils.fromString(pushPromise.getPath()),
+                                                      StringUtils.fromString(pushPromise.getMethod()));
+            HttpUtil.populatePushPromiseStruct(pushPromiseObj, pushPromise);
+            dataContext.notifyInboundResponseStatus(pushPromiseObj, null);
         }
     }
 }

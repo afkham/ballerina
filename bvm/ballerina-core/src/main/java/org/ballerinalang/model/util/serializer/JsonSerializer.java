@@ -27,15 +27,14 @@ import org.ballerinalang.model.util.serializer.providers.bvalue.BStringBValuePro
 import org.ballerinalang.model.util.serializer.providers.bvalue.BTypeBValueProviders;
 import org.ballerinalang.model.util.serializer.providers.bvalue.BValueArrayBValueProvider;
 import org.ballerinalang.model.util.serializer.providers.bvalue.BXMLBValueProviders;
-import org.ballerinalang.model.util.serializer.providers.bvalue.BallerinaBrokerByteBufBValueProvider;
 import org.ballerinalang.model.util.serializer.providers.bvalue.ClassBValueProvider;
 import org.ballerinalang.model.util.serializer.providers.bvalue.ConcurrentHashMapBValueProvider;
 import org.ballerinalang.model.util.serializer.providers.bvalue.DateTimeBValueProviders;
 import org.ballerinalang.model.util.serializer.providers.bvalue.HashSetBValueProvider;
 import org.ballerinalang.model.util.serializer.providers.bvalue.InetSocketAddressBValueProvider;
+import org.ballerinalang.model.util.serializer.providers.bvalue.LinkedHashSetBValueProvider;
 import org.ballerinalang.model.util.serializer.providers.bvalue.NumericBValueProviders;
 import org.ballerinalang.model.values.BRefType;
-import org.ballerinalang.persistence.serializable.SerializableState;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
 import java.io.IOException;
@@ -43,7 +42,7 @@ import java.io.StringReader;
 import java.io.StringWriter;
 
 /**
- * Serialize {@link SerializableState} into JSON and back.
+ * Serialize into JSON and back.
  * <p>
  * Note that {@link JsonSerializer} is not thread safe and each thread needs to have it's own instance.
  *
@@ -58,17 +57,19 @@ public class JsonSerializer implements ObjectToJsonSerializer {
         bValueProvider.register(new BStringBValueProvider());
         bValueProvider.register(new BMapBValueProvider());
         bValueProvider.register(new ClassBValueProvider());
-        bValueProvider.register(new BallerinaBrokerByteBufBValueProvider());
         bValueProvider.register(new ConcurrentHashMapBValueProvider());
         bValueProvider.register(new BIntegerBValueProvider());
         bValueProvider.register(new BFloatBValueProvider());
         bValueProvider.register(new BBooleanBValueProvider());
         bValueProvider.register(new ArrayListBValueProvider());
         bValueProvider.register(new HashSetBValueProvider());
+        bValueProvider.register(new LinkedHashSetBValueProvider());
         bValueProvider.register(new BTypeBValueProviders.BObjectTypeBValueProvider());
         bValueProvider.register(new BTypeBValueProviders.BRecordTypeBValueProvider());
         bValueProvider.register(new BTypeBValueProviders.BAnyTypeBValueProvider());
+        bValueProvider.register(new BTypeBValueProviders.BAnydataTypeBValueProvider());
         bValueProvider.register(new BTypeBValueProviders.BArrayTypeBValueProvider());
+        bValueProvider.register(new BTypeBValueProviders.BMapTypeBValueProvider());
         bValueProvider.register(new DateTimeBValueProviders.DateBValueProvider());
         bValueProvider.register(new DateTimeBValueProviders.InstantBValueProvider());
         bValueProvider.register(new BXMLBValueProviders.BXMLItemBValueProvider());

@@ -16,6 +16,7 @@
 
 package org.ballerinalang.langserver.compiler.workspace;
 
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -50,9 +51,9 @@ public class ExtendedWorkspaceDocumentManagerImplTest {
     @Test(enabled = false)
     public void testOpenFile() throws IOException, WorkspaceDocumentException {
         // Call open file
-        Optional<Lock> lock = Optional.empty();
+        Optional<Lock> lock = documentManager.lockFile(filePath);
         try {
-            lock = documentManager.openFile(filePath, readAll(filePath.toFile()));
+            documentManager.openFile(filePath, readAll(filePath.toFile()));
         } finally {
             lock.ifPresent(Lock::unlock);
         }
@@ -113,9 +114,9 @@ public class ExtendedWorkspaceDocumentManagerImplTest {
     public void testUpdateFile() throws IOException, WorkspaceDocumentException {
         String updateContent = readAll(filePath.toFile()) + "\nfunction foo(){\n}\n";
         // Update the file
-        Optional<Lock> lock = Optional.empty();
+        Optional<Lock> lock = documentManager.lockFile(filePath);
         try {
-            lock = documentManager.updateFile(filePath, updateContent);
+            documentManager.updateFile(filePath, updateContent);
         } finally {
             lock.ifPresent(Lock::unlock);
         }

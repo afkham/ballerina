@@ -59,8 +59,8 @@ public enum TypeKind {
     BLOB("blob"),
 
     TYPEDESC("typedesc"),
-    TABLE("table"),
     STREAM("stream"),
+    TABLE("table"),
     JSON("json"),
     XML("xml"),
     ANY("any"),
@@ -75,18 +75,21 @@ public enum TypeKind {
     ANNOTATION("annotation"),
     ARRAY("[]"),
     UNION("|"),
+    INTERSECTION("&"),
     VOID(""),
     NIL("null"),
+    NEVER("never"),
     NONE(""),
     OTHER("other"),
     ERROR("error"),
-    XML_ATTRIBUTES("xml-attributes"),
-    INTERMEDIATE_COLLECTION("intermediate_collection"),
     TUPLE("tuple"),
     OBJECT("object"),
     RECORD("record"),
     FINITE("finite"),
-    CHANNEL("channel")
+    CHANNEL("channel"),
+    HANDLE("handle"),
+    READONLY("readonly"),
+    TYPEPARAM("typeparam"),
     ;
 
     private String name;

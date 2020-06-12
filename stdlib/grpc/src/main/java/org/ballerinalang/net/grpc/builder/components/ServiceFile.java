@@ -30,13 +30,12 @@ import java.util.List;
 /**
  * Service file definition bean class.
  */
-public class ServiceFile {
-    private boolean bidiStreaming;
-    private boolean clientStreaming;
-    private boolean unary;
+public class ServiceFile extends AbstractStub {
+    private boolean enableEp = true;
     private String serviceName;
     private List<Method> unaryFunctions = new ArrayList<>();
-    private Method streamingFunction = null;
+    private List<Method> streamingFunctions = new ArrayList<>();
+
 
     private ServiceFile(String serviceName) {
         this.serviceName = serviceName;
@@ -50,25 +49,22 @@ public class ServiceFile {
         return serviceName;
     }
 
-    public List<Method> getunaryFunctions() {
+    public List<Method> getUnaryFunctions() {
         return Collections.unmodifiableList(unaryFunctions);
     }
 
-    public Method getStreamingFunction() {
-        return streamingFunction;
+    public List<Method> getStreamingFunctions() {
+        return Collections.unmodifiableList(streamingFunctions);
     }
 
-    public boolean isBidiStreaming() {
-        return bidiStreaming;
+    public void setEnableEp(boolean enableEp) {
+        this.enableEp = enableEp;
     }
 
-    public boolean isClientStreaming() {
-        return clientStreaming;
+    public boolean isEnableEp() {
+        return enableEp;
     }
 
-    public boolean isUnary() {
-        return unary;
-    }
     /**
      * Service file definition builder.
      */
@@ -94,37 +90,11 @@ public class ServiceFile {
                 switch (method.getMethodType()) {
                 case UNARY:
                 case SERVER_STREAMING:
-                    if (!serviceFile.clientStreaming && !serviceFile.bidiStreaming) {
-                        serviceFile.unaryFunctions.add(method);
-                        serviceFile.unary = true;
-                    } else {
-                        String message = serviceName + "/" + method.getMethodName() + " is not implemented. There " +
-                                "should be only one method for client streaming or bidirectional streaming.";
-                        log.error(message);
-                        console.println(message);
-                    }
+                    serviceFile.unaryFunctions.add(method);
                     break;
                 case CLIENT_STREAMING:
-                    if (serviceFile.streamingFunction == null && !serviceFile.unary) {
-                        serviceFile.streamingFunction = method;
-                        serviceFile.clientStreaming = true;
-                    } else {
-                        String message = serviceName + "/" + method.getMethodName() + " is not implemented. There " +
-                                "should be only one method for client streaming.";
-                        log.error(message);
-                        console.println(message);
-                    }
-                    break;
                 case BIDI_STREAMING:
-                    if (serviceFile.streamingFunction == null && !serviceFile.unary) {
-                        serviceFile.streamingFunction = method;
-                        serviceFile.bidiStreaming = true;
-                    } else {
-                        String message = serviceName + "/" + method.getMethodName() + " is not implemented. There " +
-                                "should be only one method for bidirectional streaming.";
-                        log.error(message);
-                        console.println(message);
-                    }
+                    serviceFile.streamingFunctions.add(method);
                     break;
                 default:
                     String message = serviceName + "/" + method.getMethodName() + " is not implemented. Method type " +

@@ -25,8 +25,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TEST_RESOURCES = __dirname + '/../../target/test/';
-const PLATFORM_PREFIX = /ballerina-tools-/;
+const TEST_RESOURCES = __dirname + '/../../extractedDistribution/';
+const PLATFORM_PREFIX = /jballerina-tools-/;
 
 
 function findBallerinaDistribution(){
@@ -42,10 +42,16 @@ export function getBallerinaHome(): string {
     return fs.realpathSync(path);
 }
 
+export function getBallerinaCmd(): string {
+    const ballerinaDistribution = TEST_RESOURCES + findBallerinaDistribution();
+    const prefix = path.join(fs.realpathSync(ballerinaDistribution), "bin") + path.sep;
+    return prefix + (process.platform === 'win32' ? 'ballerina.bat' : 'ballerina');
+}
+
 export function getBallerinaVersion() {
     return findBallerinaDistribution().replace(PLATFORM_PREFIX, '').replace('\n','').trim();
 }
 
 export function getBBEPath(): any {
-    return path.join(getBallerinaHome(),'examples');
+    return path.join(__dirname + '/../../resources/templates/');
 }

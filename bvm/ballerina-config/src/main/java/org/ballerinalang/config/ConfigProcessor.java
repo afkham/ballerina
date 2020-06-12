@@ -18,21 +18,17 @@
 
 package org.ballerinalang.config;
 
-import org.antlr.v4.runtime.ANTLRFileStream;
-import org.antlr.v4.runtime.ANTLRInputStream;
-import org.antlr.v4.runtime.CharStream;
-import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.tree.ParseTree;
-import org.antlr.v4.runtime.tree.ParseTreeWalker;
+import com.moandjiezana.toml.Toml;
 import org.ballerinalang.bcl.parser.BConfig;
-import org.ballerinalang.bcl.parser.BConfigLangListener;
-import org.ballerinalang.toml.antlr4.TomlLexer;
-import org.ballerinalang.toml.antlr4.TomlParser;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,6 +39,7 @@ import java.util.Map;
 public class ConfigProcessor {
 
     private static final String ENV_VAR_FORMAT = "[a-zA-Z_]+[a-zA-Z0-9_]*";
+    private static final String ENCRYPTED_FIELD_REGEX = "@encrypted:\\{(.*)\\}";
 
     /**
      * Processes runtime, environment and config file properties.This populates configRegistry with configs based on
@@ -50,7 +47,7 @@ public class ConfigProcessor {
      * (environment vars, etcd or something similar), 3. ballerina.conf file
      *
      * @param runtimeParams             The -B params passed to the BVM as CLI parameters
-     * @param userProvidedConfigFile    The config file provided through the --config CLI parameter
+     * @param userProvidedConfigFile    The config file provided through the --b7a.config.file property
      * @param ballerinaConfDefaultPath  The default config file (ballerina.conf) located at the source root
      * @return The parsed and resolved set of configurations
      * @throws IOException  Thrown if there was an error while attempting to process the config file
@@ -77,6 +74,32 @@ public class ConfigProcessor {
                     configEntries.hasEncryptedValues() | parsedRuntimeParams.hasEncryptedValues());
         }
         return configEntries;
+    }
+
+    private static void flatTomlMap(String currentPath, Object obj, Map<String, Object> map) {
+
+        if (obj instanceof String) {
+            String strObj = (String) obj;
+            map.put(currentPath, strObj);
+        } else if (obj instanceof Long) {
+            Long longObj = (Long) obj;
+            map.put(currentPath, longObj);
+        } else if (obj instanceof Double) {
+            Double doubleObj = (Double) obj;
+            map.put(currentPath, doubleObj);
+        } else if (obj instanceof List) {
+            List listObj = (List) obj;
+            map.put(currentPath, listObj);
+        } else if (obj instanceof Boolean) {
+            Boolean booleanObj = (Boolean) obj;
+            map.put(currentPath, booleanObj);
+        } else if (obj instanceof Map) {
+            Map<String, Object> m = (Map<String, Object>) obj;
+            String pathPrefix = currentPath.isEmpty() ? "" : currentPath + ".";
+            for (Map.Entry<String, Object> entry : m.entrySet()) {
+                flatTomlMap(pathPrefix + entry.getKey(), entry.getValue(), map);
+            }
+        }
     }
 
     private static void lookUpVariables(Map<String, Object> configFileEntries) {
@@ -155,33 +178,43 @@ public class ConfigProcessor {
     }
 
     private static BConfig parseConfigFile(String path) throws IOException {
-        ANTLRFileStream configFileStream = new ANTLRFileStream(path);
+        InputStream inputstream = new FileInputStream(path);
+        Toml configToml = new Toml().read(inputstream);
         BConfig configEntries = new BConfig();
-        ParseTreeWalker treeWalker = new ParseTreeWalker();
-        treeWalker.walk(new BConfigLangListener(configEntries), buildParseTree(configFileStream));
+
+        Map<String, Object> configTomlMap = configToml.toMap();
+        Map<String, Object> configTomlMapFlat = new HashMap<>();
+        // Generate flatted map from given hierarchical map
+        flatTomlMap("", configTomlMap, configTomlMapFlat);
+
+        configEntries.addConfigurations(configTomlMapFlat);
+        configEntries.setHasEncryptedValues(containsEncryptedValues(configTomlMapFlat));
+
         return configEntries;
     }
 
-    private static BConfig parseRuntimeParams(Map<String, String> runtimeParams) {
-        StringBuilder stringBuilder = new StringBuilder();
-        runtimeParams.forEach(
-                (key, val) -> stringBuilder.append(key)
-                                            .append('=')
-                                            // TODO: need to handle this in a better way
-                                            .append('\"').append(val).append('\"')
-                                            .append('\n'));
-        ANTLRInputStream runtimeConfigsStream = new ANTLRInputStream(stringBuilder.toString());
-        BConfig runtimeConfigEntries = new BConfig();
-        ParseTreeWalker treeWalker = new ParseTreeWalker();
-        treeWalker.walk(new BConfigLangListener(runtimeConfigEntries), buildParseTree(runtimeConfigsStream));
-        return runtimeConfigEntries;
+    private static Boolean containsEncryptedValues(Map<String, Object> configTomlMap) { //use this in above method
+        for (Object value : configTomlMap.values()) {
+            if ((value instanceof String) && (value.toString().matches(ENCRYPTED_FIELD_REGEX))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    private static ParseTree buildParseTree(CharStream configEntriesStream) {
-        TomlLexer lexer = new TomlLexer(configEntriesStream);
-        CommonTokenStream tokenStream = new CommonTokenStream(lexer);
-        TomlParser parser = new TomlParser(tokenStream);
-        return parser.toml();
+    private static BConfig parseRuntimeParams(Map<String, String> runtimeParams) {
+        Map<String, Object> runtimeParamsMap = new HashMap<>();
+        BConfig runtimeConfigEntries = new BConfig();
+
+        for (Map.Entry<String, String> entry : runtimeParams.entrySet()) {
+            runtimeParamsMap.put(entry.getKey(), entry.getValue());
+        }
+
+        runtimeConfigEntries.addConfigurations(runtimeParamsMap);
+        runtimeConfigEntries.setHasEncryptedValues(containsEncryptedValues(runtimeParamsMap));
+
+        return runtimeConfigEntries;
     }
 
     private static void addErrorMsg(StringBuilder errMsgBuilder, String msg, String key, String val) {

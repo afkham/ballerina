@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.util.PsiTreeUtil;
 import static io.ballerina.plugins.idea.psi.BallerinaTypes.*;
+import com.intellij.extapi.psi.ASTWrapperPsiElement;
 import io.ballerina.plugins.idea.psi.*;
 
-public class BallerinaMatchPatternClauseImpl extends BallerinaCompositeElementImpl implements BallerinaMatchPatternClause {
+public class BallerinaMatchPatternClauseImpl extends ASTWrapperPsiElement implements BallerinaMatchPatternClause {
 
   public BallerinaMatchPatternClauseImpl(@NotNull ASTNode node) {
     super(node);
@@ -43,14 +44,20 @@ public class BallerinaMatchPatternClauseImpl extends BallerinaCompositeElementIm
 
   @Override
   @Nullable
-  public BallerinaStaticMatchPattern getStaticMatchPattern() {
-    return PsiTreeUtil.getChildOfType(this, BallerinaStaticMatchPattern.class);
+  public BallerinaErrorMatchPatternClause getErrorMatchPatternClause() {
+    return findChildByClass(BallerinaErrorMatchPatternClause.class);
   }
 
   @Override
   @Nullable
-  public BallerinaVarMatchPattern getVarMatchPattern() {
-    return PsiTreeUtil.getChildOfType(this, BallerinaVarMatchPattern.class);
+  public BallerinaStaticMatchPatternClause getStaticMatchPatternClause() {
+    return findChildByClass(BallerinaStaticMatchPatternClause.class);
+  }
+
+  @Override
+  @Nullable
+  public BallerinaVarMatchPatternClause getVarMatchPatternClause() {
+    return findChildByClass(BallerinaVarMatchPatternClause.class);
   }
 
 }

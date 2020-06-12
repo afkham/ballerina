@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,34 +21,23 @@ import java.util.List;
 import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
 import io.ballerina.plugins.idea.psi.impl.BallerinaTopLevelDefinition;
-import com.intellij.psi.StubBasedPsiElement;
-import io.ballerina.plugins.idea.stubs.BallerinaFunctionDefinitionStub;
 
-public interface BallerinaFunctionDefinition extends BallerinaNamedElement, BallerinaTopLevelDefinition, StubBasedPsiElement<BallerinaFunctionDefinitionStub> {
+public interface BallerinaFunctionDefinition extends BallerinaTopLevelDefinition {
 
   @Nullable
-  BallerinaAttachedObject getAttachedObject();
+  BallerinaAnyIdentifierName getAnyIdentifierName();
 
   @Nullable
-  BallerinaCallableUnitBody getCallableUnitBody();
+  BallerinaFunctionDefinitionBody getFunctionDefinitionBody();
 
   @Nullable
-  BallerinaCallableUnitSignature getCallableUnitSignature();
-
-  @Nullable
-  BallerinaTypeName getTypeName();
-
-  @Nullable
-  PsiElement getDot();
-
-  @Nullable
-  PsiElement getSemicolon();
-
-  @Nullable
-  PsiElement getExtern();
+  BallerinaFunctionSignature getFunctionSignature();
 
   @NotNull
   PsiElement getFunction();
+
+  @Nullable
+  PsiElement getPrivate();
 
   @Nullable
   PsiElement getPublic();

@@ -17,14 +17,15 @@
 */
 package org.ballerinalang.model.values;
 
-import org.ballerinalang.bre.bvm.BVM;
+import org.ballerinalang.model.types.BArrayType;
 import org.ballerinalang.model.types.BType;
+import org.ballerinalang.model.types.TypeTags;
 import org.ballerinalang.util.exceptions.BLangExceptionHelper;
+import org.ballerinalang.util.exceptions.BallerinaErrorReasons;
 import org.ballerinalang.util.exceptions.RuntimeErrors;
+import org.wso2.ballerinalang.compiler.util.BArrayState;
 
 import java.lang.reflect.Array;
-
-import static org.ballerinalang.model.util.FreezeUtils.isOpenForFreeze;
 
 /**
  * {@code BArray} represents an arrays in Ballerina.
@@ -35,8 +36,6 @@ import static org.ballerinalang.model.util.FreezeUtils.isOpenForFreeze;
 public abstract class BNewArray implements BRefType, BCollection {
 
     protected BType arrayType;
-    protected volatile BVM.FreezeStatus freezeStatus = new BVM.FreezeStatus(BVM.FreezeStatus.State.UNFROZEN);
-
     /**
      * The maximum size of arrays to allocate.
      * <p>
@@ -56,11 +55,6 @@ public abstract class BNewArray implements BRefType, BCollection {
     @Override
     public BType getType() {
         return arrayType;
-    }
-
-    @Override
-    public void stamp(BType type) {
-
     }
 
     @Override
@@ -90,26 +84,30 @@ public abstract class BNewArray implements BRefType, BCollection {
 
     protected void rangeCheck(long index, int size) {
         if (index > Integer.MAX_VALUE || index < Integer.MIN_VALUE) {
-            throw BLangExceptionHelper.getRuntimeException(
-                    RuntimeErrors.INDEX_NUMBER_TOO_LARGE, index);
+            throw BLangExceptionHelper.getRuntimeException(BallerinaErrorReasons.INDEX_OUT_OF_RANGE_ERROR,
+                                                           RuntimeErrors.INDEX_NUMBER_TOO_LARGE, index);
         }
-
         if ((int) index < 0 || index >= maxArraySize) {
-            throw BLangExceptionHelper.getRuntimeException(
-                    RuntimeErrors.ARRAY_INDEX_OUT_OF_RANGE, index, size);
+            if (this.arrayType != null && this.arrayType.getTag() == TypeTags.TUPLE_TAG) {
+                throw BLangExceptionHelper.getRuntimeException(BallerinaErrorReasons.INDEX_OUT_OF_RANGE_ERROR,
+                        RuntimeErrors.TUPLE_INDEX_OUT_OF_RANGE, index, size);
+            }
+            throw BLangExceptionHelper.getRuntimeException(BallerinaErrorReasons.INDEX_OUT_OF_RANGE_ERROR,
+                                                           RuntimeErrors.ARRAY_INDEX_OUT_OF_RANGE, index, size);
         }
     }
 
     protected void rangeCheckForGet(long index, int size) {
         rangeCheck(index, size);
         if (index < 0 || index >= size) {
-            throw BLangExceptionHelper.getRuntimeException(
-                    RuntimeErrors.ARRAY_INDEX_OUT_OF_RANGE, index, size);
+            throw BLangExceptionHelper.getRuntimeException(BallerinaErrorReasons.INDEX_OUT_OF_RANGE_ERROR,
+                                                           RuntimeErrors.ARRAY_INDEX_OUT_OF_RANGE, index, size);
         }
     }
 
     protected void ensureCapacity(int requestedCapacity, int currentArraySize) {
-        if ((requestedCapacity) - currentArraySize >= 0) {
+        if ((requestedCapacity - currentArraySize) >= 0 && this.arrayType.getTag() == TypeTags.ARRAY_TAG &&
+                ((BArrayType) this.arrayType).getState() == BArrayState.UNSEALED) {
             // Here the growth rate is 1.5. This value has been used by many other languages
             int newArraySize = currentArraySize + (currentArraySize >> 1);
 
@@ -162,10 +160,6 @@ public abstract class BNewArray implements BRefType, BCollection {
             return cursor < length;
         }
 
-        @Override
-        public void stamp(BType type) {
-
-        }
     }
 
     /**
@@ -173,16 +167,6 @@ public abstract class BNewArray implements BRefType, BCollection {
      */
     @Override
     public synchronized boolean isFrozen() {
-        return this.freezeStatus.isFrozen();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public synchronized void attemptFreeze(BVM.FreezeStatus freezeStatus) {
-        if (isOpenForFreeze(this.freezeStatus, freezeStatus)) {
-            this.freezeStatus = freezeStatus;
-        }
+        return true;
     }
 }

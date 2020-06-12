@@ -1,0 +1,34 @@
+{
+  "kind": "COMPOUND_ASSIGNMENT_STATEMENT",
+  "children": [
+    {
+      "kind": "IDENTIFIER_TOKEN",
+      "value": "a",
+      "trailingMinutiae": [
+        {
+          "kind": "WHITESPACE_MINUTIAE",
+          "value": " "
+        }
+      ]
+    },
+    {
+      "kind": "PLUS_TOKEN"
+    },
+    {
+      "kind": "EQUAL_TOKEN",
+      "trailingMinutiae": [
+        {
+          "kind": "WHITESPACE_MINUTIAE",
+          "value": " "
+        }
+      ]
+    },
+    {
+      "kind": "DECIMAL_INTEGER_LITERAL",
+      "value": "5"
+    },
+    {
+      "kind": "SEMICOLON_TOKEN"
+    }
+  ]
+}

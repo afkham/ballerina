@@ -1,0 +1,58 @@
+{
+  "kind": "CONDITIONAL_EXPRESSION",
+  "hasDiagnostics": true,
+  "children": [
+    {
+      "kind": "IDENTIFIER_TOKEN",
+      "value": "a",
+      "trailingMinutiae": [
+        {
+          "kind": "WHITESPACE_MINUTIAE",
+          "value": " "
+        }
+      ]
+    },
+    {
+      "kind": "QUESTION_MARK_TOKEN",
+      "trailingMinutiae": [
+        {
+          "kind": "WHITESPACE_MINUTIAE",
+          "value": " "
+        }
+      ]
+    },
+    {
+      "kind": "BRACED_EXPRESSION",
+      "children": [
+        {
+          "kind": "OPEN_PAREN_TOKEN"
+        },
+        {
+          "kind": "IDENTIFIER_TOKEN",
+          "value": "b"
+        },
+        {
+          "kind": "CLOSE_PAREN_TOKEN",
+          "trailingMinutiae": [
+            {
+              "kind": "WHITESPACE_MINUTIAE",
+              "value": "  "
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "COLON_TOKEN",
+      "isMissing": true,
+      "hasDiagnostics": true,
+      "diagnostics": [
+        "ERROR_MISSING_COLON_TOKEN"
+      ]
+    },
+    {
+      "kind": "IDENTIFIER_TOKEN",
+      "value": "c"
+    }
+  ]
+}

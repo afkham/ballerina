@@ -18,9 +18,11 @@
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
 import org.ballerinalang.model.types.InvokableType;
+import org.ballerinalang.model.types.TypeKind;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
 import org.wso2.ballerinalang.compiler.util.TypeTags;
+import org.wso2.ballerinalang.util.Flags;
 
 import java.util.List;
 
@@ -30,12 +32,18 @@ import java.util.List;
 public class BInvokableType extends BType implements InvokableType {
 
     public List<BType> paramTypes;
+    public BType restType;
     public BType retType;
 
-    public BInvokableType(List<BType> paramTypes, BType retType, BTypeSymbol tsymbol) {
-        super(TypeTags.INVOKABLE, tsymbol);
+    public BInvokableType(List<BType> paramTypes, BType restType, BType retType, BTypeSymbol tsymbol) {
+        super(TypeTags.INVOKABLE, tsymbol, Flags.READONLY);
         this.paramTypes = paramTypes;
+        this.restType = restType;
         this.retType = retType;
+    }
+
+    public BInvokableType(List<BType> paramTypes, BType retType, BTypeSymbol tsymbol) {
+        this(paramTypes, null, retType, tsymbol);
     }
 
     @Override
@@ -48,10 +56,6 @@ public class BInvokableType extends BType implements InvokableType {
         return retType;
     }
 
-    @Override
-    public String getDesc() {
-        return TypeDescriptor.SIG_FUNCTION + "(" + getDescriptors(paramTypes) + ")(" + retType.getDesc() + ")";
-    }
 
     @Override
     public <T, R> R accept(BTypeVisitor<T, R> visitor, T t) {
@@ -60,7 +64,8 @@ public class BInvokableType extends BType implements InvokableType {
 
     @Override
     public String toString() {
-        return getTypeName(TypeDescriptor.SIG_FUNCTION, paramTypes, retType);
+
+        return "function " + getTypeSignature();
     }
 
     @Override
@@ -81,7 +86,7 @@ public class BInvokableType extends BType implements InvokableType {
             return false;
         }
 
-        return true;
+        return restType != null ? restType.equals(that.restType) : that.restType == null;
     }
 
     @Override
@@ -91,10 +96,20 @@ public class BInvokableType extends BType implements InvokableType {
         return result;
     }
 
-    private static String getTypeName(String typeDescriptor, List<BType> paramType, BType retType) {
-        return (TypeDescriptor.SIG_FUNCTION.equals(typeDescriptor) ? "function " : "")
-                + "(" + (paramType.size() != 0 ? getBTypeListAsString(paramType) : "") + ")"
-                + " returns (" + retType + ")"; // TODO improve this with void type
+    public String getTypeSignature() {
+        String retTypeWithParam = retType.toString();
+        if (retType.getKind() != TypeKind.NIL) {
+            retTypeWithParam = "(" + retTypeWithParam + ")";
+        }
+        String restParam = "";
+        if (restType != null && restType instanceof BArrayType) {
+            if (!paramTypes.isEmpty()) {
+                restParam += ", ";
+            }
+            restParam += ((BArrayType) restType).eType + "...";
+        }
+        return "(" + (paramTypes.size() != 0 ? getBTypeListAsString(paramTypes) : "") + restParam + ")"
+                + " returns " + retTypeWithParam;
     }
 
     private static String getBTypeListAsString(List<BType> typeNames) {
@@ -109,9 +124,8 @@ public class BInvokableType extends BType implements InvokableType {
         return br.toString();
     }
 
-    private static String getDescriptors(List<BType> types) {
-        StringBuffer br = new StringBuffer();
-        types.forEach(type -> br.append(type.getDesc()));
-        return br.toString();
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 }

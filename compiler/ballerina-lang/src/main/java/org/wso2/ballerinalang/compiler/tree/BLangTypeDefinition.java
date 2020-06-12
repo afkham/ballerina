@@ -20,7 +20,6 @@ package org.wso2.ballerinalang.compiler.tree;
 
 import org.ballerinalang.model.elements.Flag;
 import org.ballerinalang.model.tree.AnnotationAttachmentNode;
-import org.ballerinalang.model.tree.DeprecatedNode;
 import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.MarkdownDocumentationNode;
 import org.ballerinalang.model.tree.NodeKind;
@@ -43,15 +42,14 @@ public class BLangTypeDefinition extends BLangNode implements TypeDefinition {
     public BLangType typeNode;
     public List<BLangAnnotationAttachment> annAttachments;
     public BLangMarkdownDocumentation markdownDocumentationAttachment;
-    public List<BLangDeprecatedNode> deprecatedAttachments;
     public Set<Flag> flagSet;
     public int precedence;
+    public boolean isBuiltinTypeDef;
 
     public BTypeSymbol symbol;
 
     public BLangTypeDefinition() {
         this.annAttachments = new ArrayList<>();
-        this.deprecatedAttachments = new ArrayList<>();
         this.flagSet = EnumSet.noneOf(Flag.class);
     }
 
@@ -100,16 +98,6 @@ public class BLangTypeDefinition extends BLangNode implements TypeDefinition {
     @Override
     public void setMarkdownDocumentationAttachment(MarkdownDocumentationNode documentationNode) {
         this.markdownDocumentationAttachment = (BLangMarkdownDocumentation) documentationNode;
-    }
-
-    @Override
-    public List<BLangDeprecatedNode> getDeprecatedAttachments() {
-        return deprecatedAttachments;
-    }
-
-    @Override
-    public void addDeprecatedAttachment(DeprecatedNode deprecatedNode) {
-        this.deprecatedAttachments.add((BLangDeprecatedNode) deprecatedNode);
     }
 
     @Override

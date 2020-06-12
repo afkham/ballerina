@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.util.PsiTreeUtil;
 import static io.ballerina.plugins.idea.psi.BallerinaTypes.*;
+import com.intellij.extapi.psi.ASTWrapperPsiElement;
 import io.ballerina.plugins.idea.psi.*;
 
-public class BallerinaErrorRefBindingPatternImpl extends BallerinaCompositeElementImpl implements BallerinaErrorRefBindingPattern {
+public class BallerinaErrorRefBindingPatternImpl extends ASTWrapperPsiElement implements BallerinaErrorRefBindingPattern {
 
   public BallerinaErrorRefBindingPatternImpl(@NotNull ASTNode node) {
     super(node);
@@ -42,39 +43,45 @@ public class BallerinaErrorRefBindingPatternImpl extends BallerinaCompositeEleme
   }
 
   @Override
+  @NotNull
+  public List<BallerinaErrorNamedArgRefPattern> getErrorNamedArgRefPatternList() {
+    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaErrorNamedArgRefPattern.class);
+  }
+
+  @Override
   @Nullable
-  public BallerinaRecordRefBindingPattern getRecordRefBindingPattern() {
-    return PsiTreeUtil.getChildOfType(this, BallerinaRecordRefBindingPattern.class);
+  public BallerinaErrorRefRestPattern getErrorRefRestPattern() {
+    return findChildByClass(BallerinaErrorRefRestPattern.class);
+  }
+
+  @Override
+  @Nullable
+  public BallerinaTypeName getTypeName() {
+    return findChildByClass(BallerinaTypeName.class);
+  }
+
+  @Override
+  @Nullable
+  public BallerinaVariableReference getVariableReference() {
+    return findChildByClass(BallerinaVariableReference.class);
   }
 
   @Override
   @NotNull
-  public List<BallerinaVariableReference> getVariableReferenceList() {
-    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaVariableReference.class);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getComma() {
-    return findChildByType(COMMA);
-  }
-
-  @Override
-  @Nullable
   public PsiElement getLeftParenthesis() {
-    return findChildByType(LEFT_PARENTHESIS);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getRightParenthesis() {
-    return findChildByType(RIGHT_PARENTHESIS);
+    return findNotNullChildByType(LEFT_PARENTHESIS);
   }
 
   @Override
   @NotNull
+  public PsiElement getRightParenthesis() {
+    return findNotNullChildByType(RIGHT_PARENTHESIS);
+  }
+
+  @Override
+  @Nullable
   public PsiElement getError() {
-    return notNullChild(findChildByType(ERROR));
+    return findChildByType(ERROR);
   }
 
 }

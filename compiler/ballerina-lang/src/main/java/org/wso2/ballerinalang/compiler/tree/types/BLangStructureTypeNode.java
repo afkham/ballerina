@@ -26,6 +26,7 @@ import org.wso2.ballerinalang.compiler.tree.BLangFunction;
 import org.wso2.ballerinalang.compiler.tree.BLangSimpleVariable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -38,7 +39,7 @@ public abstract class BLangStructureTypeNode extends BLangType implements Struct
     public List<BLangSimpleVariable> fields;
     public BLangFunction initFunction;
     public boolean isAnonymous;
-    public boolean isFieldAnalyseRequired;
+    public boolean isLocal;
     public List<BLangType> typeRefs;
     public BSymbol symbol;
 
@@ -63,7 +64,7 @@ public abstract class BLangStructureTypeNode extends BLangType implements Struct
 
     @Override
     public List<? extends TypeNode> getTypeReferences() {
-        return this.typeRefs;
+        return Collections.unmodifiableList(this.typeRefs);
     }
 
     @Override
@@ -77,8 +78,17 @@ public abstract class BLangStructureTypeNode extends BLangType implements Struct
     }
 
     @Override
+    public boolean getIsAnonymous() {
+        return this.isAnonymous;
+    }
+
+    @Override
+    public boolean getIsLocal() {
+        return this.isLocal;
+    }
+
+    @Override
     public String toString() {
         return "record { " + this.fields + " }";
     }
-
 }

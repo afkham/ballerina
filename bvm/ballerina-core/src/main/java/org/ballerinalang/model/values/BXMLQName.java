@@ -53,12 +53,7 @@ public final class BXMLQName implements BRefType {
 
     @Override
     public BType getType() {
-        return BTypes.typeXMLAttributes;
-    }
-
-    @Override
-    public void stamp(BType type) {
-
+        return BTypes.typeString;
     }
 
     @Override

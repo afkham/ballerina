@@ -1,20 +1,19 @@
-import { ExtendedLangClient } from '../core/extended-language-client';
-import { Uri, ExtensionContext } from 'vscode';
-import { getLibraryWebViewContent } from '../utils';
+import { Uri } from 'vscode';
+import { getLibraryWebViewContent, WebViewOptions, getComposerWebViewOptions } from '../utils';
 
-export function render (context: ExtensionContext, langClient: ExtendedLangClient, docUri: Uri, retries: number = 1)
+export function render (docUri: Uri)
         : string {       
-   return renderDiagram(context, docUri);
+   return renderDiagram(docUri);
 }
 
-function renderDiagram(context: ExtensionContext, docUri: Uri): string {
+function renderDiagram(docUri: Uri): string {
 
     const body = `
-        <div id="warning">
-        </div>
-        <div class="ballerina-editor design-view-container" id="diagram">
-        </div>
+        <div id="warning"></div>
+        <div class="ballerina-editor design-view-container" id="diagram"></div>
     `;
+
+    const bodyCss = "diagram";
 
     const styles = `
         body {
@@ -55,8 +54,9 @@ function renderDiagram(context: ExtensionContext, docUri: Uri): string {
         }
     `;
 
-    const script = `
+    const scripts = `
         function loadedScript() {
+            window.langclient = getLangClient();
             let docUri = ${JSON.stringify(docUri.toString())};
             function drawDiagram() {
                 try {
@@ -96,10 +96,16 @@ function renderDiagram(context: ExtensionContext, docUri: Uri): string {
                 \`;
             }
             drawDiagram();
+            enableUndoRedo();
         }
     `;
-
-    return getLibraryWebViewContent(context, body, script, styles);
+    
+    const webViewOptions: WebViewOptions = {
+        ...getComposerWebViewOptions(),
+        body, scripts, styles, bodyCss
+    };
+    
+    return getLibraryWebViewContent(webViewOptions);
 }
 
 export function renderError() {

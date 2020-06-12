@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ * Copyright (c) 2019 WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  * WSO2 Inc. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,12 +18,13 @@
 
 package org.ballerinalang.stdlib.file.service;
 
-import org.ballerinalang.connector.api.Executor;
-import org.ballerinalang.connector.api.Resource;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.util.codegen.StructureTypeInfo;
+import org.ballerinalang.jvm.BRuntime;
+import org.ballerinalang.jvm.BallerinaValues;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.types.AttachedFunction;
+import org.ballerinalang.jvm.values.MapValue;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.api.BString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wso2.transport.localfilesystem.server.connector.contract.LocalFileSystemEvent;
@@ -31,8 +32,10 @@ import org.wso2.transport.localfilesystem.server.connector.contract.LocalFileSys
 
 import java.util.Map;
 
+import static org.ballerinalang.stdlib.file.service.DirectoryListenerConstants.FILE_SYSTEM_EVENT;
 import static org.ballerinalang.stdlib.file.utils.FileConstants.FILE_EVENT_NAME;
 import static org.ballerinalang.stdlib.file.utils.FileConstants.FILE_EVENT_OPERATION;
+import static org.ballerinalang.stdlib.file.utils.FileConstants.FILE_PACKAGE_ID;
 
 /**
  * File System connector listener for Ballerina.
@@ -40,35 +43,36 @@ import static org.ballerinalang.stdlib.file.utils.FileConstants.FILE_EVENT_OPERA
 public class FSListener implements LocalFileSystemListener {
 
     private static final Logger log = LoggerFactory.getLogger(FSListener.class);
+    private BRuntime runtime;
+    private ObjectValue service;
+    private Map<String, AttachedFunction> attachedFunctionRegistry;
 
-    private Map<String, Resource> resourceRegistry;
-    private StructureTypeInfo structInfo;
-
-    public FSListener(Map<String, Resource> resourceRegistry, StructureTypeInfo structInfo) {
-        this.resourceRegistry = resourceRegistry;
-        this.structInfo = structInfo;
+    public FSListener(BRuntime runtime, ObjectValue service, Map<String, AttachedFunction> resourceRegistry) {
+        this.runtime = runtime;
+        this.service = service;
+        this.attachedFunctionRegistry = resourceRegistry;
     }
 
     @Override
     public void onMessage(LocalFileSystemEvent fileEvent) {
-        BValue[] parameters = getSignatureParameters(fileEvent);
-        Resource resource = getResource(fileEvent.getEvent());
+        Object[] parameters = getJvmSignatureParameters(fileEvent);
+        AttachedFunction resource = getAttachedFunction(fileEvent.getEvent());
         if (resource != null) {
-            Executor.submit(resource, new DirectoryListenerCallback(), null, null, parameters);
+            runtime.invokeMethodAsync(service, resource.getName(), new DirectoryCallback(), parameters);
         } else {
-            log.warn("FileEvent received for unregistered resource: [" + fileEvent.getEvent() + "] " + fileEvent
-                    .getFileName());
+            log.warn(String.format("FileEvent received for unregistered resource: [%s] %s", fileEvent.getEvent(),
+                    fileEvent.getFileName()));
         }
     }
 
-    private BValue[] getSignatureParameters(LocalFileSystemEvent fileEvent) {
-        BMap<String, BValue> eventStruct = new BMap<>(this.structInfo.getType());
-        eventStruct.put(FILE_EVENT_NAME, new BString(fileEvent.getFileName()));
-        eventStruct.put(FILE_EVENT_OPERATION, new BString(fileEvent.getEvent()));
-        return new BValue[] { eventStruct };
+    private Object[] getJvmSignatureParameters(LocalFileSystemEvent fileEvent) {
+        MapValue<BString, Object> eventStruct = BallerinaValues.createRecordValue(FILE_PACKAGE_ID, FILE_SYSTEM_EVENT);
+        eventStruct.put(StringUtils.fromString(FILE_EVENT_NAME), StringUtils.fromString(fileEvent.getFileName()));
+        eventStruct.put(StringUtils.fromString(FILE_EVENT_OPERATION), StringUtils.fromString(fileEvent.getEvent()));
+        return new Object[] { eventStruct, true };
     }
 
-    private Resource getResource(String event) {
-        return resourceRegistry.get(event);
+    private AttachedFunction getAttachedFunction(String event) {
+        return attachedFunctionRegistry.get(event);
     }
 }

@@ -1,5 +1,5 @@
 import { WebViewMethod, WebViewRPCMessage } from './model';
-import { Webview, Position, Range, Selection, window } from 'vscode';
+import { Position, Range, Selection, window, Uri, TextEditor, ViewColumn, commands, WebviewPanel } from 'vscode';
 import { ExtendedLangClient } from 'src/core/extended-language-client';
 
 const getLangClientMethods = (langClient: ExtendedLangClient): WebViewMethod[] => {
@@ -12,10 +12,18 @@ const getLangClientMethods = (langClient: ExtendedLangClient): WebViewMethod[] =
         }
     },
     {
+        methodName: 'getProjectAST',
+        handler: (args: any[]) => {
+            return langClient.onReady().then(() => {
+                return langClient.getProjectAST(args[0]);
+            });
+        }
+    },
+    {
         methodName: 'astDidChange',
         handler: (args: any[]) => {
             return langClient.onReady().then(() => {
-                return langClient.triggerASTDidChange(JSON.parse(args[0]), args[1]);
+                return langClient.triggerASTDidChange(args[0], args[1]);
             });
         }
     },
@@ -41,15 +49,47 @@ const getLangClientMethods = (langClient: ExtendedLangClient): WebViewMethod[] =
     },
     {
         methodName: 'revealRange',
-        handler: (args: any[]) => {
-            const activeEditor = window.activeTextEditor;
-            if (activeEditor) {
-                const start = new Position(args[0] - 1, args[1] - 1);
-                const end = new Position(args[2] - 1, args[3]);
-                activeEditor.revealRange(new Range(start, end));
-                activeEditor.selection = new Selection(start, end);
+        handler: (args: any[], webViewPanel) => {
+            const params = JSON.parse(args[0]);
+            const revealRangeInEditor = (editor: TextEditor) => {
+                const { start, end } = params.range;
+                const startPosition = new Position(start.line - 1, start.character - 1);
+                const endPosition = new Position(end.line - 1, end.character - 1);
+                editor.revealRange(new Range(startPosition, endPosition));
+                editor.selection = new Selection(startPosition, endPosition);
+                // Following is a hack tempPanel is created so the editor has two columns
+                // webViewPanel.reveal does not move to column TWO if its not already there
+                // TODO: Report to vscode as a bug
+                const tempPanel = window.createWebviewPanel(
+                    'temp',
+                    'TEMP',
+                    { viewColumn: ViewColumn.Two, preserveFocus: true }
+                );
+                webViewPanel.reveal(ViewColumn.Two);
+                setTimeout(() => {
+                    tempPanel.dispose();
+                }, 0);
+            };
+            const activeTextEditor = window.activeTextEditor;
+            const visibleTextEditors = window.visibleTextEditors;
+            const findByDocUri = (editor: TextEditor) => editor.document.uri.toString() 
+                                    === params.textDocumentIdentifier.uri;
+            const foundVisibleEditor = visibleTextEditors.find(findByDocUri);
+
+            if (activeTextEditor && findByDocUri(activeTextEditor)) {
+                revealRangeInEditor(activeTextEditor);
+            } else if (foundVisibleEditor) {
+                revealRangeInEditor(foundVisibleEditor);            
+                return Promise.resolve();   
+            } else {
+                return window.showTextDocument(Uri.parse(params.textDocumentIdentifier.uri)
+                    ,{
+                        viewColumn: ViewColumn.One
+                    })
+                    .then((textEditor) => {
+                        revealRangeInEditor(textEditor);
+                    });
             }
-            return Promise.resolve();
         }
     },
     {
@@ -69,40 +109,69 @@ const getLangClientMethods = (langClient: ExtendedLangClient): WebViewMethod[] =
                 return langClient.fetchExamples();
             });
         }
-    }];
+    },
+    {
+        methodName: 'getDefinitionPosition',
+        handler: (args: any[]) => {
+            return langClient.getDefinitionPosition(args[0]);
+        }
+    }
+    ];
 };
+
+const undoRedoMethods = [{
+        methodName: 'undo',
+        handler: (args: any[]) => {
+            commands.executeCommand('workbench.action.focusPreviousGroup')
+                .then(() => {
+                    commands.executeCommand('undo');
+                });
+        }
+    },
+    {
+        methodName: 'redo',
+        handler: (args: any[]) => {
+            commands.executeCommand('workbench.action.focusPreviousGroup')
+                .then(() => {
+                    commands.executeCommand('redo');
+                });
+           
+        }
+    }
+];
 
 export class WebViewRPCHandler {
 
     private _sequence: number = 1;
     private _callbacks: Map<number, Function> = new Map();
 
-    constructor(public methods: Array<WebViewMethod>, public webView: Webview){
-        webView.onDidReceiveMessage(this._onRemoteMessage.bind(this));
+    constructor(public methods: Array<WebViewMethod>, public webViewPanel: WebviewPanel){
+        webViewPanel.webview.onDidReceiveMessage(this._onRemoteMessage.bind(this));
+        this.webViewPanel = webViewPanel;
     }
 
     private _getMethod(methodName: string) {
         return this.methods.find(method => (method.methodName === methodName));
     }
-    
+
     private _onRemoteMessage(msg: WebViewRPCMessage) {
-        if (msg.id) {
+        if (msg.id !== undefined) {
             // this is a request from remote
             const method = this._getMethod(msg.methodName);
             if (method) {
-                method.handler(msg.arguments || [])
+                method.handler(msg.arguments || [], this.webViewPanel)
                     .then((response: Thenable<any>) => {
-                        this.webView.postMessage({
+                        this.webViewPanel.webview.postMessage({
                             originId: msg.id,
-                            response,
+                            response: JSON.stringify(response)
                         });
                     });
             }
-        } else if (msg.originId) {
+        } else if (msg.originId !== undefined) {
             // this is a response from remote to one of our requests
             const callback = this._callbacks.get(msg.originId);
             if (callback) {
-                callback(msg.response);
+                callback(JSON.parse(msg.response));
                 this._callbacks.delete(msg.originId);
             }
         }
@@ -115,18 +184,18 @@ export class WebViewRPCHandler {
             arguments: args,
         };
         this._callbacks.set(this._sequence, callback);
-        this.webView.postMessage(msg);
+        this.webViewPanel.webview.postMessage(msg);
         this._sequence++;
     }
 
     static create(
-        webView: Webview,
+        webViewPanel: WebviewPanel,
         langClient: ExtendedLangClient,
         methods: Array<WebViewMethod> = [])
             : WebViewRPCHandler {
         return new WebViewRPCHandler(
-            [...methods, ...getLangClientMethods(langClient)],
-            webView);
+            [...methods, ...getLangClientMethods(langClient), ...undoRedoMethods],
+            webViewPanel);
     }
 
     dispose() {

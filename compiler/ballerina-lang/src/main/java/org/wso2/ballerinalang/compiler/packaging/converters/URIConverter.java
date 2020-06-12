@@ -18,47 +18,51 @@
 
 package org.wso2.ballerinalang.compiler.packaging.converters;
 
+import org.ballerinalang.cli.module.Pull;
+import org.ballerinalang.cli.module.exeptions.CommandException;
 import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.repository.CompilerInput;
-import org.ballerinalang.spi.EmbeddedExecutor;
+import org.ballerinalang.toml.model.Manifest;
 import org.ballerinalang.toml.model.Proxy;
-import org.ballerinalang.util.EmbeddedExecutorError;
-import org.ballerinalang.util.EmbeddedExecutorProvider;
 import org.wso2.ballerinalang.compiler.packaging.Patten;
-import org.wso2.ballerinalang.compiler.packaging.repo.CacheRepo;
+import org.wso2.ballerinalang.compiler.packaging.repo.HomeBaloRepo;
 import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
-import org.wso2.ballerinalang.programfile.ProgramFileConstants;
 import org.wso2.ballerinalang.util.RepoUtils;
 import org.wso2.ballerinalang.util.TomlParserUtils;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Optional;
+import java.util.Map;
 import java.util.stream.Stream;
+
+import static org.wso2.ballerinalang.programfile.ProgramFileConstants.IMPLEMENTATION_VERSION;
+import static org.wso2.ballerinalang.programfile.ProgramFileConstants.SUPPORTED_PLATFORMS;
 
 /**
  * Provide functions need to covert a patten to steam of by paths, by downloading them as url.
  */
 public class URIConverter implements Converter<URI> {
 
-    private static CacheRepo binaryRepo = new CacheRepo(RepoUtils.createAndGetHomeReposPath(),
-                                                        ProjectDirConstants.BALLERINA_CENTRAL_DIR_NAME);
-    private final URI base;
+    private HomeBaloRepo homeBaloRepo;
+    protected URI base;
+    protected final Map<PackageID, Manifest> dependencyManifests;
     private boolean isBuild = true;
-    private PrintStream outStream = System.err;
+    private PrintStream errStream = System.err;
 
-    public URIConverter(URI base) {
-        this.base = base;
+    public URIConverter(URI base, Map<PackageID, Manifest> dependencyManifests) {
+        this.base = URI.create(base.toString() + "/modules/");
+        this.dependencyManifests = dependencyManifests;
+        this.homeBaloRepo = new HomeBaloRepo(this.dependencyManifests);
     }
 
-    public URIConverter(URI base, boolean isBuild) {
-        this.base = base;
+    public URIConverter(URI base, Map<PackageID, Manifest> dependencyManifests, boolean isBuild) {
+        this.base = URI.create(base.toString() + "/modules/");
+        this.dependencyManifests = dependencyManifests;
         this.isBuild = isBuild;
+        this.homeBaloRepo = new HomeBaloRepo(this.dependencyManifests);
     }
 
     /**
@@ -71,7 +75,7 @@ public class URIConverter implements Converter<URI> {
             try {
                 Files.createDirectories(dirPath);
             } catch (IOException e) {
-                throw new RuntimeException("Error occurred when creating the directory path " + dirPath);
+                throw new RuntimeException("error occurred when creating the directory path " + dirPath);
             }
         }
     }
@@ -102,53 +106,61 @@ public class URIConverter implements Converter<URI> {
 
     }
 
-    public Stream<CompilerInput> finalize(URI u, PackageID packageID) {
-        String orgName = packageID.getOrgName().getValue();
-        String pkgName = packageID.getName().getValue();
-        Path destDirPath = RepoUtils.createAndGetHomeReposPath().resolve(Paths.get(ProjectDirConstants.CACHES_DIR_NAME,
-                                                                                   ProjectDirConstants
-                                                                                           .BALLERINA_CENTRAL_DIR_NAME,
-                                                                                   orgName, pkgName));
-        createDirectory(destDirPath);
-        try {
-            String fullPkgPath = orgName + "/" + pkgName;
-            Proxy proxy = TomlParserUtils.readSettings().getProxy();
+    public Stream<CompilerInput> finalize(URI remoteURI, PackageID moduleID) {
+        // if path to balo is not given in the manifest file
+        String orgName = moduleID.getOrgName().getValue();
+        String moduleName = moduleID.getName().getValue();
+        Path modulePathInBaloCache = RepoUtils.createAndGetHomeReposPath()
+                .resolve(ProjectDirConstants.BALO_CACHE_DIR_NAME)
+                .resolve(orgName)
+                .resolve(moduleName);
+        
+        // create directory path in balo cache
+        createDirectory(modulePathInBaloCache);
+        Proxy proxy = TomlParserUtils.readSettings().getProxy();
 
-            String supportedVersionRange = "?supported-version-range=" + ProgramFileConstants.MIN_SUPPORTED_VERSION +
-                    "," + ProgramFileConstants.MAX_SUPPORTED_VERSION;
-            EmbeddedExecutor executor = EmbeddedExecutorProvider.getInstance().getExecutor();
-            Optional<EmbeddedExecutorError> execute = executor.executeFunction("packaging_pull/packaging_pull.balx",
-                    "invokePull", u.toString(), destDirPath.toString(), fullPkgPath, File.separator, proxy.getHost(),
-                    proxy.getPort(), proxy.getUserName(), proxy.getPassword(), RepoUtils.getTerminalWidth(),
-                    supportedVersionRange, String.valueOf(isBuild));
-            // Check if error has occurred or not.
-            if (execute.isPresent()) {
-                String errorMessage = getInnerErrorMessage(execute.get());
-                if (!errorMessage.trim().equals("")) {
-                    outStream.println(errorMessage);
-                }
-                return Stream.of();
-            } else {
-                Patten patten = binaryRepo.calculate(packageID);
-                return patten.convertToSources(binaryRepo.getConverterInstance(), packageID);
+        String supportedVersionRange = "";
+        boolean nightlyBuild = RepoUtils.getBallerinaVersion().contains("SNAPSHOT");
+        for (String supportedPlatform : SUPPORTED_PLATFORMS) {
+            String errorMessage = "";
+            try {
+                Pull.execute(remoteURI.toString(), modulePathInBaloCache.toString(), orgName + "/" + moduleName,
+                        proxy.getHost(), proxy.getPort(), proxy.getUserName(), proxy.getPassword(),
+                        supportedVersionRange, this.isBuild, nightlyBuild, IMPLEMENTATION_VERSION, supportedPlatform);
+            } catch (CommandException e) {
+                errorMessage = e.getMessage().trim();
             }
-        } catch (Exception e) {
-            outStream.println(e.getMessage());
+
+            if (!"".equals(errorMessage)) {
+                // removing the error stack
+                if (errorMessage.contains("\n\tat")) {
+                    errorMessage = errorMessage.substring(0, errorMessage.indexOf("\n\tat"));
+                }
+
+                // if module already exists in home repository
+                if (errorMessage.contains("module already exists in the home repository") && this.isBuild) {
+                    // Need to update the version of moduleID that was resolved by remote. But since the version
+                    // cannot be returned by the call done to module_pull.bal file we need to set the version from
+                    // the downloaded balo file.
+                    Patten patten = this.homeBaloRepo.calculate(moduleID);
+                    return patten.convertToSources(this.homeBaloRepo.getConverterInstance(), moduleID);
+                }
+
+                // check if the message is empty or not. Empty means module not found. Else some other error.
+                // Log if it is some other error.
+                if (!"".equals(errorMessage.replace("error: \t", "").trim())) {
+                    this.errStream.println(errorMessage.trim());
+                    return Stream.of();
+                }
+            } else {
+                // Need to update the version of moduleID that was resolved by remote. But since the version cannot
+                // be returned by the call done to module_pull.bal file we need to set the version from the
+                // downloaded balo file.
+                Patten patten = this.homeBaloRepo.calculate(moduleID);
+                return patten.convertToSources(this.homeBaloRepo.getConverterInstance(), moduleID);
+            }
         }
         return Stream.of();
-    }
-    
-    /**
-     * Get nested error message.
-     * @param embeddedExecutorError The execution error.
-     * @return Error message.
-     */
-    private String getInnerErrorMessage(EmbeddedExecutorError embeddedExecutorError) {
-        if (embeddedExecutorError.getCause() == null) {
-            return embeddedExecutorError.getMessage();
-        } else {
-            return getInnerErrorMessage(embeddedExecutorError.getCause());
-        }
     }
 
     @Override

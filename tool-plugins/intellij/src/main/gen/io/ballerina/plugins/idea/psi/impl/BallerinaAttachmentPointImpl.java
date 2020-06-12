@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.util.PsiTreeUtil;
 import static io.ballerina.plugins.idea.psi.BallerinaTypes.*;
+import com.intellij.extapi.psi.ASTWrapperPsiElement;
 import io.ballerina.plugins.idea.psi.*;
 
-public class BallerinaAttachmentPointImpl extends BallerinaCompositeElementImpl implements BallerinaAttachmentPoint {
+public class BallerinaAttachmentPointImpl extends ASTWrapperPsiElement implements BallerinaAttachmentPoint {
 
   public BallerinaAttachmentPointImpl(@NotNull ASTNode node) {
     super(node);
@@ -43,62 +44,14 @@ public class BallerinaAttachmentPointImpl extends BallerinaCompositeElementImpl 
 
   @Override
   @Nullable
-  public PsiElement getTypeParameter() {
-    return findChildByType(TYPE_PARAMETER);
+  public BallerinaDualAttachPoint getDualAttachPoint() {
+    return findChildByClass(BallerinaDualAttachPoint.class);
   }
 
   @Override
   @Nullable
-  public PsiElement getAnnotation() {
-    return findChildByType(ANNOTATION);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getClient() {
-    return findChildByType(CLIENT);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getFunction() {
-    return findChildByType(FUNCTION);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getListener() {
-    return findChildByType(LISTENER);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getObject() {
-    return findChildByType(OBJECT);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getRemote() {
-    return findChildByType(REMOTE);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getResource() {
-    return findChildByType(RESOURCE);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getService() {
-    return findChildByType(SERVICE);
-  }
-
-  @Override
-  @Nullable
-  public PsiElement getType() {
-    return findChildByType(TYPE);
+  public BallerinaSourceOnlyAttachPoint getSourceOnlyAttachPoint() {
+    return findChildByClass(BallerinaSourceOnlyAttachPoint.class);
   }
 
 }

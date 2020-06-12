@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.util.PsiTreeUtil;
 import static io.ballerina.plugins.idea.psi.BallerinaTypes.*;
+import com.intellij.extapi.psi.ASTWrapperPsiElement;
 import io.ballerina.plugins.idea.psi.*;
 
-public class BallerinaRecordLiteralBodyImpl extends BallerinaCompositeElementImpl implements BallerinaRecordLiteralBody {
+public class BallerinaRecordLiteralBodyImpl extends ASTWrapperPsiElement implements BallerinaRecordLiteralBody {
 
   public BallerinaRecordLiteralBodyImpl(@NotNull ASTNode node) {
     super(node);
@@ -43,8 +44,8 @@ public class BallerinaRecordLiteralBodyImpl extends BallerinaCompositeElementImp
 
   @Override
   @NotNull
-  public List<BallerinaRecordKeyValue> getRecordKeyValueList() {
-    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaRecordKeyValue.class);
+  public List<BallerinaRecordField> getRecordFieldList() {
+    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaRecordField.class);
   }
 
 }

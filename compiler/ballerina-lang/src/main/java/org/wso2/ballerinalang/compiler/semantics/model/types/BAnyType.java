@@ -17,19 +17,31 @@
 */
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
+import org.ballerinalang.model.Name;
+import org.ballerinalang.model.types.SelectivelyImmutableReferenceType;
 import org.ballerinalang.model.types.TypeKind;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.Symbols;
+import org.wso2.ballerinalang.util.Flags;
 
 /**
  * @since 0.94
  */
-public class BAnyType extends BBuiltInRefType {
+public class BAnyType extends BBuiltInRefType implements SelectivelyImmutableReferenceType {
 
     private boolean nullable = true;
+    public BIntersectionType immutableType;
 
     public BAnyType(int tag, BTypeSymbol tsymbol) {
         super(tag, tsymbol);
+    }
+
+    public BAnyType(int tag, BTypeSymbol tsymbol, Name name, int flag) {
+
+        super(tag, tsymbol);
+        this.name = name;
+        this.flags = flag;
     }
 
     public BAnyType(int tag, BTypeSymbol tsymbol, boolean nullable) {
@@ -37,8 +49,12 @@ public class BAnyType extends BBuiltInRefType {
         this.nullable = nullable;
     }
 
-    public String getDesc() {
-        return TypeDescriptor.SIG_ANY;
+    public BAnyType(int tag, BTypeSymbol tsymbol, Name name, int flags, boolean nullable) {
+
+        super(tag, tsymbol);
+        this.name = name;
+        this.flags = flags;
+        this.nullable = nullable;
     }
 
     @Override
@@ -53,5 +69,21 @@ public class BAnyType extends BBuiltInRefType {
     @Override
     public TypeKind getKind() {
         return TypeKind.ANY;
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
+
+    @Override
+    public String toString() {
+        return !Symbols.isFlagOn(flags, Flags.READONLY) ? getKind().typeName() :
+                getKind().typeName().concat(" & readonly");
+    }
+
+    @Override
+    public BIntersectionType getImmutableType() {
+        return this.immutableType;
     }
 }

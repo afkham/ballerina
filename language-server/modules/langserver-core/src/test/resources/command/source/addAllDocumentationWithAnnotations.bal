@@ -14,7 +14,7 @@ service testDocService on new http:Listener(8080) {
     }
     resource function testDocResource(http:Caller caller, http:Request request) {
         http:Response res = new;
-        _ = caller->respond(res);
+        checkpanic caller->respond(res);
     }
 }
 
@@ -28,8 +28,11 @@ type testDocObject object {
     private int testPrivate = 12;
     public string testString = "hello";
 
-    function testFunctionSignature();
     function testFunctionWithImpl() {
         io:println("Hello World!!");
     }
+};
+
+type testDocObject2 abstract object {
+	function testFunctionWithNoImpl();
 };

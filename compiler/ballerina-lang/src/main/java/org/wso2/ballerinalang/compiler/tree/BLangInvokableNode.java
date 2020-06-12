@@ -20,19 +20,16 @@ package org.wso2.ballerinalang.compiler.tree;
 import org.ballerinalang.model.TreeBuilder;
 import org.ballerinalang.model.elements.Flag;
 import org.ballerinalang.model.tree.AnnotationAttachmentNode;
-import org.ballerinalang.model.tree.DeprecatedNode;
 import org.ballerinalang.model.tree.EndpointNode;
+import org.ballerinalang.model.tree.FunctionBodyNode;
 import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.InvokableNode;
 import org.ballerinalang.model.tree.MarkdownDocumentationNode;
 import org.ballerinalang.model.tree.SimpleVariableNode;
 import org.ballerinalang.model.tree.WorkerNode;
-import org.ballerinalang.model.tree.statements.BlockNode;
-import org.ballerinalang.model.tree.statements.VariableDefinitionNode;
 import org.ballerinalang.model.tree.types.TypeNode;
+import org.wso2.ballerinalang.compiler.semantics.model.SymbolEnv;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BInvokableSymbol;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangBlockStmt;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangSimpleVariableDef;
 import org.wso2.ballerinalang.compiler.tree.types.BLangType;
 
 import java.util.ArrayList;
@@ -53,17 +50,22 @@ public abstract class BLangInvokableNode extends BLangNode implements InvokableN
     public List<BLangSimpleVariable> requiredParams;
     public BLangType returnTypeNode;
     public List<BLangAnnotationAttachment> returnTypeAnnAttachments;
-    public BLangBlockStmt body;
+    public BLangFunctionBody body;
     public Set<Flag> flagSet;
     public List<BLangAnnotationAttachment> annAttachments;
     public BLangMarkdownDocumentation markdownDocumentationAttachment;
-    public List<BLangDeprecatedNode> deprecatedAttachments;
     public List<BLangEndpoint> endpoints;
     public List<BLangWorker> workers;
-    public List<BLangSimpleVariableDef> defaultableParams;
     public BLangSimpleVariable restParam;
 
     public BInvokableSymbol symbol;
+    /**
+     * clonedEnv is used for function parameter variable scoping.
+     * Scope of clonedEnv will be populated with function parameters one by one at semantic phase to support
+     * referencing of previous function parameters.
+     */
+    // TODO: Should be properly fixed by doing symbolEnter of function parameters only when needed at semantic phase.
+    public SymbolEnv clonedEnv;
 
     public boolean desugaredReturnType;
 
@@ -74,8 +76,6 @@ public abstract class BLangInvokableNode extends BLangNode implements InvokableN
         this.endpoints = new ArrayList<>();
         this.flagSet = EnumSet.noneOf(Flag.class);
         this.workers = new ArrayList<>();
-        this.deprecatedAttachments = new ArrayList<>();
-        this.defaultableParams = new ArrayList<>();
         this.defaultWorkerName = (BLangIdentifier) TreeBuilder.createIdentifierNode();
         this.defaultWorkerName.value = DEFAULT_WORKER_NAME;
     }
@@ -121,13 +121,18 @@ public abstract class BLangInvokableNode extends BLangNode implements InvokableN
     }
 
     @Override
-    public BLangBlockStmt getBody() {
+    public BLangFunctionBody getBody() {
         return body;
     }
 
     @Override
-    public void setBody(BlockNode body) {
-        this.body = (BLangBlockStmt) body;
+    public void setBody(FunctionBodyNode body) {
+        this.body = (BLangFunctionBody) body;
+    }
+
+    @Override
+    public boolean hasBody() {
+        return this.body != null;
     }
 
     @Override
@@ -161,16 +166,6 @@ public abstract class BLangInvokableNode extends BLangNode implements InvokableN
     }
 
     @Override
-    public List<BLangDeprecatedNode> getDeprecatedAttachments() {
-        return deprecatedAttachments;
-    }
-
-    @Override
-    public void addDeprecatedAttachment(DeprecatedNode deprecatedNode) {
-        this.deprecatedAttachments.add((BLangDeprecatedNode) deprecatedNode);
-    }
-
-    @Override
     public void addWorker(WorkerNode worker) {
         this.workers.add((BLangWorker) worker);
     }
@@ -178,16 +173,6 @@ public abstract class BLangInvokableNode extends BLangNode implements InvokableN
     @Override
     public List<BLangWorker> getWorkers() {
         return workers;
-    }
-
-    @Override
-    public List<BLangSimpleVariableDef> getDefaultableParameters() {
-        return defaultableParams;
-    }
-
-    @Override
-    public void addDefaultableParameter(VariableDefinitionNode param) {
-        this.defaultableParams.add((BLangSimpleVariableDef) param);
     }
 
     @Override

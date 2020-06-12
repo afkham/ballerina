@@ -18,8 +18,8 @@
 package org.ballerinalang.langserver.completions.util.positioning.resolvers;
 
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSContext;
 import org.ballerinalang.langserver.completions.TreeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.Scope;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolEnv;
@@ -64,12 +64,12 @@ public class MatchExpressionScopeResolver extends CursorPositionResolver {
         }
         
         if (isBeforeNode) {
-            Map<Name, Scope.ScopeEntry> visibleSymbolEntries =
+            Map<Name, List<Scope.ScopeEntry>> visibleSymbolEntries =
                     treeVisitor.resolveAllVisibleSymbols(treeVisitor.getSymbolEnv());
             SymbolEnv matchEnv = createMatchExpressionEnv(matchNode, treeVisitor.getSymbolEnv());
             treeVisitor.populateSymbols(visibleSymbolEntries, matchEnv);
             treeVisitor.forceTerminateVisitor();
-            treeVisitor.setNextNode(bSymbol);
+            treeVisitor.setNextNode(bSymbol, node);
         }
         
         return isBeforeNode;

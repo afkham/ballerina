@@ -18,7 +18,7 @@
 package org.ballerinalang.protobuf.utils;
 
 import org.ballerinalang.protobuf.BalGenerationConstants;
-import org.ballerinalang.protobuf.exception.BalGenToolException;
+import org.ballerinalang.protobuf.exception.CodeGeneratorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import static org.ballerinalang.protobuf.BalGenerationConstants.EMPTY_STRING;
@@ -43,8 +44,9 @@ public class BalFileGenerationUtils {
      * Execute command and generate file descriptor.
      *
      * @param command protoc executor command.
+     * @throws CodeGeneratorException if an error occurred when executing protoc command.
      */
-    public static void generateDescriptor(String command) {
+    public static void generateDescriptor(String command) throws CodeGeneratorException {
         boolean isWindows = System.getProperty("os.name")
                 .toLowerCase(Locale.ENGLISH).startsWith("windows");
         ProcessBuilder builder = new ProcessBuilder();
@@ -58,25 +60,25 @@ public class BalFileGenerationUtils {
         try {
             process = builder.start();
         } catch (IOException e) {
-            throw new BalGenToolException("Error in executing protoc command '" + command + "'.", e);
+            throw new CodeGeneratorException("Error in executing protoc command '" + command + "'.", e);
         }
         try {
             process.waitFor();
         } catch (InterruptedException e) {
-            throw new BalGenToolException("Process not successfully completed. Process is interrupted while" +
+            throw new CodeGeneratorException("Process not successfully completed. Process is interrupted while" +
                     " running the protoc executor.", e);
         }
         if (process.exitValue() != 0) {
             try (BufferedReader bufferedReader = new BufferedReader(new
-                    InputStreamReader(process.getErrorStream(), "UTF-8"))) {
+                    InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 String err;
                 StringBuilder errMsg = new StringBuilder();
                 while ((err = bufferedReader.readLine()) != null) {
                     errMsg.append(System.lineSeparator()).append(err);
                 }
-                throw new BalGenToolException(errMsg.toString());
+                throw new CodeGeneratorException(errMsg.toString());
             } catch (IOException e) {
-                throw new BalGenToolException("Invalid command syntax.", e);
+                throw new CodeGeneratorException("Invalid command syntax.", e);
             }
         }
     }
@@ -103,7 +105,7 @@ public class BalFileGenerationUtils {
      */
     public static void delete(File file) {
         if ((file != null) && file.exists() && file.isDirectory()) {
-            String files[] = file.list();
+            String[] files = file.list();
             if (files != null) {
                 if (files.length != 0) {
                     for (String temp : files) {
@@ -133,21 +135,20 @@ public class BalFileGenerationUtils {
     /**
      * Download file in the url to the destination file.
      *
-     * @param url  file URL
-     * @param file destination file
+     * @param url  file URL.
+     * @param file destination file.
+     * @throws CodeGeneratorException if an error occurred while downloading the file.
      */
-    public static void downloadFile(URL url, File file) {
+    public static void downloadFile(URL url, File file) throws CodeGeneratorException {
         try (InputStream in = url.openStream(); FileOutputStream fos = new FileOutputStream(file)) {
             int length;
             byte[] buffer = new byte[1024]; // buffer for portion of data from
             while ((length = in.read(buffer)) > -1) {
                 fos.write(buffer, 0, length);
             }
-            fos.close();
-            in.close();
         } catch (IOException e) {
-            String msg = "Error while downloading the file: " + file.getName();
-            throw new BalGenToolException(msg, e);
+            String msg = "Error while downloading the file: " + file.getName() + ". " + e.getMessage();
+            throw new CodeGeneratorException(msg, e);
         }
     }
     
@@ -155,8 +156,9 @@ public class BalFileGenerationUtils {
      * Grant permission to the protoc executor file.
      *
      * @param file protoc executor file.
+     * @throws CodeGeneratorException if an error occurred while providing execute permission to protoc executor file.
      */
-    public static void grantPermission(File file) {
+    public static void grantPermission(File file) throws CodeGeneratorException {
         boolean isExecutable = file.setExecutable(true);
         boolean isReadable = file.setReadable(true);
         boolean isWritable = file.setWritable(true);
@@ -164,7 +166,7 @@ public class BalFileGenerationUtils {
             LOG.debug("Successfully granted permission for protoc exe file");
         } else {
             String msg = "Error while providing execute permission to protoc executor file: " + file.getName();
-            throw new BalGenToolException(msg);
+            throw new CodeGeneratorException(msg);
         }
     }
 

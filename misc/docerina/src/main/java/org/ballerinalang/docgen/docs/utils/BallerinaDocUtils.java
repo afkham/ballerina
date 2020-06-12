@@ -38,6 +38,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.FileSystems;
@@ -76,6 +77,11 @@ public class BallerinaDocUtils {
      * @return html representation
      */
     public static String mdToHtml(String mdContent) {
+        // TODO: Handle this properly at grammar level
+        // TODO: ```ballerina ``` sections in markdown shouldn't contain '#' at the beginning of each line
+        mdContent = mdContent != null
+               ? mdContent.replaceAll("\n[\\s]*#", "\n")
+               : null;
         List<Extension> extensions = Arrays.asList(TablesExtension.create());
         Parser parser = Parser.builder().extensions(extensions).enabledBlockTypes(new HashSet<>(Arrays.asList(Heading
                 .class, HtmlBlock.class, ThematicBreak.class, FencedCodeBlock.class, BlockQuote.class, ListBlock
@@ -83,6 +89,20 @@ public class BallerinaDocUtils {
         Node document = parser.parse(mdContent != null ? mdContent.trim() : "");
         HtmlRenderer renderer = HtmlRenderer.builder().extensions(extensions).build();
         return renderer.render(document);
+    }
+
+    /**
+     * Parse a given markdown.
+     *
+     * @param mdContent content
+     * @return Node parse tree
+     */
+    public static Node parseMD(String mdContent) {
+        List<Extension> extensions = Arrays.asList(TablesExtension.create());
+        Parser parser = Parser.builder().extensions(extensions).enabledBlockTypes(new HashSet<>(Arrays.asList(Heading
+                .class, HtmlBlock.class, ThematicBreak.class, FencedCodeBlock.class, BlockQuote.class, ListBlock
+                .class))).build();
+       return parser.parse(mdContent != null ? mdContent.trim() : "");
     }
 
     /**
@@ -150,10 +170,14 @@ public class BallerinaDocUtils {
      * @throws IOException Failure to load the resources.
      */
     public static void copyResources(String resource, String targetPath) throws IOException {
-        URI uri = null;
+        URI uri;
         try {
             // load the resource from the Class path
-            uri = BallerinaDocUtils.class.getClassLoader().getResource(resource).toURI();
+            URL url = BallerinaDocUtils.class.getClassLoader().getResource(resource);
+            if (url == null) {
+                return;
+            }
+            uri = url.toURI();
         } catch (URISyntaxException e) {
             throw new IOException("Failed to load resources: " + e.getMessage(), e);
         }

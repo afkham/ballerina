@@ -39,18 +39,30 @@ suite("Ballerina Extension Core Tests", function () {
         assert.equal(ballerinaExtInstance.isValidBallerinaHome(__dirname), false);
     });
 
-    test("Test autoDitectBallerinaHome", function () {
+    test("Test autoDetectBallerinaHome", function () {
         // Following should not throw an error all times.
-        const path = ballerinaExtInstance.autoDitectBallerinaHome();
-        if (path) {
-            assert.equal(ballerinaExtInstance.isValidBallerinaHome(path), true);
+        const { home } = ballerinaExtInstance.autoDetectBallerinaHome();
+        if (home) {
+            assert.equal(ballerinaExtInstance.isValidBallerinaHome(home), true);
         }
     });
 
     test("Test getBallerinaVersion", function () {
-        ballerinaExtInstance.getBallerinaVersion(testBallerinaHome).then(ditected=>{
-            assert.equal(ditected, testBallerinaVersion);
+        ballerinaExtInstance.getBallerinaVersion(testBallerinaHome, true).then(detected=>{
+            assert.equal(detected, testBallerinaVersion);
         });
     });
 
+    test("Test compareVersions", function () {
+        assert(ballerinaExtInstance.compareVersions("0.100.5", "0.100.8") === 0);
+        assert(ballerinaExtInstance.compareVersions("0.101.0", "0.100.0") > 0);
+        assert(ballerinaExtInstance.compareVersions("1.100.0", "0.100.0") > 0);
+        assert(ballerinaExtInstance.compareVersions("0.100.0", "0.101.0") < 0);
+        assert(ballerinaExtInstance.compareVersions("0.100.0", "1.100.0") < 0);
+        assert(ballerinaExtInstance.compareVersions("0.100.5", "0.100-r8") === 0);
+        assert(ballerinaExtInstance.compareVersions("0.101.0", "0.100-r1") > 0);
+        assert(ballerinaExtInstance.compareVersions("1.100.0", "0.100-r1") > 0);
+        assert(ballerinaExtInstance.compareVersions("0.100.0", "0.101-r1") < 0);
+        assert(ballerinaExtInstance.compareVersions("0.100.0", "1.100-r1") < 0);
+    });
 });

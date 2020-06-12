@@ -20,19 +20,26 @@ package org.wso2.ballerinalang.compiler.semantics.model.types;
 import org.ballerinalang.model.types.Field;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.util.Name;
+import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
+
+import java.util.Objects;
 
 /**
  * {@code BField} represents a field in a structure type in Ballerina.
  *
  * @since 0.971.0
  */
-public class BField implements Field {
+public class BField implements Field, NamedNode {
     public Name name;
     public BType type;
     public BVarSymbol symbol;
 
-    public BField(Name name, BVarSymbol symbol) {
+    //Position for BIR model
+    public DiagnosticPos pos;
+
+    public BField(Name name, DiagnosticPos pos, BVarSymbol symbol) {
         this.name = name;
+        this.pos = pos;
         this.symbol = symbol;
         this.type = symbol.type;
     }
@@ -47,4 +54,22 @@ public class BField implements Field {
         return symbol.type;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        BField field = (BField) o;
+        return name.equals(field.name) && type.tag == field.type.tag;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, type.tag);
+    }
 }

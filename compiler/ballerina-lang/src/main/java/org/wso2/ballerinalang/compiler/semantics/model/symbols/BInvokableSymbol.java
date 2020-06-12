@@ -25,8 +25,11 @@ import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
 import org.wso2.ballerinalang.compiler.util.Name;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * @since 0.94
@@ -34,14 +37,21 @@ import java.util.Map;
 public class BInvokableSymbol extends BVarSymbol implements InvokableSymbol {
 
     public List<BVarSymbol> params;
-    public List<BVarSymbol> defaultableParams;
     public BVarSymbol restParam;
     public BType retType;
     public Map<Integer, TaintRecord> taintTable;
+    public Map<String, BType> paramDefaultValTypes;
 
     // This field is only applicable for functions at the moment.
     public BVarSymbol receiverSymbol;
     public boolean bodyExist;
+
+    // Only applicable for workers within fork statements.
+    public String enclForkName;
+    public String source;
+    public SchedulerPolicy schedulerPolicy = SchedulerPolicy.PARENT;
+
+    public Set<BVarSymbol> dependentGlobalVars;
 
     public BInvokableSymbol(int tag,
                             int flags,
@@ -52,7 +62,8 @@ public class BInvokableSymbol extends BVarSymbol implements InvokableSymbol {
         super(flags, name, pkgID, type, owner);
         this.tag = tag;
         this.params = new ArrayList<>();
-        this.defaultableParams = new ArrayList<>();
+        this.dependentGlobalVars = new HashSet<>();
+        this.paramDefaultValTypes = new HashMap<>();
     }
 
     @Override
@@ -72,10 +83,5 @@ public class BInvokableSymbol extends BVarSymbol implements InvokableSymbol {
     @Override
     public BType getReturnType() {
         return retType;
-    }
-
-    @Override
-    public List<BVarSymbol> getDefaultableParameters() {
-        return defaultableParams;
     }
 }

@@ -10,27 +10,31 @@ import { Loader } from "./loader";
 
 const resizeDelay = 200;
 
-export interface EdiatableDiagramProps extends CommonDiagramProps {
+export interface EditableDiagramProps extends CommonDiagramProps {
     docUri: string;
     langClient: IBallerinaLangClient;
 }
 
 export interface EditableDiagramState {
     ast?: CompilationUnit;
+    docUri: string;
     editingEnabled: boolean;
+    hasSyntaxErrors: boolean;
     error?: Error;
     width?: number;
     height?: number;
 }
 
-export class EditableDiagram extends React.Component<EdiatableDiagramProps, EditableDiagramState> {
+export class EditableDiagram extends React.Component<EditableDiagramProps, EditableDiagramState> {
 
     // get default context or provided context from a parent (if any)
     public static contextType = DiagramContext;
 
     public state: EditableDiagramState = {
         ast: undefined,
+        docUri: this.props.docUri,
         editingEnabled: false,
+        hasSyntaxErrors: false,
         height: this.props.height,
         width: this.props.width
     };
@@ -46,7 +50,10 @@ export class EditableDiagram extends React.Component<EdiatableDiagramProps, Edit
         // create props for the diagram
         const diagramProps = {
             ast,
+            docUri: "",
+            fitToWidthOrHeight: true,
             height,
+            langClient: this.props.langClient,
             mode,
             width,
             zoom,
@@ -67,10 +74,8 @@ export class EditableDiagram extends React.Component<EdiatableDiagramProps, Edit
             </DiagramContext.Provider>;
     }
 
-    public componentWillReceiveProps(nextProps: EdiatableDiagramProps) {
-        if (this.props.docUri !== nextProps.docUri) {
-            this.updateAST(nextProps.docUri);
-        }
+    public componentWillReceiveProps(nextProps: EditableDiagramProps) {
+        this.updateAST(nextProps.docUri);
     }
 
     public componentDidMount(): void {
@@ -100,11 +105,17 @@ export class EditableDiagram extends React.Component<EdiatableDiagramProps, Edit
         }
         const disposable = ASTUtil.onTreeModified((tree) => {
             this.forceUpdate();
-            const { langClient, docUri } = this.props;
+            const { langClient } = this.props;
+            const serializableAST = JSON.stringify(this.state.ast, (key, value) => {
+                if (key === "parent" || key === "viewState") {
+                    return undefined;
+                }
+                return value;
+            });
             langClient.astDidChange({
-                ast: tree as BallerinaAST,
+                ast: JSON.parse(serializableAST) as BallerinaAST,
                 textDocumentIdentifier: {
-                    uri: docUri
+                    uri: this.state.docUri
                 },
             });
         });
@@ -117,38 +128,41 @@ export class EditableDiagram extends React.Component<EdiatableDiagramProps, Edit
         });
     }
 
-    public updateAST(uri: string = this.props.docUri) {
+    public updateAST(uri: string = this.state.docUri) {
+        const newState: Partial<EditableDiagramState> = {
+            docUri: uri,
+            error: undefined,
+            hasSyntaxErrors: false
+        };
         // invoke the parser and get the AST
         this.props.langClient.getAST({
             documentIdentifier: {
                 uri,
             },
-        }).then((resp) => {
-            if (resp.ast) {
-                this.setState({
-                    ast: resp.ast as CompilationUnit,
-                    error: undefined
-                });
+        }).then(({ ast, parseSuccess }) => {
+            if (ast) {
+                newState.ast = ast as CompilationUnit;
+            } else if (parseSuccess) {
+                // ast cannot be created due to syntax errors
+                newState.hasSyntaxErrors = true;
             } else {
-                this.setState({
-                    error: new Error("Unable to parse " + this.props.docUri)
-                });
+                // runtime error while parsing
+                newState.error = new Error("Unable to parse " + this.props.docUri);
             }
+            this.setState(newState as EditableDiagramState);
         }, (error) => {
-           this.setState({ error });
+            newState.error = error;
+            this.setState(newState as EditableDiagramState);
         });
     }
 
     private createContext(): IDiagramContext {
         // create context contributions for the children
         const contextContributions: Partial<IDiagramContext> = {
+            docUri: this.state.docUri,
             editingEnabled: this.state.editingEnabled,
+            hasSyntaxErrors: this.state.hasSyntaxErrors,
             langClient: this.props.langClient,
-            toggleEditing: () => {
-                this.setState({
-                    editingEnabled: !this.state.editingEnabled,
-                });
-            }
         };
 
         // merge with parent (if any) or with default context

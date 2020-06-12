@@ -30,6 +30,7 @@ import java.lang.annotation.Target;
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
+@Deprecated
 public @interface BallerinaFunction {
 
     /**
@@ -45,6 +46,13 @@ public @interface BallerinaFunction {
      * @return package name of the function.
      */
     String packageName() default "";
+
+    /**
+     * Package version of the {@code AbstractNativeFunction}.
+     *
+     * @return package version of the function.
+     */
+    String version() default "0.0.0";
 
     /**
      * Function name of the {@code AbstractNativeFunction}.

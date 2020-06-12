@@ -19,11 +19,13 @@ package org.wso2.ballerinalang.compiler.semantics.model.types;
 
 import org.ballerinalang.model.types.ObjectType;
 import org.ballerinalang.model.types.TypeKind;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BAttachedFunction;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BObjectTypeSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.Symbols;
 import org.wso2.ballerinalang.compiler.util.TypeTags;
-
-import java.util.ArrayList;
+import org.wso2.ballerinalang.util.Flags;
 
 /**
  * {@code BObjectType} represents object type in Ballerina.
@@ -32,18 +34,31 @@ import java.util.ArrayList;
  */
 public class BObjectType extends BStructureType implements ObjectType {
 
+    private static final String OBJECT = "object";
+    private static final String SPACE = " ";
+    private static final String DOLLAR = "$";
+    private static final String PUBLIC = "public";
+    private static final String PRIVATE = "private";
+    private static final String LEFT_CURL = "{";
+    private static final String RIGHT_CURL = "}";
+    private static final String SEMI_COLON = ";";
+
     public BObjectType(BTypeSymbol tSymbol) {
         super(TypeTags.OBJECT, tSymbol);
-        this.fields = new ArrayList<>();
     }
 
-    public String getDesc() {
-        return TypeDescriptor.SIG_STRUCT + getQualifiedTypeName() + ";";
+    public BObjectType(BTypeSymbol tSymbol, int flags) {
+        super(TypeTags.OBJECT, tSymbol, flags);
     }
 
     @Override
     public TypeKind getKind() {
         return TypeKind.OBJECT;
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 
     @Override
@@ -53,7 +68,30 @@ public class BObjectType extends BStructureType implements ObjectType {
 
     @Override
     public String toString() {
+
+        if (tsymbol.name.value.startsWith(DOLLAR)) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(OBJECT).append(SPACE).append(LEFT_CURL);
+            for (BField field : fields.values()) {
+                if (Symbols.isFlagOn(field.symbol.flags, Flags.PUBLIC)) {
+                    sb.append(SPACE).append(PUBLIC);
+                } else if (Symbols.isFlagOn(field.symbol.flags, Flags.PRIVATE)) {
+                    sb.append(SPACE).append(PRIVATE);
+                }
+                sb.append(SPACE).append(field.type).append(SPACE).append(field.name).append(";");
+            }
+            BObjectTypeSymbol objectSymbol = (BObjectTypeSymbol) this.tsymbol;
+            for (BAttachedFunction fun : objectSymbol.attachedFuncs) {
+                if (Symbols.isFlagOn(fun.symbol.flags, Flags.PUBLIC)) {
+                    sb.append(SPACE).append(PUBLIC);
+                } else if (Symbols.isFlagOn(fun.symbol.flags, Flags.PRIVATE)) {
+                    sb.append(SPACE).append(PRIVATE);
+                }
+                sb.append(SPACE).append(fun).append(SEMI_COLON);
+            }
+            sb.append(SPACE).append(RIGHT_CURL);
+            return sb.toString();
+        }
         return this.tsymbol.toString();
     }
-
 }

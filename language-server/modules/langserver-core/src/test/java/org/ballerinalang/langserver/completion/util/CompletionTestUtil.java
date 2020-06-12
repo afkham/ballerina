@@ -42,7 +42,7 @@ public class CompletionTestUtil {
         return ("{" +
                 completionItem.getInsertText() + "," +
                 completionItem.getDetail() + "," +
-                completionItem.getLabel() + additionalTextEdits +
+                completionItem.getLabel() + "," + additionalTextEdits  +
                 "}").replace("\r\n", "\n").replace("\\r\\n", "\\n");
     }
 
@@ -70,7 +70,8 @@ public class CompletionTestUtil {
      * @return whether list1 is a subset of list2
      */
     public static boolean isSubList(List<CompletionItem> list1, List<CompletionItem> list2) {
-        return getStringListForEvaluation(list2).containsAll(getStringListForEvaluation(list1));
+        return getStringListForEvaluation(list2).containsAll(getStringListForEvaluation(list1))
+                && list1.size() == list2.size();
     }
 
     /**

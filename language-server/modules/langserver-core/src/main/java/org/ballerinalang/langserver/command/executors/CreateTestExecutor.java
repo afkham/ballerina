@@ -15,36 +15,46 @@
  */
 package org.ballerinalang.langserver.command.executors;
 
-import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.JsonObject;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 import org.ballerinalang.annotation.JavaSPIService;
 import org.ballerinalang.langserver.BallerinaLanguageServer;
 import org.ballerinalang.langserver.BallerinaWorkspaceService;
 import org.ballerinalang.langserver.client.ExtendedLanguageClient;
-import org.ballerinalang.langserver.command.ExecuteCommandKeys;
-import org.ballerinalang.langserver.command.LSCommandExecutor;
-import org.ballerinalang.langserver.command.LSCommandExecutorException;
 import org.ballerinalang.langserver.command.testgen.TestGenerator;
 import org.ballerinalang.langserver.command.testgen.TestGeneratorException;
 import org.ballerinalang.langserver.common.constants.CommandConstants;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.capability.LSClientCapabilities;
+import org.ballerinalang.langserver.commons.command.ExecuteCommandKeys;
+import org.ballerinalang.langserver.commons.command.LSCommandExecutorException;
+import org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor;
+import org.ballerinalang.langserver.commons.workspace.LSDocumentIdentifier;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSCompiler;
-import org.ballerinalang.langserver.compiler.LSCompilerException;
 import org.ballerinalang.langserver.compiler.LSCompilerUtil;
-import org.ballerinalang.langserver.compiler.LSContext;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
+import org.ballerinalang.langserver.compiler.LSModuleCompiler;
+import org.ballerinalang.langserver.compiler.exception.CompilationFailedException;
+import org.ballerinalang.langserver.util.references.ReferencesKeys;
+import org.ballerinalang.langserver.util.references.ReferencesUtil;
+import org.ballerinalang.langserver.util.references.SymbolReferencesModel;
 import org.eclipse.lsp4j.ApplyWorkspaceEditParams;
+import org.eclipse.lsp4j.CreateFile;
 import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.MessageParams;
 import org.eclipse.lsp4j.MessageType;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
+import org.eclipse.lsp4j.ResourceOperation;
 import org.eclipse.lsp4j.TextDocumentEdit;
 import org.eclipse.lsp4j.TextEdit;
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier;
 import org.eclipse.lsp4j.WorkspaceEdit;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
+import org.eclipse.lsp4j.services.LanguageClient;
+import org.eclipse.lsp4j.services.LanguageServer;
 import org.wso2.ballerinalang.compiler.tree.BLangNode;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
 import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
@@ -56,22 +66,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
-
-import static org.ballerinalang.langserver.BallerinaWorkspaceService.Experimental.SHOW_TEXT_DOCUMENT;
-import static org.ballerinalang.langserver.command.CommandUtil.getBLangNode;
 
 /**
  * Represents the create variable command executor.
  *
  * @since 0.985.0
  */
-@JavaSPIService("org.ballerinalang.langserver.command.LSCommandExecutor")
+@JavaSPIService("org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor")
 public class CreateTestExecutor implements LSCommandExecutor {
 
-    private static final String COMMAND = "CREATE_TEST";
+    public static final String COMMAND = "CREATE_TEST";
 
     public static String generateTestFileName(Path sourceFilePath) {
         String fileName = FilenameUtils.removeExtension(sourceFilePath.toFile().getName());
@@ -79,7 +85,7 @@ public class CreateTestExecutor implements LSCommandExecutor {
     }
 
     private static ImmutablePair<Path, Path> createTestFolderIfNotExists(Path sourceFilePath) {
-        Path projectRoot = Paths.get(LSCompilerUtil.getSourceRoot(sourceFilePath));
+        Path projectRoot = Paths.get(LSCompilerUtil.getProjectRoot(sourceFilePath));
         ImmutablePair<Path, Path> testsDirPath = getTestsDirPath(sourceFilePath, projectRoot);
 
         //Check for tests folder, if not exists create a new folder
@@ -138,8 +144,8 @@ public class CreateTestExecutor implements LSCommandExecutor {
         int column = -1;
 
         for (Object arg : context.get(ExecuteCommandKeys.COMMAND_ARGUMENTS_KEY)) {
-            String argKey = ((LinkedTreeMap) arg).get(ARG_KEY).toString();
-            String argVal = ((LinkedTreeMap) arg).get(ARG_VALUE).toString();
+            String argKey = ((JsonObject) arg).get(ARG_KEY).getAsString();
+            String argVal = ((JsonObject) arg).get(ARG_VALUE).getAsString();
             switch (argKey) {
                 case CommandConstants.ARG_KEY_DOC_URI:
                     docUri = argVal;
@@ -159,21 +165,24 @@ public class CreateTestExecutor implements LSCommandExecutor {
             throw new LSCommandExecutorException("Invalid parameters received for the create test command!");
         }
 
-        WorkspaceDocumentManager docManager = context.get(ExecuteCommandKeys.DOCUMENT_MANAGER_KEY);
-        LSCompiler lsCompiler = context.get(ExecuteCommandKeys.LS_COMPILER_KEY);
+        WorkspaceDocumentManager docManager = context.get(DocumentServiceKeys.DOC_MANAGER_KEY);
 
         // Compile the source file
-        BLangPackage builtSourceFile = null;
+        BLangPackage builtSourceFile;
         try {
-            builtSourceFile = lsCompiler.getBLangPackage(context, docManager, false, null, false);
-        } catch (LSCompilerException e) {
+            builtSourceFile = LSModuleCompiler.getBLangPackage(context, docManager, null, false, false);
+        } catch (CompilationFailedException e) {
             throw new LSCommandExecutorException("Couldn't compile the source", e);
         }
 
         // Generate test file and notify Client
-        BallerinaLanguageServer ballerinaLanguageServer = context.get(ExecuteCommandKeys.LANGUAGE_SERVER_KEY);
-        ExtendedLanguageClient client = ballerinaLanguageServer.getClient();
-        BallerinaWorkspaceService workspace = (BallerinaWorkspaceService) ballerinaLanguageServer.getWorkspaceService();
+        LanguageServer languageServer = context.get(ExecuteCommandKeys.LANGUAGE_SERVER_KEY);
+        BallerinaWorkspaceService workspace = null;
+        if (languageServer instanceof BallerinaLanguageServer) {
+            BallerinaLanguageServer ballerinaLanguageServer = (BallerinaLanguageServer) languageServer;
+            workspace = (BallerinaWorkspaceService) ballerinaLanguageServer.getWorkspaceService();
+        }
+        LanguageClient client = context.get(ExecuteCommandKeys.LANGUAGE_CLIENT_KEY);
         try {
             if (builtSourceFile == null || builtSourceFile.diagCollector.hasErrors()) {
                 String message = "Test generation failed due to compilation errors!";
@@ -191,19 +200,14 @@ public class CreateTestExecutor implements LSCommandExecutor {
             // Generate a unique name for the tests file
             File testFile = testsDir.toPath().resolve(generateTestFileName(filePath)).toFile();
 
-            // If not exists, create a new test file
-            if (!testFile.exists()) {
-                try {
-                    testFile.createNewFile();
-                } catch (IOException e) {
-                    String message = "Error occurred while creating the test file:" + testFile.toString();
-                    throw new TestGeneratorException(message, e);
-                }
-            }
-
             // Generate test content edits
             String pkgRelativeSourceFilePath = testDirs.getLeft().relativize(filePath).toString();
-            Pair<BLangNode, Object> bLangNodePair = getBLangNode(line, column, docUri, docManager, lsCompiler, context);
+
+            LSDocumentIdentifier lsDocument = docManager.getLSDocument(filePath);
+            Position pos = new Position(line, column + 1);
+            context.put(ReferencesKeys.OFFSET_CURSOR_N_TRY_NEXT_BEST, true);
+            SymbolReferencesModel.Reference refAtCursor = ReferencesUtil.getReferenceAtCursor(context, lsDocument, pos);
+            BLangNode bLangNode = refAtCursor.getbLangNode();
 
             Position position = new Position(0, 0);
             Range focus = new Range(position, position);
@@ -213,33 +217,48 @@ public class CreateTestExecutor implements LSCommandExecutor {
                 }
                 position.setLine(position.getLine() + incrementer);
             };
-            List<TextEdit> content = TestGenerator.generate(docManager, bLangNodePair, focusLineAcceptor,
-                                                            builtSourceFile, pkgRelativeSourceFilePath, testFile);
+            List<TextEdit> content = TestGenerator.generate(docManager, bLangNode, focusLineAcceptor, builtSourceFile,
+                                                            pkgRelativeSourceFilePath, testFile, context);
+
+            // If not exists, create a new test file
+            List<Either<TextDocumentEdit, ResourceOperation>> edits = new ArrayList<>();
+            if (!testFile.exists()) {
+                edits.add(Either.forRight(new CreateFile(testFile.toPath().toUri().toString())));
+            }
 
             // Send edits
             VersionedTextDocumentIdentifier identifier = new VersionedTextDocumentIdentifier();
             identifier.setUri(testFile.toPath().toUri().toString());
-            TextDocumentEdit textDocumentEdit = new TextDocumentEdit(identifier, content);
-            WorkspaceEdit workspaceEdit = new WorkspaceEdit();
-            workspaceEdit.setDocumentChanges(Collections.singletonList(textDocumentEdit));
-            ApplyWorkspaceEditParams editParams = new ApplyWorkspaceEditParams();
-            editParams.setEdit(workspaceEdit);
+
+            TextDocumentEdit textEdit = new TextDocumentEdit(identifier, content);
+            edits.add(Either.forLeft(textEdit));
+
+            WorkspaceEdit workspaceEdit = new WorkspaceEdit(edits);
+            ApplyWorkspaceEditParams editParams = new ApplyWorkspaceEditParams(workspaceEdit);
             if (client != null) {
                 client.applyEdit(editParams);
                 String message = "Tests generated into the file:" + testFile.toString();
                 client.showMessage(new MessageParams(MessageType.Info, message));
-                if (workspace.getExperimentalClientCapabilities().get(SHOW_TEXT_DOCUMENT.getValue())) {
-                    Location location = new Location(identifier.getUri(), focus);
-                    client.showTextDocument(location);
+                LSClientCapabilities clientCapabilities = context.get(ExecuteCommandKeys.LS_CLIENT_CAPABILITIES_KEY);
+                if (clientCapabilities.getExperimentalCapabilities().isShowTextDocumentEnabled()) {
+                    showTextDocument(workspace, client, focus, identifier);
                 }
             }
             return editParams;
-        } catch (TestGeneratorException e) {
+        } catch (TestGeneratorException | CompilationFailedException | WorkspaceDocumentException e) {
             String message = "Test generation failed!: " + e.getMessage();
             if (client != null) {
                 client.showMessage(new MessageParams(MessageType.Error, message));
             }
             throw new LSCommandExecutorException(message, e);
+        }
+    }
+
+    private void showTextDocument(BallerinaWorkspaceService workspace, LanguageClient client, Range focus,
+                                  VersionedTextDocumentIdentifier identifier) {
+        if (workspace != null && client instanceof ExtendedLanguageClient) {
+            Location location = new Location(identifier.getUri(), focus);
+            ((ExtendedLanguageClient) client).showTextDocument(location);
         }
     }
 

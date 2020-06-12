@@ -16,9 +16,10 @@
 
 package org.ballerinalang.langserver.compiler.workspace.repository;
 
+import org.ballerinalang.langserver.commons.workspace.LSDocumentIdentifier;
 import org.ballerinalang.langserver.compiler.LSCompilerUtil;
 import org.ballerinalang.langserver.compiler.LSPackageCache;
-import org.ballerinalang.langserver.compiler.common.LSDocument;
+import org.ballerinalang.langserver.compiler.common.LSDocumentIdentifierImpl;
 import org.ballerinalang.langserver.compiler.workspace.ExtendedWorkspaceDocumentManagerImpl;
 import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManagerImpl;
 import org.ballerinalang.model.elements.PackageID;
@@ -31,7 +32,7 @@ import org.wso2.ballerinalang.compiler.tree.BLangPackage;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.Name;
 import org.wso2.ballerinalang.compiler.util.Names;
-import org.wso2.ballerinalang.compiler.util.diagnotic.BLangDiagnosticLog;
+import org.wso2.ballerinalang.compiler.util.diagnotic.BLangDiagnosticLogHelper;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -127,9 +128,9 @@ public class WorkspacePackageRepositoryTest {
     }
 
     private Pair compileAndGetWorkspacePackageRepo(Path filePath) {
-        LSDocument document = new LSDocument(filePath.toUri().toString());
+        LSDocumentIdentifier document = new LSDocumentIdentifierImpl(filePath.toUri().toString());
         WorkspaceDocumentManagerImpl documentManager = ExtendedWorkspaceDocumentManagerImpl.getInstance();
-        String sourceRoot = document.getSourceRoot();
+        String sourceRoot = document.getProjectRoot();
         WorkspacePackageRepository workspacePackageRepository = new WorkspacePackageRepository(sourceRoot,
                                                                                                documentManager);
 
@@ -142,7 +143,8 @@ public class WorkspacePackageRepositoryTest {
     }
 
     private String getPackageName(String sourceRoot, Path filePath) {
-        String packageName = LSCompilerUtil.getPackageNameForGivenFile(sourceRoot, filePath.toString());
+        LSDocumentIdentifier lsDocument = new LSDocumentIdentifierImpl(sourceRoot);
+        String packageName = lsDocument.getOwnerModule();
         if ("".equals(packageName)) {
             Path path = filePath.getFileName();
             if (path != null) {
@@ -154,16 +156,16 @@ public class WorkspacePackageRepositoryTest {
 
     private CompilerContext getCompilerContext(Path filePath, String sourceRoot, String packageName,
                                                PackageRepository packageRepository) {
-        LSDocument sourceDocument = new LSDocument(filePath, sourceRoot);
+        LSDocumentIdentifier sourceDocument = new LSDocumentIdentifierImpl(filePath, sourceRoot);
         WorkspaceDocumentManagerImpl documentManager = ExtendedWorkspaceDocumentManagerImpl.getInstance();
         PackageID packageID = new PackageID(Names.ANON_ORG, new Name(packageName), Names.DEFAULT_VERSION);
-        return LSCompilerUtil.prepareCompilerContext(packageID, packageRepository, sourceDocument,
-                                                     true, documentManager);
+        return LSCompilerUtil.prepareCompilerContext(packageID, packageRepository, sourceDocument, documentManager,
+                false);
     }
 
     private BLangPackage compileFile(String packageName, CompilerContext context) {
         BLangPackage bLangPackage = null;
-        BLangDiagnosticLog.getInstance(context).errorCount = 0;
+        BLangDiagnosticLogHelper.getInstance(context).resetErrorCount();
         Compiler compiler = Compiler.getInstance(context);
         bLangPackage = compiler.compile(packageName);
         LSPackageCache.getInstance(context).invalidate(bLangPackage.packageID);

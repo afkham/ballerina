@@ -23,7 +23,7 @@ import org.ballerinalang.test.context.BallerinaTestException;
 import org.ballerinalang.test.context.LogLeecher;
 import org.ballerinalang.test.util.HttpClientRequest;
 import org.ballerinalang.test.util.HttpResponse;
-import org.ballerinalang.test.utils.PackagingTestUtils;
+import org.ballerinalang.test.utils.TestUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -32,7 +32,6 @@ import org.testng.annotations.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Map;
 
 /**
@@ -44,16 +43,16 @@ public class ModuleInitTestCase extends BaseTest {
     private Path tempHomeDirectory;
     private Path tempProjectDirectory;
     private String moduleName = "test";
-    private String orgName = "integrationtests";
+    private String orgName = "bcintegrationtest";
     private Map<String, String> envVariables;
 
     @BeforeClass()
-    public void setUp() throws BallerinaTestException, IOException {
+    public void setUp() throws IOException {
         tempHomeDirectory = Files.createTempDirectory("bal-test-integration-packaging-home-");
         tempProjectDirectory = Files.createTempDirectory("bal-test-integration-packaging-project-");
-        createSettingToml();
-        moduleName = moduleName + PackagingTestUtils.randomModuleName(10);
-        envVariables = PackagingTestUtils.getEnvVariables();
+        TestUtils.createSettingToml(tempHomeDirectory);
+        moduleName = moduleName + TestUtils.randomModuleName(10);
+        envVariables = TestUtils.getEnvVariables();
     }
 
     @Test(description = "Test creating a project with a main in a module")
@@ -239,7 +238,7 @@ public class ModuleInitTestCase extends BaseTest {
         Path projectPath = tempProjectDirectory.resolve("firstTestWithModulesMain");
 
         String[] clientArgsForInit = {"-i"};
-        String[] options = {"\n", orgName + "\n", "\n", "m\n", "newpkg\n", "f\n"};
+        String[] options = {"\n", "m\n", "newpkg\n", "f\n"};
         balClient.runMain("init", clientArgsForInit, envVariables, options, new LogLeecher[]{},
                 projectPath.toString());
 
@@ -264,6 +263,61 @@ public class ModuleInitTestCase extends BaseTest {
 
         // Test ballerina run with balx
         runMainFunction(projectPath, projectPath.resolve("target").resolve("newpkg.balx").toString());
+    }
+
+    @Test(description = "Test running init on an already existing project and create a new module with the same name " +
+            "as existing module", dependsOnMethods = "testInitOnExistingProjectWithNewModule")
+    public void testInitOnExistingProjectWithNewModuleWithSameName() throws Exception {
+        // Test ballerina init
+        Path projectPath = tempProjectDirectory.resolve("firstTestWithModulesMain");
+
+        String[] clientArgsForInit = {"-i"};
+        String[] options = {"\n", "m\n", "newpkg\n", "foo\n", "anotherpkg\n", "f\n"};
+        balClient.runMain("init", clientArgsForInit, envVariables, options, new LogLeecher[]{},
+                projectPath.toString());
+
+        Assert.assertTrue(Files.exists(projectPath.resolve("anotherpkg").resolve("main.bal")));
+        Assert.assertTrue(Files.exists(projectPath.resolve("anotherpkg").resolve("tests").resolve("main_test.bal")));
+
+        // Test ballerina build
+        balClient.runMain("build", new String[]{"anotherpkg"}, envVariables, new String[]{},
+                new LogLeecher[]{}, projectPath.toString());
+        Assert.assertTrue(Files.exists(projectPath.resolve("target").resolve("anotherpkg.balx")));
+        Assert.assertTrue(Files.exists(projectPath.resolve(".ballerina").resolve("repo").resolve(orgName)
+                .resolve("anotherpkg").resolve("0.0.1").resolve("anotherpkg.zip")));
+
+
+        // Test ballerina run on the new module
+        runMainFunction(projectPath, "anotherpkg");
+
+        // Test ballerina run with balx
+        runMainFunction(projectPath, projectPath.resolve("target").resolve("anotherpkg.balx").toString());
+    }
+
+    @Test(description = "Test running init on an already existing module",
+            dependsOnMethods = "testInitWithMainInModule")
+    public void testInitInsideAModule() throws Exception {
+        // Test ballerina init
+        Path projectPath = tempProjectDirectory.resolve("firstTestWithModulesMain").resolve("foo")
+                                               .resolve("tests").resolve("newProj");
+
+        Files.createDirectories(projectPath);
+        String[] clientArgsForInit = {"-i"};
+        LogLeecher leecher = new LogLeecher("Directory is already within a ballerina project :" +
+                tempProjectDirectory.resolve("firstTestWithModulesMain"), LogLeecher.LeecherType.ERROR);
+        balClient.runMain("init", clientArgsForInit, envVariables, new String[0], new LogLeecher[]{leecher},
+                projectPath.toString());
+    }
+
+    @Test(description = "Test running init on an already existing module",
+            dependsOnMethods = "testInitWithMainInModule")
+    public void testInitOutsideAProject() throws Exception {
+        // Test ballerina init
+        String[] clientArgsForInit = {"-i"};
+        LogLeecher leecher = new LogLeecher("A ballerina project is already initialized in " +
+                tempProjectDirectory, LogLeecher.LeecherType.ERROR);
+        balClient.runMain("init", clientArgsForInit, envVariables, new String[0], new LogLeecher[]{leecher},
+                tempProjectDirectory.toString());
     }
 
     @Test(description = "Test creating a project with invalid options")
@@ -328,7 +382,7 @@ public class ModuleInitTestCase extends BaseTest {
                 new LogLeecher[]{}, projectPath.toString());
 
         Assert.assertTrue(Files.exists(projectPath.resolve("target").resolve("foo.balx")));
-        Assert.assertTrue(Files.exists(projectPath.resolve(".ballerina").resolve("repo").resolve("integrationtests")
+        Assert.assertTrue(Files.exists(projectPath.resolve(".ballerina").resolve("repo").resolve("bcintegrationtest")
                 .resolve("foo").resolve("0.0.1").resolve("foo.zip")));
     }
 
@@ -347,6 +401,31 @@ public class ModuleInitTestCase extends BaseTest {
         Assert.assertTrue(Files.exists(projectPath.resolve("Ballerina.toml")));
         Assert.assertTrue(Files.exists(projectPath.resolve("hello_service.bal")));
     }
+
+    @Test(description = "Test creating a project with 'ballerina' and 'ballerinax' as the org-name")
+    public void testInitWithInvalidOrg() throws Exception {
+        Path projectWithBallerinaAsOrg = tempProjectDirectory.resolve("testsWithBallerinaAsOrg");
+        Files.createDirectories(projectWithBallerinaAsOrg);
+
+        String[] clientArgsForInit = {"-i"};
+        String[] optionsWithBallerina = {"\n", "ballerina\n", "\n", "\n", "f\n"};
+        LogLeecher leecherForBallerina = new LogLeecher("--Invalid organization name: 'ballerina'. 'ballerina' " +
+                "and 'ballerinax' are reserved organization names that are used by Ballerina");
+        balClient.runMain("init", clientArgsForInit, envVariables, optionsWithBallerina,
+                new LogLeecher[]{leecherForBallerina}, projectWithBallerinaAsOrg.toString());
+        leecherForBallerina.waitForText(3000);
+
+        Path projectWithBallerinaXAsOrg = tempProjectDirectory.resolve("testsWithBallerinaXAsOrg");
+        Files.createDirectories(projectWithBallerinaXAsOrg);
+
+        String[] optionsWithBallerinaX = {"\n", "ballerinax\n", "\n", "\n", "f\n"};
+        LogLeecher leecherForBallerinaX = new LogLeecher("--Invalid organization name: 'ballerinax'. 'ballerina'" +
+                " and 'ballerinax' are reserved organization names that are used by Ballerina");
+        balClient.runMain("init", clientArgsForInit, envVariables, optionsWithBallerinaX,
+                new LogLeecher[]{leecherForBallerinaX}, projectWithBallerinaXAsOrg.toString());
+        leecherForBallerinaX.waitForText(3000);
+    }
+
     /**
      * Run and test main function in project.
      *
@@ -370,27 +449,16 @@ public class ModuleInitTestCase extends BaseTest {
      */
     private void runService(Path serviceBalPath) throws BallerinaTestException, IOException {
         BServerInstance ballerinaServerForService = new BServerInstance(balServer);
-        ballerinaServerForService.startServer(serviceBalPath.toString());
+        ballerinaServerForService.startServer(serviceBalPath.toString(), true);
         HttpResponse response = HttpClientRequest.doGet(ballerinaServerForService
                 .getServiceURLHttp(9090, "hello/sayHello"));
         Assert.assertEquals(response.getResponseCode(), 200, "Response code mismatched");
         ballerinaServerForService.shutdownServer();
     }
 
-    /**
-     * Create Settings.toml inside the home repository.
-     *
-     * @throws IOException i/o exception when writing to file
-     */
-    private void createSettingToml() throws IOException {
-        Path tomlFilePath = tempHomeDirectory.resolve("Settings.toml");
-        String content = "[central]\n accesstoken = \"0f647e67-857d-32e8-a679-bd3c1c3a7eb2\"";
-        Files.write(tomlFilePath, content.getBytes(), StandardOpenOption.CREATE);
-    }
-
     @AfterClass
     private void cleanup() throws Exception {
-        PackagingTestUtils.deleteFiles(tempHomeDirectory);
-        PackagingTestUtils.deleteFiles(tempProjectDirectory);
+        TestUtils.deleteFiles(tempHomeDirectory);
+        TestUtils.deleteFiles(tempProjectDirectory);
     }
 }

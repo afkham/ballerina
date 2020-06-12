@@ -1,5 +1,5 @@
 /*
-*  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+*  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 *
 *  WSO2 Inc. licenses this file to you under the Apache License,
 *  Version 2.0 (the "License"); you may not use this file except
@@ -18,28 +18,36 @@
 
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
-import org.ballerinalang.model.types.ConstrainedType;
+import org.ballerinalang.model.types.StreamType;
+import org.ballerinalang.model.types.Type;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
 import org.wso2.ballerinalang.compiler.util.TypeTags;
 
 /**
  * {@code BStreamType} represents stream data in Ballerina.
  *
- * @since 0.965.0
+ * @since 1.2.0
  */
-public class BStreamType extends BBuiltInRefType implements ConstrainedType {
+public class BStreamType extends BBuiltInRefType implements StreamType {
 
     public BType constraint;
+    public BType error;
 
-    public BStreamType(int tag, BType constraint, BTypeSymbol tsymbol) {
+    public BStreamType(int tag, BType constraint, BType error, BTypeSymbol tsymbol) {
         super(tag, tsymbol);
         this.constraint = constraint;
+        this.error = error;
     }
 
     @Override
     public BType getConstraint() {
         return constraint;
+    }
+
+    @Override
+    public Type getError() {
+        return error;
     }
 
     @Override
@@ -53,11 +61,11 @@ public class BStreamType extends BBuiltInRefType implements ConstrainedType {
             return super.toString();
         }
 
-        return super.toString() + "<" + constraint + ">";
+        return super.toString() + "<" + constraint + ((this.error == null) ? ">" : "," + this.error + ">");
     }
 
     @Override
-    public String getDesc() {
-        return TypeDescriptor.SIG_STREAM + constraint.getDesc();
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 }

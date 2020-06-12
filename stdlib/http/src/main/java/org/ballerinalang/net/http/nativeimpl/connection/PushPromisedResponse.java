@@ -18,19 +18,14 @@
 
 package org.ballerinalang.net.http.nativeimpl.connection;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.CallableUnitCallback;
+import org.ballerinalang.jvm.BallerinaErrors;
+import org.ballerinalang.jvm.scheduling.Scheduler;
+import org.ballerinalang.jvm.scheduling.Strand;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.connector.NonBlockingCallback;
 import org.ballerinalang.mime.util.EntityBodyHandler;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
-import org.ballerinalang.natives.annotations.ReturnType;
 import org.ballerinalang.net.http.DataContext;
 import org.ballerinalang.net.http.HttpUtil;
-import org.ballerinalang.util.exceptions.BallerinaException;
 import org.wso2.transport.http.netty.contract.HttpConnectorListener;
 import org.wso2.transport.http.netty.contract.HttpResponseFuture;
 import org.wso2.transport.http.netty.message.Http2PushPromise;
@@ -39,51 +34,35 @@ import org.wso2.transport.http.netty.message.HttpMessageDataStreamer;
 
 import java.io.OutputStream;
 
-import static org.ballerinalang.net.http.HttpConstants.CALLER;
 import static org.ballerinalang.net.http.HttpUtil.extractEntity;
 
 /**
  * {@code PushPromisedResponse} is the extern function to respond back the client with Server Push response.
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "pushPromisedResponse",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = CALLER,
-                structPackage = "ballerina/http"),
-        args = {@Argument(name = "promise", type = TypeKind.OBJECT, structType = "PushPromise",
-                structPackage = "ballerina/http"),
-                @Argument(name = "res", type = TypeKind.OBJECT, structType = "OutResponse",
-                        structPackage = "ballerina/http")},
-        returnType = @ReturnType(type = TypeKind.RECORD, structType = "HttpConnectorError",
-                structPackage = "ballerina/http"),
-        isPublic = true
-)
 public class PushPromisedResponse extends ConnectionAction {
 
-    @Override
-    public void execute(Context context, CallableUnitCallback callback) {
-        BMap<String, BValue> connectionStruct = (BMap<String, BValue>) context.getRefArgument(0);
-        HttpCarbonMessage inboundRequestMsg = HttpUtil.getCarbonMsg(connectionStruct, null);
-        DataContext dataContext = new DataContext(context, callback, inboundRequestMsg);
+    public static Object pushPromisedResponse(ObjectValue connectionObj, ObjectValue pushPromiseObj,
+                                     ObjectValue outboundResponseObj) {
+        HttpCarbonMessage inboundRequestMsg = HttpUtil.getCarbonMsg(connectionObj, null);
+        Strand strand = Scheduler.getStrand();
+        DataContext dataContext = new DataContext(strand, new NonBlockingCallback(strand), inboundRequestMsg);
         HttpUtil.serverConnectionStructCheck(inboundRequestMsg);
 
-        BMap<String, BValue> pushPromiseStruct = (BMap<String, BValue>) context.getRefArgument(1);
-        Http2PushPromise http2PushPromise = HttpUtil.getPushPromise(pushPromiseStruct, null);
+        Http2PushPromise http2PushPromise = HttpUtil.getPushPromise(pushPromiseObj, null);
         if (http2PushPromise == null) {
-            throw new BallerinaException("invalid push promise");
+            throw BallerinaErrors.createError("invalid push promise");
         }
 
-        BMap<String, BValue> outboundResponseStruct = (BMap<String, BValue>) context.getRefArgument(2);
         HttpCarbonMessage outboundResponseMsg = HttpUtil
-                .getCarbonMsg(outboundResponseStruct, HttpUtil.createHttpCarbonMessage(false));
-
-        HttpUtil.prepareOutboundResponse(context, inboundRequestMsg, outboundResponseMsg, outboundResponseStruct);
-        pushResponseRobust(dataContext, inboundRequestMsg, outboundResponseStruct, outboundResponseMsg,
+                .getCarbonMsg(outboundResponseObj, HttpUtil.createHttpCarbonMessage(false));
+        HttpUtil.prepareOutboundResponse(connectionObj, inboundRequestMsg, outboundResponseMsg, outboundResponseObj);
+        pushResponseRobust(dataContext, inboundRequestMsg, outboundResponseObj, outboundResponseMsg,
                 http2PushPromise);
+        return null;
     }
 
-    private void pushResponseRobust(DataContext dataContext, HttpCarbonMessage requestMessage,
-                                    BMap<String, BValue> outboundResponseStruct, HttpCarbonMessage responseMessage,
+    private static void pushResponseRobust(DataContext dataContext, HttpCarbonMessage requestMessage,
+                                    ObjectValue outboundResponseObj, HttpCarbonMessage responseMessage,
                                     Http2PushPromise http2PushPromise) {
         HttpResponseFuture outboundRespStatusFuture =
                 HttpUtil.pushResponse(requestMessage, responseMessage, http2PushPromise);
@@ -93,10 +72,10 @@ public class PushPromisedResponse extends ConnectionAction {
         outboundRespStatusFuture.setHttpConnectorListener(outboundResStatusConnectorListener);
         OutputStream messageOutputStream = outboundMsgDataStreamer.getOutputStream();
 
-        BMap<String, BValue> entityStruct = extractEntity(outboundResponseStruct);
-        if (entityStruct != null) {
-            BValue outboundMessageSource = EntityBodyHandler.getMessageDataSource(entityStruct);
-            serializeMsgDataSource(outboundMessageSource, entityStruct, messageOutputStream);
+        ObjectValue entityObj = extractEntity(outboundResponseObj);
+        if (entityObj != null) {
+            Object outboundMessageSource = EntityBodyHandler.getMessageDataSource(entityObj);
+            serializeMsgDataSource(outboundMessageSource, entityObj, messageOutputStream);
         }
     }
 }

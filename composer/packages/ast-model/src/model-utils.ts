@@ -1,17 +1,20 @@
-import { ASTNode, Invocation, SimpleVariableRef, Variable, VariableDef } from "./ast-interfaces";
+import {
+    ASTNode, Invocation, ObjectType, SimpleVariableRef,
+    TypeDefinition, Variable, VariableDef, WorkerReceive
+} from "./ast-interfaces";
 import { Visitor } from "./base-visitor";
 import { ASTKindChecker } from "./check-kind-util";
 
-const metaNodes = ["viewState", "ws", "position"];
+const metaNodes = ["viewState", "ws", "position", "parent"];
 
-export function traversNode(node: ASTNode, visitor: Visitor) {
+export function traversNode(node: ASTNode, visitor: Visitor, parent?: ASTNode) {
     let beginVisitFn: any = (visitor as any)[`beginVisit${node.kind}`];
     if (!beginVisitFn) {
         beginVisitFn = visitor.beginVisitASTNode && visitor.beginVisitASTNode;
     }
 
     if (beginVisitFn) {
-        beginVisitFn.bind(visitor)(node);
+        beginVisitFn.bind(visitor)(node, parent);
     }
 
     const keys = Object.keys(node);
@@ -28,7 +31,7 @@ export function traversNode(node: ASTNode, visitor: Visitor) {
                     return;
                 }
 
-                traversNode(elementNode, visitor);
+                traversNode(elementNode, visitor, node);
             });
             return;
         }
@@ -37,7 +40,7 @@ export function traversNode(node: ASTNode, visitor: Visitor) {
             return;
         }
 
-        traversNode(childNode, visitor);
+        traversNode(childNode, visitor, node);
     });
 
     let endVisitFn: any = (visitor as any)[`endVisit${node.kind}`];
@@ -45,7 +48,7 @@ export function traversNode(node: ASTNode, visitor: Visitor) {
         endVisitFn = visitor.endVisitASTNode && visitor.endVisitASTNode;
     }
     if (endVisitFn) {
-        endVisitFn.bind(visitor)(node);
+        endVisitFn.bind(visitor)(node, parent);
     }
 }
 
@@ -83,4 +86,66 @@ export function isWorker(node: ASTNode) {
         }
     }
     return false;
+}
+
+export function isWorkerFuture(node: ASTNode) {
+    if (ASTKindChecker.isVariableDef(node)) {
+        if (ASTKindChecker.isVariable((node as VariableDef).variable)) {
+            const initialExp = ((node as VariableDef).variable as Variable).initialExpression;
+
+            if (initialExp === undefined) {
+                return false;
+            }
+
+            if (ASTKindChecker.isInvocation(initialExp)) {
+                return /^0.*/.test(initialExp.name.value);
+            }
+        }
+    }
+    return false;
+}
+
+export function isValidObjectType(node: ASTNode): boolean {
+    if (ASTKindChecker.isTypeDefinition(node)) {
+        const typeDefinition = node as TypeDefinition;
+        if (ASTKindChecker.isObjectType(typeDefinition.typeNode)) {
+            const objectType = typeDefinition.typeNode as ObjectType;
+            // Check if it has nun interface functions.
+            const functions = objectType.functions.filter((element) => {
+                return !element.interface;
+            });
+            if (functions.length > 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+export function isWorkerReceive(node: ASTNode): boolean | string {
+    let found: boolean | string = false;
+    traversNode(node, {
+        beginVisitASTNode(element: ASTNode) {
+            if (ASTKindChecker.isWorkerReceive(element)) {
+                found = (element as WorkerReceive).workerName.value;
+            }
+        }
+    });
+    return found;
+}
+
+export function extractWorkerReceive(node: ASTNode): WorkerReceive | undefined {
+    if (ASTKindChecker.isVariableDef(node)) {
+        if (node.variable.initialExpression &&
+            ASTKindChecker.isWorkerReceive(node.variable.initialExpression)) {
+            return node.variable.initialExpression;
+        }
+    }
+
+    if (ASTKindChecker.isAssignment(node)) {
+        if (ASTKindChecker.isWorkerReceive(node.expression)) {
+            return node.expression;
+        }
+    }
+    return;
 }

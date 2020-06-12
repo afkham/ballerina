@@ -13,13 +13,13 @@
             "--extensionDevelopmentPath=${workspaceFolder}"
         ],
         "env": {
-            "LS_CUSTOM_CLASSPATH": "", 
+            "LS_EXTENSIONS_PATH":  "",
             "LSDEBUG": "false",
             "COMPOSER_DEBUG": "false",
             "COMPOSER_DEV_HOST": "http://localhost:9000"
         },
         "outFiles": [
-            "${workspaceFolder}/out/**/*.js"
+            "${workspaceFolder}/dist/**/*.js"
         ],
         "preLaunchTask": "npm: watch"
     },
@@ -29,6 +29,7 @@
         "request": "launch",
         "runtimeExecutable": "${execPath}",
         "env": {
+            "LS_EXTENSIONS_PATH":  "",
             "LSDEBUG": "false",
             "COMPOSER_DEBUG": "false"
         },
@@ -39,7 +40,7 @@
         "outFiles": [
             "${workspaceFolder}/out/test/**/*.js"
         ],
-        "preLaunchTask": "npm: watch"
+        "preLaunchTask": "npm: test-compile"
     },
     {
         "type": "node",

@@ -15,26 +15,32 @@
  */
 package org.ballerinalang.langserver.command.executors;
 
-import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.JsonObject;
 import org.ballerinalang.annotation.JavaSPIService;
-import org.ballerinalang.langserver.command.ExecuteCommandKeys;
-import org.ballerinalang.langserver.command.LSCommandExecutor;
-import org.ballerinalang.langserver.command.LSCommandExecutorException;
 import org.ballerinalang.langserver.command.docs.DocAttachmentInfo;
 import org.ballerinalang.langserver.common.constants.CommandConstants;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.command.ExecuteCommandKeys;
+import org.ballerinalang.langserver.commons.command.LSCommandExecutorException;
+import org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSCompiler;
-import org.ballerinalang.langserver.compiler.LSCompilerException;
-import org.ballerinalang.langserver.compiler.LSContext;
+import org.ballerinalang.langserver.compiler.LSModuleCompiler;
 import org.ballerinalang.langserver.compiler.common.LSCustomErrorStrategy;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
+import org.ballerinalang.langserver.compiler.exception.CompilationFailedException;
+import org.ballerinalang.model.elements.Flag;
+import org.ballerinalang.model.tree.TopLevelNode;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.TextDocumentEdit;
 import org.eclipse.lsp4j.TextEdit;
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
+import org.eclipse.lsp4j.services.LanguageClient;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
 import org.wso2.ballerinalang.compiler.tree.BLangService;
+import org.wso2.ballerinalang.compiler.tree.BLangTypeDefinition;
+import org.wso2.ballerinalang.compiler.tree.types.BLangObjectTypeNode;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,10 +54,10 @@ import static org.ballerinalang.langserver.command.docs.DocumentationGenerator.g
  *
  * @since 0.983.0
  */
-@JavaSPIService("org.ballerinalang.langserver.command.LSCommandExecutor")
+@JavaSPIService("org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor")
 public class AddAllDocumentationExecutor implements LSCommandExecutor {
 
-    private static final String COMMAND = "ADD_ALL_DOC";
+    public static final String COMMAND = "ADD_ALL_DOC";
 
     /**
      * {@inheritDoc}
@@ -62,47 +68,59 @@ public class AddAllDocumentationExecutor implements LSCommandExecutor {
         VersionedTextDocumentIdentifier textDocumentIdentifier = new VersionedTextDocumentIdentifier();
 
         for (Object arg : context.get(ExecuteCommandKeys.COMMAND_ARGUMENTS_KEY)) {
-            if (((LinkedTreeMap) arg).get(ARG_KEY).equals(CommandConstants.ARG_KEY_DOC_URI)) {
-                documentUri = (String) ((LinkedTreeMap) arg).get(ARG_VALUE);
+            if (((JsonObject) arg).get(ARG_KEY).getAsString().equals(CommandConstants.ARG_KEY_DOC_URI)) {
+                documentUri = ((JsonObject) arg).get(ARG_VALUE).getAsString();
                 textDocumentIdentifier.setUri(documentUri);
                 context.put(DocumentServiceKeys.FILE_URI_KEY, documentUri);
             }
         }
 
-        BLangPackage bLangPackage = null;
+        BLangPackage bLangPackage;
         try {
-            WorkspaceDocumentManager docManager = context.get(ExecuteCommandKeys.DOCUMENT_MANAGER_KEY);
-            LSCompiler lsCompiler = context.get(ExecuteCommandKeys.LS_COMPILER_KEY);
-            bLangPackage = lsCompiler.getBLangPackage(context, docManager, false, LSCustomErrorStrategy.class, false);
-        } catch (LSCompilerException e) {
+            WorkspaceDocumentManager docManager = context.get(DocumentServiceKeys.DOC_MANAGER_KEY);
+            bLangPackage = LSModuleCompiler.getBLangPackage(context, docManager, LSCustomErrorStrategy.class, false,
+                    false);
+        } catch (CompilationFailedException e) {
             throw new LSCommandExecutorException("Couldn't compile the source", e);
         }
 
-        context.put(DocumentServiceKeys.CURRENT_PACKAGE_NAME_KEY, bLangPackage.symbol.getName().getValue());
         String relativeSourcePath = context.get(DocumentServiceKeys.RELATIVE_FILE_PATH_KEY);
         BLangPackage srcOwnerPkg = CommonUtil.getSourceOwnerBLangPackage(relativeSourcePath, bLangPackage);
 
         List<TextEdit> textEdits = new ArrayList<>();
-        String fileName = context.get(DocumentServiceKeys.RELATIVE_FILE_PATH_KEY);
-        CommonUtil.getCurrentFileTopLevelNodes(srcOwnerPkg, context).stream()
-                .filter(node -> node.getPosition().getSource().getCompilationUnitName().equals(fileName))
-                .forEach(topLevelNode -> {
-                    DocAttachmentInfo docAttachmentInfo = getDocumentationEditForNode(topLevelNode);
-                    if (docAttachmentInfo != null) {
-                        textEdits.add(getTextEdit(docAttachmentInfo));
-                    }
-                    if (topLevelNode instanceof BLangService) {
-                        ((BLangService) topLevelNode).getResources().forEach(bLangResource -> {
+        for (TopLevelNode topLevelNode : CommonUtil.getCurrentFileTopLevelNodes(srcOwnerPkg, context)) {
+            if (topLevelNode instanceof BLangTypeDefinition
+                    && ((BLangTypeDefinition) topLevelNode).flagSet.contains(Flag.SERVICE)) {
+                continue;
+            }
+            DocAttachmentInfo docAttachmentInfo = getDocumentationEditForNode(topLevelNode);
+            if (docAttachmentInfo != null) {
+                textEdits.add(getTextEdit(docAttachmentInfo));
+            }
+            if (topLevelNode instanceof BLangService) {
+                BLangService service = (BLangService) topLevelNode;
+                ((BLangObjectTypeNode) service.serviceTypeDefinition.getTypeNode()).getFunctions()
+                        .forEach(bLangResource -> {
                             DocAttachmentInfo resourceInfo = getDocumentationEditForNode(bLangResource);
                             if (resourceInfo != null) {
                                 textEdits.add(getTextEdit(resourceInfo));
                             }
                         });
+            }
+            if (topLevelNode instanceof BLangTypeDefinition
+                    && ((BLangTypeDefinition) topLevelNode).typeNode instanceof BLangObjectTypeNode) {
+                ((BLangObjectTypeNode) ((BLangTypeDefinition) topLevelNode).typeNode).functions.forEach(function -> {
+                    DocAttachmentInfo resourceInfo = getDocumentationEditForNode(function);
+                    if (resourceInfo != null) {
+                        textEdits.add(getTextEdit(resourceInfo));
                     }
                 });
+            }
+        }
+
         TextDocumentEdit textDocumentEdit = new TextDocumentEdit(textDocumentIdentifier, textEdits);
-        return applyWorkspaceEdit(Collections.singletonList(textDocumentEdit),
-                                              context.get(ExecuteCommandKeys.LANGUAGE_SERVER_KEY).getClient());
+        LanguageClient languageClient = context.get(ExecuteCommandKeys.LANGUAGE_CLIENT_KEY);
+        return applyWorkspaceEdit(Collections.singletonList(Either.forLeft(textDocumentEdit)), languageClient);
     }
 
     /**

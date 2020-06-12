@@ -18,19 +18,28 @@
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
 import org.ballerinalang.model.types.ConstrainedType;
+import org.ballerinalang.model.types.SelectivelyImmutableReferenceType;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.Symbols;
 import org.wso2.ballerinalang.compiler.util.TypeTags;
+import org.wso2.ballerinalang.util.Flags;
 
 /**
  * @since 0.94
  */
-public class BMapType extends BBuiltInRefType implements ConstrainedType {
+public class BMapType extends BBuiltInRefType implements ConstrainedType, SelectivelyImmutableReferenceType {
 
     public BType constraint;
+    public BIntersectionType immutableType;
 
     public BMapType(int tag, BType constraint, BTypeSymbol tsymbol) {
         super(tag, tsymbol);
+        this.constraint = constraint;
+    }
+
+    public BMapType(int tag, BType constraint, BTypeSymbol tsymbol, int flags) {
+        super(tag, tsymbol, flags);
         this.constraint = constraint;
     }
 
@@ -46,15 +55,28 @@ public class BMapType extends BBuiltInRefType implements ConstrainedType {
 
     @Override
     public String toString() {
+        String stringRep;
+
         if (constraint.tag == TypeTags.ANY) {
-            return super.toString();
+            stringRep = super.toString();
+        } else {
+            stringRep = super.toString() + "<" + constraint + ">";
         }
 
-        return super.toString() + "<" + constraint + ">";
+        return !Symbols.isFlagOn(flags, Flags.READONLY) ? stringRep : stringRep.concat(" & readonly");
     }
 
     @Override
-    public String getDesc() {
-        return TypeDescriptor.SIG_MAP + constraint.getDesc();
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
+
+    public final boolean isAnydata() {
+        return this.constraint.isPureType();
+    }
+
+    @Override
+    public BIntersectionType getImmutableType() {
+        return this.immutableType;
     }
 }

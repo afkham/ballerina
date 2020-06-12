@@ -17,11 +17,13 @@
 */
 package org.ballerinalang.langserver.signature;
 
+import org.ballerinalang.langserver.common.CommonKeys;
 import org.ballerinalang.langserver.common.LSNodeVisitor;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSServiceOperationContext;
-import org.ballerinalang.langserver.completions.SymbolInfo;
+import org.ballerinalang.model.elements.Flag;
+import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.model.tree.TopLevelNode;
 import org.eclipse.lsp4j.Position;
 import org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolResolver;
@@ -29,11 +31,15 @@ import org.wso2.ballerinalang.compiler.semantics.model.Scope;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolEnv;
 import org.wso2.ballerinalang.compiler.semantics.model.SymbolTable;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
+import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachment;
+import org.wso2.ballerinalang.compiler.tree.BLangBlockFunctionBody;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
 import org.wso2.ballerinalang.compiler.tree.BLangNode;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
 import org.wso2.ballerinalang.compiler.tree.BLangService;
 import org.wso2.ballerinalang.compiler.tree.BLangSimpleVariable;
+import org.wso2.ballerinalang.compiler.tree.BLangTypeDefinition;
+import org.wso2.ballerinalang.compiler.tree.expressions.BLangTypeInit;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangBlockStmt;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangCompoundAssignment;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangForeach;
@@ -51,6 +57,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -61,33 +68,56 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
     private SymbolResolver symbolResolver;
     private boolean terminateVisitor = false;
     private SymbolTable symTable;
-    private LSServiceOperationContext lsContext;
+    private Position cursorPosition;
+    private LSContext lsContext;
     private Deque<DiagnosticPos> blockPositionStack;
 
     /**
      * Public constructor.
-     * @param textDocumentServiceContext    Document service context for the signature operation
+     * @param context    Document service context for the signature operation
      */
-    public SignatureTreeVisitor(LSServiceOperationContext textDocumentServiceContext) {
+    public SignatureTreeVisitor(LSContext context) {
         blockPositionStack = new ArrayDeque<>();
-        this.lsContext = textDocumentServiceContext;
-        init(lsContext.get(DocumentServiceKeys.COMPILER_CONTEXT_KEY));
-    }
+        lsContext = context;
+        cursorPosition = context.get(DocumentServiceKeys.POSITION_KEY).getPosition();
 
-    private void init(CompilerContext compilerContext) {
+        CompilerContext compilerContext = context.get(DocumentServiceKeys.COMPILER_CONTEXT_KEY);
         symTable = SymbolTable.getInstance(compilerContext);
         symbolResolver = SymbolResolver.getInstance(compilerContext);
-        lsContext.put(DocumentServiceKeys.SYMBOL_TABLE_KEY, symTable);
     }
 
     @Override
     public void visit(BLangPackage pkgNode) {
-        SymbolEnv pkgEnv = symTable.pkgEnvMap.get(pkgNode.symbol);
-        List<TopLevelNode> topLevelNodes = CommonUtil.getCurrentFileTopLevelNodes(pkgNode, lsContext);
+        final SymbolEnv pkgEnv;
+        String relativePath = this.lsContext.get(DocumentServiceKeys.RELATIVE_FILE_PATH_KEY);
+        BLangPackage sourceOwnerPkg = CommonUtil.getSourceOwnerBLangPackage(relativePath, pkgNode);
+        if (sourceOwnerPkg.symbol == null) {
+            Optional<SymbolEnv> first = symTable.pkgEnvMap.entrySet().stream().filter(
+                    s -> s.getKey().pkgID.equals(sourceOwnerPkg.packageID)).map(Map.Entry::getValue).findFirst();
+            pkgEnv = first.orElse(null);
+        } else {
+            pkgEnv = symTable.pkgEnvMap.get(sourceOwnerPkg.symbol);
+        }
+        List<TopLevelNode> topLevelNodes = CommonUtil.getCurrentFileTopLevelNodes(sourceOwnerPkg, lsContext);
 
         topLevelNodes.stream()
                 .filter(CommonUtil.checkInvalidTypesDefs())
                 .forEach(topLevelNode -> acceptNode((BLangNode) topLevelNode, pkgEnv));
+    }
+
+    @Override
+    public void visit(BLangTypeDefinition typeDefinition) {
+        if (typeDefinition.annAttachments != null) {
+            typeDefinition.annAttachments.forEach(s -> acceptNode(s, symbolEnv));
+        }
+        acceptNode(typeDefinition.typeNode, symbolEnv);
+    }
+
+    @Override
+    public void visit(BLangObjectTypeNode objectTypeNode) {
+        objectTypeNode.functions.stream()
+                .filter(bLangFunction -> !bLangFunction.flagSet.contains(Flag.INTERFACE))
+                .forEach(bLangFunction -> acceptNode(bLangFunction, symbolEnv));
     }
 
     @Override
@@ -114,10 +144,28 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
         List<BLangSimpleVariable> serviceFields = serviceType.getFields().stream()
                 .map(simpleVar -> (BLangSimpleVariable) simpleVar)
                 .collect(Collectors.toList());
+        List<BLangAnnotationAttachment> annAttachments = serviceNode.annAttachments;
         serviceContent.addAll(serviceFunctions);
         serviceContent.addAll(serviceFields);
+        serviceContent.addAll(annAttachments);
         serviceContent.sort(new CommonUtil.BLangNodeComparator());
         serviceContent.forEach(serviceField -> this.acceptNode(serviceField, serviceEnv));
+    }
+
+    @Override
+    public void visit(BLangAnnotationAttachment attachment) {
+        SymbolEnv annotationAttachmentEnv = new SymbolEnv(attachment, symbolEnv.scope);
+        symbolEnv.copyTo(annotationAttachmentEnv);
+        PackageID packageID = attachment.annotationSymbol.pkgID;
+        if (packageID.getOrgName().getValue().equals("ballerina") && packageID.getName().getValue().equals("grpc")
+                && attachment.annotationName.getValue().equals("ServiceDescriptor")) {
+            return;
+        }
+        blockPositionStack.push(attachment.pos);
+        if (!terminateVisitor && this.isCursorWithinBlock()) {
+            this.populateSymbols(symbolResolver.getAllVisibleInScopeSymbols(annotationAttachmentEnv));
+        }
+        blockPositionStack.pop();
     }
 
     @Override
@@ -125,7 +173,19 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
         SymbolEnv blockEnv = SymbolEnv.createBlockEnv(blockNode, symbolEnv);
         blockNode.stmts.forEach(stmt -> this.acceptNode(stmt, blockEnv));
         if (!terminateVisitor && this.isCursorWithinBlock()) {
-            Map<Name, Scope.ScopeEntry> visibleSymbolEntries = symbolResolver.getAllVisibleInScopeSymbols(blockEnv);
+            Map<Name, List<Scope.ScopeEntry>> visibleSymbolEntries
+                    = symbolResolver.getAllVisibleInScopeSymbols(blockEnv);
+            this.populateSymbols(visibleSymbolEntries);
+        }
+    }
+
+    @Override
+    public void visit(BLangBlockFunctionBody blockFuncBody) {
+        SymbolEnv blockEnv = SymbolEnv.createFuncBodyEnv(blockFuncBody, symbolEnv);
+        blockFuncBody.stmts.forEach(stmt -> this.acceptNode(stmt, blockEnv));
+        if (!terminateVisitor && this.isCursorWithinBlock()) {
+            Map<Name, List<Scope.ScopeEntry>> visibleSymbolEntries
+                    = symbolResolver.getAllVisibleInScopeSymbols(blockEnv);
             this.populateSymbols(visibleSymbolEntries);
         }
     }
@@ -167,12 +227,6 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
         this.blockPositionStack.push(transactionNode.transactionBody.pos);
         this.acceptNode(transactionNode.transactionBody, symbolEnv);
         this.blockPositionStack.pop();
-
-        if (transactionNode.onRetryBody != null) {
-            this.blockPositionStack.push(transactionNode.onRetryBody.pos);
-            this.acceptNode(transactionNode.onRetryBody, symbolEnv);
-            this.blockPositionStack.pop();
-        }
     }
 
     @Override
@@ -185,6 +239,23 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
             this.blockPositionStack.push(assignment.expr.pos);
             acceptNode(assignment.expr, symbolEnv);
             this.blockPositionStack.pop();
+        }
+    }
+
+    @Override
+    public void visit(BLangSimpleVariable variable) {
+        if (variable.expr != null) {
+            this.blockPositionStack.push(variable.expr.pos);
+            acceptNode(variable.expr, symbolEnv);
+            this.blockPositionStack.pop();
+        }
+    }
+
+    public void visit(BLangTypeInit typeInit) {
+        if (!terminateVisitor && this.isCursorWithinBlock()) {
+            Map<Name, List<Scope.ScopeEntry>> visibleSymbolEntries
+                    = symbolResolver.getAllVisibleInScopeSymbols(symbolEnv);
+            this.populateSymbols(visibleSymbolEntries);
         }
     }
 
@@ -201,7 +272,9 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
     }
 
     private boolean isCursorWithinBlock() {
-        Position cursorPosition = this.lsContext.get(DocumentServiceKeys.POSITION_KEY).getPosition();
+        if (blockPositionStack.isEmpty()) {
+            return false;
+        }
         DiagnosticPos blockPosition = CommonUtil.toZeroBasedPosition(blockPositionStack.peek());
         int cursorLine = cursorPosition.getLine();
         int cursorColumn = cursorPosition.getCharacter();
@@ -223,13 +296,18 @@ public class SignatureTreeVisitor extends LSNodeVisitor {
 
     /**
      * Populate the symbols.
+     *
      * @param symbolEntries symbol entries
      */
-    private void populateSymbols(Map<Name, Scope.ScopeEntry> symbolEntries) {
+    private void populateSymbols(Map<Name, List<Scope.ScopeEntry>> symbolEntries) {
         this.terminateVisitor = true;
-        List<SymbolInfo> visibleSymbols = new ArrayList<>();
+        List<Scope.ScopeEntry> visibleSymbols = new ArrayList<>();
 
-        symbolEntries.forEach((k, v) -> visibleSymbols.add(new SymbolInfo(k.getValue(), v)));
-        lsContext.put(SignatureKeys.VISIBLE_SYMBOLS_KEY, visibleSymbols);
+        for (Map.Entry<Name, List<Scope.ScopeEntry>> entry : symbolEntries.entrySet()) {
+            List<Scope.ScopeEntry> entryList = entry.getValue();
+            List<Scope.ScopeEntry> symbolCompletionItems = new ArrayList<>(entryList);
+            visibleSymbols.addAll(symbolCompletionItems);
+        }
+        lsContext.put(CommonKeys.VISIBLE_SYMBOLS_KEY, visibleSymbols);
     }
 }

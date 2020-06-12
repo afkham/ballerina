@@ -1,0 +1,104 @@
+{
+  "kind": "IMPORT_DECLARATION",
+  "hasDiagnostics": true,
+  "children": [
+    {
+      "kind": "IMPORT_KEYWORD",
+      "trailingMinutiae": [
+        {
+          "kind": "WHITESPACE_MINUTIAE",
+          "value": " "
+        }
+      ]
+    },
+    {
+      "kind": "LIST",
+      "children": [
+        {
+          "kind": "IDENTIFIER_TOKEN",
+          "value": "foo",
+          "trailingMinutiae": [
+            {
+              "kind": "WHITESPACE_MINUTIAE",
+              "value": " "
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "IMPORT_VERSION",
+      "hasDiagnostics": true,
+      "children": [
+        {
+          "kind": "VERSION_KEYWORD",
+          "isMissing": true,
+          "hasDiagnostics": true,
+          "diagnostics": [
+            "ERROR_MISSING_VERSION_KEYWORD"
+          ]
+        },
+        {
+          "kind": "LIST",
+          "children": [
+            {
+              "kind": "DECIMAL_INTEGER_LITERAL",
+              "value": "5"
+            },
+            {
+              "kind": "IMPORT_SUB_VERSION",
+              "children": [
+                {
+                  "kind": "DOT_TOKEN"
+                },
+                {
+                  "kind": "DECIMAL_INTEGER_LITERAL",
+                  "value": "4"
+                }
+              ]
+            },
+            {
+              "kind": "IMPORT_SUB_VERSION",
+              "children": [
+                {
+                  "kind": "DOT_TOKEN"
+                },
+                {
+                  "kind": "DECIMAL_INTEGER_LITERAL",
+                  "value": "0",
+                  "trailingMinutiae": [
+                    {
+                      "kind": "WHITESPACE_MINUTIAE",
+                      "value": " "
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "IMPORT_PREFIX",
+      "hasDiagnostics": true,
+      "children": [
+        {
+          "kind": "AS_KEYWORD",
+          "isMissing": true,
+          "hasDiagnostics": true,
+          "diagnostics": [
+            "ERROR_MISSING_AS_KEYWORD"
+          ]
+        },
+        {
+          "kind": "IDENTIFIER_TOKEN",
+          "value": "bar"
+        }
+      ]
+    },
+    {
+      "kind": "SEMICOLON_TOKEN"
+    }
+  ]
+}

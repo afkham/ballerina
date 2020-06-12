@@ -16,8 +16,8 @@
 package org.ballerinalang.langserver.completions.util.positioning.resolvers;
 
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSContext;
 import org.ballerinalang.langserver.completions.TreeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.Scope;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
@@ -26,6 +26,7 @@ import org.wso2.ballerinalang.compiler.tree.BLangNode;
 import org.wso2.ballerinalang.compiler.util.Name;
 import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -53,11 +54,11 @@ public class FunctionNodeScopeResolver extends CursorPositionResolver {
         boolean isWithinScopeAfterLastChild = isLastWorker && line > nodeELine && line < invokeableNodeEndLine;
 
         if (line < nodeSLine || (line == nodeSLine && col <= nodeSCol) || isWithinScopeAfterLastChild) {
-            Map<Name, Scope.ScopeEntry> visibleSymbolEntries =
+            Map<Name, List<Scope.ScopeEntry>> visibleSymbolEntries =
                     treeVisitor.resolveAllVisibleSymbols(treeVisitor.getSymbolEnv());
             treeVisitor.populateSymbols(visibleSymbolEntries, treeVisitor.getSymbolEnv());
             treeVisitor.forceTerminateVisitor();
-            treeVisitor.setNextNode(bSymbol);
+            treeVisitor.setNextNode(bSymbol, node);
             return true;
         }
 

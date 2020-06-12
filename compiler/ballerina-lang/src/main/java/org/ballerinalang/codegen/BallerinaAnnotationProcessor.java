@@ -41,6 +41,7 @@ import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
@@ -98,8 +99,47 @@ public class BallerinaAnnotationProcessor extends AbstractProcessor {
             return;
         }
         this.generateNativeEntityProviderSource(nativeDefs);
+        this.generateNativeMap(nativeDefs);
     }
-    
+
+    private void generateNativeMap(List<NativeElementCodeDef> nativeDefs) {
+        Writer writer = null;
+        try {
+            Filer filer = this.processingEnv.getFiler();
+            String mappingPathInJar = "META-INF/this.map.json";
+            FileObject javaFile = filer.createResource(StandardLocation.CLASS_OUTPUT, "", mappingPathInJar);
+            writer = javaFile.openWriter();
+            this.writeNativeMapJson(writer, nativeDefs);
+        } catch (IOException e) {
+            throw new RuntimeException("Error processing native functions: " + e.getMessage(), e);
+        } finally {
+            try {
+                if (writer != null) {
+                    writer.close();
+                }
+            } catch (IOException ignore) {
+            }
+        }
+    }
+
+    private void writeNativeMapJson(Writer writer, List<NativeElementCodeDef> nativeDefs) throws IOException {
+        writer.append("{");
+        for (int i = 0; i < nativeDefs.size(); i++) {
+            NativeElementCodeDef nativeDef = nativeDefs.get(i);
+            if (i != 0) {
+                writer.append(" ,");
+            }
+            writer.append("\n\"");
+            NativeFunctionCodeDef funcDef = (NativeFunctionCodeDef) nativeDef;
+            writer.append(funcDef.org).append("/").append(funcDef.pkg.replace('.', '_')).append("/")
+                    .append(funcDef.version.replace('.', '_')).append("/").append(funcDef.name);
+            writer.append("\" : \"");
+            writer.append(funcDef.className.replace('.', '/'));
+            writer.append("\"");
+        }
+        writer.append("\n}");
+    }
+
     private void generateNativeEntityProviderSource(List<NativeElementCodeDef> nativeDefs) {
         Map<String, String> options = this.processingEnv.getOptions();
         String targetPackageName = options.get(NATIVE_ENTITY_PROVIDER_PACKAGE_NAME);
@@ -125,6 +165,7 @@ public class BallerinaAnnotationProcessor extends AbstractProcessor {
         NativeFunctionCodeDef def = new NativeFunctionCodeDef();
         def.org = func.orgName();
         def.pkg = func.packageName();
+        def.version = func.version();
         if (func.receiver().type() == TypeKind.OBJECT) {
             def.name = func.receiver().structType() + "." + func.functionName();
         } else {
@@ -140,6 +181,7 @@ public class BallerinaAnnotationProcessor extends AbstractProcessor {
         NativeActionCodeDef def = new NativeActionCodeDef();
         def.org = action.orgName();
         def.pkg = action.packageName();
+        def.version = action.version();
         def.connectorName = action.connectorName();
         def.name = action.actionName();
         def.className = this.extractClassName(element);
@@ -225,6 +267,8 @@ public class BallerinaAnnotationProcessor extends AbstractProcessor {
         public String org;
 
         public String pkg;
+
+        public String version;
         
         public String name;
         
@@ -243,8 +287,8 @@ public class BallerinaAnnotationProcessor extends AbstractProcessor {
         }
         
         public String code() {
-            return "registerNativeFunction(new NativeFunctionDef(\"" + this.org + "\", \"" + this.pkg + "\", " +
-                    "\"" + this.name + "\", " + this.typeArrayToCode(this.argTypes) + ", " +
+            return "registerNativeFunction(new NativeFunctionDef(\"" + this.org + "\", \"" + this.pkg + "\", \"" +
+                    this.version + "\", \"" + this.name + "\", " + this.typeArrayToCode(this.argTypes) + ", " +
                     this.typeArrayToCode(this.retTypes) + ", \"" + this.className + "\"))";
         }
         
@@ -259,7 +303,7 @@ public class BallerinaAnnotationProcessor extends AbstractProcessor {
         
         public String code() {
             return "registerNativeAction(new NativeActionDef(\"" + this.org + "\", \""
-                    + this.pkg + "\", \"" + this.connectorName + "\", \""
+                    + this.pkg + "\", \"" + this.version + "\", \"" + this.connectorName + "\", \""
                     + this.name + "\", " + this.typeArrayToCode(this.argTypes) + ", "
                     + this.typeArrayToCode(this.retTypes) + ", \"" + this.className + "\"))";
         }

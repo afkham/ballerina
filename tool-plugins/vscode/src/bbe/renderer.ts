@@ -1,11 +1,14 @@
 import { ExtendedLangClient } from '../core/extended-language-client';
 import { ExtensionContext } from 'vscode';
-import { getLibraryWebViewContent } from '../utils';
+import { getLibraryWebViewContent, WebViewOptions, getComposerWebViewOptions } from '../utils';
 
 export function render(context: ExtensionContext, langClient: ExtendedLangClient)
     : string {
-    const body = `<div id="examples" class="examples" />`;
-    const script = `
+
+    const body = `<div id="examples" class="examples-container" />`;
+    const bodyCss = "examples";
+    const styles = ``;
+    const scripts = `
             function loadedScript() {
                     function openExample(url) {
                         webViewRPCHandler.invokeRemoteMethod("openExample", [url]);
@@ -17,14 +20,12 @@ export function render(context: ExtensionContext, langClient: ExtendedLangClient
                     renderSamples();
             }
         `;
-    const styles = `
-        body.vscode-dark {
-            background-color: #1e1e1e;
-        }
-        body.vscode-light {
-            background-color: white;
-        }
-    `;
 
-    return getLibraryWebViewContent(context, body, script, styles);
+        const webViewOptions: WebViewOptions = {
+            ...getComposerWebViewOptions(),
+            body, scripts, styles, bodyCss
+        };
+        
+        return getLibraryWebViewContent(webViewOptions);
 }
+

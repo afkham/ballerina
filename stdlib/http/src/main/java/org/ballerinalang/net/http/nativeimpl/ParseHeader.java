@@ -17,74 +17,56 @@
  */
 package org.ballerinalang.net.http.nativeimpl;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.types.BTupleType;
+import org.ballerinalang.jvm.types.BTypes;
+import org.ballerinalang.jvm.values.ErrorValue;
+import org.ballerinalang.jvm.values.api.BArray;
+import org.ballerinalang.jvm.values.api.BString;
+import org.ballerinalang.jvm.values.api.BValueCreator;
 import org.ballerinalang.mime.util.HeaderUtil;
-import org.ballerinalang.mime.util.MimeUtil;
-import org.ballerinalang.model.types.BTupleType;
-import org.ballerinalang.model.types.BTypes;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.model.values.BValueArray;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.ReturnType;
-import org.ballerinalang.util.exceptions.BLangNullReferenceException;
-import org.ballerinalang.util.exceptions.BallerinaException;
+import org.ballerinalang.net.http.HttpUtil;
 
 import java.util.Arrays;
 
 import static org.ballerinalang.mime.util.MimeConstants.COMMA;
-import static org.ballerinalang.mime.util.MimeConstants.MIME_ERROR_CODE;
 import static org.ballerinalang.mime.util.MimeConstants.PARSER_ERROR;
+import static org.ballerinalang.mime.util.MimeConstants.READING_HEADER_FAILED;
 import static org.ballerinalang.mime.util.MimeConstants.SEMICOLON;
+import static org.ballerinalang.net.http.HttpErrorType.GENERIC_CLIENT_ERROR;
 
 /**
  * Extern function to parse header value and get value with parameter map.
  *
  * @since 0.96.1
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "parseHeader",
-        args = {@Argument(name = "headerValue", type = TypeKind.STRING)},
-        returnType = {@ReturnType(type = TypeKind.STRING),
-                @ReturnType(type = TypeKind.MAP, elementType = TypeKind.STRING),
-                @ReturnType(type = TypeKind.RECORD, structType = "Error")},
-        isPublic = true
-)
-public class ParseHeader extends BlockingNativeCallableUnit {
+public class ParseHeader {
 
     private static final BTupleType parseHeaderTupleType = new BTupleType(
             Arrays.asList(BTypes.typeString, BTypes.typeMap));
 
-    @Override
-    public void execute(Context context) {
-        String errMsg;
+    public static Object parseHeader(BString headerValue) {
+        if (headerValue == null) {
+            return HttpUtil.createHttpError(GENERIC_CLIENT_ERROR.getReason(), GENERIC_CLIENT_ERROR.getErrorName(),
+                                            READING_HEADER_FAILED, PARSER_ERROR + "header value cannot be null");
+        }
         try {
-            String headerValue = context.getStringArgument(0);
-            if (headerValue.contains(COMMA)) {
-                headerValue = headerValue.substring(0, headerValue.indexOf(COMMA));
+            if (headerValue.getValue().contains(COMMA)) {
+                headerValue = headerValue.substring(0, headerValue.getValue().indexOf(COMMA));
             }
-
             // Set value and param map
-            String value = headerValue.trim();
-            if (headerValue.contains(SEMICOLON)) {
+            String value = headerValue.getValue().trim();
+            if (headerValue.getValue().contains(SEMICOLON)) {
                 value = HeaderUtil.getHeaderValue(value);
             }
-            BValueArray contentTuple = new BValueArray(parseHeaderTupleType);
-            contentTuple.add(0, new BString(value));
-            contentTuple.add(1, HeaderUtil.getParamMap(headerValue));
-
-            context.setReturnValues(contentTuple);
-            return;
-        } catch (BLangNullReferenceException ex) {
-            errMsg = PARSER_ERROR + "header value cannot be null";
-        } catch (BallerinaException ex) {
-            errMsg = PARSER_ERROR + ex.getMessage();
+            BArray contentTuple = BValueCreator.createTupleValue(parseHeaderTupleType);
+            contentTuple.add(0, StringUtils.fromString(value));
+            contentTuple.add(1, HeaderUtil.getParamMap(headerValue.getValue()));
+            return contentTuple;
+        } catch (Exception ex) {
+            String errMsg = ex instanceof ErrorValue ? PARSER_ERROR + ex.toString() : PARSER_ERROR + ex.getMessage();
+            return HttpUtil.createHttpError(GENERIC_CLIENT_ERROR.getReason(), GENERIC_CLIENT_ERROR.getErrorName(),
+                                            READING_HEADER_FAILED, errMsg);
         }
-
-        // set parse error
-        context.setReturnValues(MimeUtil.createError(context, MIME_ERROR_CODE, errMsg));
     }
 }

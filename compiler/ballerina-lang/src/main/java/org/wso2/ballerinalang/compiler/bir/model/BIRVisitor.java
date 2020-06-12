@@ -17,20 +17,6 @@
  */
 package org.wso2.ballerinalang.compiler.bir.model;
 
-import org.wso2.ballerinalang.compiler.bir.model.BIRNode.BIRBasicBlock;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNode.BIRFunction;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNode.BIRPackage;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNode.BIRVariableDcl;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNonTerminator.BinaryOp;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNonTerminator.ConstantLoad;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNonTerminator.Move;
-import org.wso2.ballerinalang.compiler.bir.model.BIRNonTerminator.UnaryOP;
-import org.wso2.ballerinalang.compiler.bir.model.BIROperand.BIRConstant;
-import org.wso2.ballerinalang.compiler.bir.model.BIROperand.BIRVarRef;
-import org.wso2.ballerinalang.compiler.bir.model.BIRTerminator.Call;
-import org.wso2.ballerinalang.compiler.bir.model.BIRTerminator.GOTO;
-import org.wso2.ballerinalang.compiler.bir.model.BIRTerminator.Return;
-
 /**
  * A BIR node visitor.
  *
@@ -38,34 +24,69 @@ import org.wso2.ballerinalang.compiler.bir.model.BIRTerminator.Return;
  */
 public abstract class BIRVisitor {
 
-    public void visit(BIRPackage birPackage) {
+    public void visit(BIRNode.BIRPackage birPackage) {
         throw new AssertionError();
     }
 
-    public void visit(BIRVariableDcl birVariableDcl) {
+    public void visit(BIRNode.BIRImportModule birImportModule) {
         throw new AssertionError();
     }
 
-    public void visit(BIRFunction birFunction) {
+    public void visit(BIRNode.BIRTypeDefinition birTypeDefinition) {
         throw new AssertionError();
     }
 
-    public void visit(BIRBasicBlock birBasicBlock) {
+    public void visit(BIRNode.BIRVariableDcl birVariableDcl) {
         throw new AssertionError();
     }
 
+    public void visit(BIRNode.BIRFunctionParameter birFunctionParameter) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRFunction birFunction) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRBasicBlock birBasicBlock) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRParameter birParameter) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRAnnotation birAnnotation) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRConstant birConstant) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRAnnotationAttachment birAnnotAttach) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNode.BIRErrorEntry birErrorEntry) {
+        throw new AssertionError();
+    }
 
     // Terminating instructions
 
-    public void visit(GOTO birGoto) {
+    public void visit(BIRTerminator.GOTO birGoto) {
         throw new AssertionError();
     }
 
-    public void visit(Call birCall) {
+    public void visit(BIRTerminator.Call birCall) {
         throw new AssertionError();
     }
 
-    public void visit(Return birReturn) {
+    public void visit(BIRTerminator.AsyncCall birCall) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.Return birReturn) {
         throw new AssertionError();
     }
 
@@ -73,31 +94,139 @@ public abstract class BIRVisitor {
         throw new AssertionError();
     }
 
+    public void visit(BIRTerminator.FPCall fpCall) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.Lock lock) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.FieldLock lock) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.Unlock unlock) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.Panic birPanic) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.Wait birWait) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.WaitAll waitAll) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.Flush birFlush) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.WorkerReceive workerReceive) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRTerminator.WorkerSend workerSend) {
+        throw new AssertionError();
+    }
+
 
     // Non-terminating instructions
 
-    public void visit(Move birMove) {
+    public void visit(BIRNonTerminator.Move birMove) {
         throw new AssertionError();
     }
 
-    public void visit(BinaryOp birBinaryOp) {
+    public void visit(BIRNonTerminator.BinaryOp birBinaryOp) {
         throw new AssertionError();
     }
 
-    public void visit(UnaryOP birUnaryOp) {
+    public void visit(BIRNonTerminator.UnaryOP birUnaryOp) {
         throw new AssertionError();
     }
 
-    public void visit(ConstantLoad birConstantLoad) {
+    public void visit(BIRNonTerminator.ConstantLoad birConstantLoad) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewStructure birNewStructure) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewArray birNewArray) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.FieldAccess birFieldAccess) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewError birNewError) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.FPLoad fpLoad) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.TypeCast birTypeCast) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewInstance newInstance) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.IsLike birIsLike) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.TypeTest birTypeTest) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewTable newTable) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewTypeDesc newTypeDesc) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewStringXMLQName newStringXMLQName) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewXMLProcIns newXMLProcIns) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewXMLComment newXMLComment) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.XMLAccess xmlAccess) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewXMLText newXMLText) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewXMLQName newXMLQName) {
+        throw new AssertionError();
+    }
+
+    public void visit(BIRNonTerminator.NewXMLElement newXMLElement) {
         throw new AssertionError();
     }
 
     // Operands
-    public void visit(BIRVarRef birVarRef) {
-        throw new AssertionError();
-    }
-
-    public void visit(BIRConstant birConstant) {
+    public void visit(BIROperand birVarRef) {
         throw new AssertionError();
     }
 }

@@ -21,17 +21,19 @@ package org.wso2.ballerinalang.compiler.tree.expressions;
 import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.NodeKind;
 import org.ballerinalang.model.tree.expressions.ArrowFunctionNode;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
+import org.wso2.ballerinalang.compiler.tree.BLangExprFunctionBody;
 import org.wso2.ballerinalang.compiler.tree.BLangInvokableNode;
 import org.wso2.ballerinalang.compiler.tree.BLangNodeVisitor;
 import org.wso2.ballerinalang.compiler.tree.BLangSimpleVariable;
+import org.wso2.ballerinalang.compiler.util.ClosureVarSymbol;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
 
 /**
  * Implementation of {@link ArrowFunctionNode}.
@@ -41,11 +43,13 @@ import java.util.Set;
 public class BLangArrowFunction extends BLangExpression implements ArrowFunctionNode {
 
     public List<BLangSimpleVariable> params = new ArrayList<>();
-    public BLangExpression expression;
     public BType funcType;
     public IdentifierNode functionName;
     public BLangInvokableNode function;
-    public Set<BVarSymbol> closureVarSymbols = new HashSet<>();
+    public BLangExprFunctionBody body;
+
+    // Used to track uninitialized closure variables in DataFlowAnalyzer.
+    public Set<ClosureVarSymbol> closureVarSymbols = new LinkedHashSet<>();
 
     @Override
     public List<BLangSimpleVariable> getParameters() {
@@ -53,8 +57,8 @@ public class BLangArrowFunction extends BLangExpression implements ArrowFunction
     }
 
     @Override
-    public BLangExpression getExpression() {
-        return expression;
+    public BLangExprFunctionBody getBody() {
+        return this.body;
     }
 
     @Override
@@ -70,6 +74,6 @@ public class BLangArrowFunction extends BLangExpression implements ArrowFunction
     @Override
     public String toString() {
         return String.format("ArrowExprRef:(%s) => %s",
-                Arrays.toString(params.stream().map(x -> x.name).toArray()), expression);
+                             Arrays.toString(params.stream().map(x -> x.name).toArray()), body.expr);
     }
 }

@@ -16,12 +16,14 @@
  * under the License.
  *
  */
-import { workspace, commands, window, Uri, ViewColumn, ExtensionContext, TextEditor, WebviewPanel, TextDocumentChangeEvent, Location } from 'vscode';
+import { workspace, commands, window, Uri, ViewColumn, ExtensionContext, TextEditor, WebviewPanel, TextDocumentChangeEvent } from 'vscode';
 import * as _ from 'lodash';
 import { render } from './renderer';
 import { ExtendedLangClient } from '../core/extended-language-client';
 import { BallerinaExtension } from '../core';
-import { WebViewRPCHandler } from '../utils';
+import { WebViewRPCHandler, getCommonWebViewOptions } from '../utils';
+import { join } from "path";
+import { TM_EVENT_OPEN_DIAGRAM, CMP_DIAGRAM_VIEW } from '../telemetry';
 
 const DEBOUNCE_WAIT = 500;
 
@@ -67,36 +69,24 @@ function showDiagramEditor(context: ExtensionContext, langClient: ExtendedLangCl
 		'ballerinaDiagram',
 		"Ballerina Diagram",
 		{ viewColumn: ViewColumn.Two, preserveFocus: true } ,
-		{
-			enableScripts: true,
-			retainContextWhenHidden: true,
-		}
+		getCommonWebViewOptions()
 	);
+
+	diagramViewPanel.iconPath = {
+		light: Uri.file(join(context.extensionPath, 'resources/images/icons/design-view.svg')),
+		dark: Uri.file(join(context.extensionPath, 'resources/images/icons/design-view-inverse.svg'))
+	};
+
 	const editor = window.activeTextEditor;
 	if(!editor) {
 		return;
 	}
 	activeEditor = editor;
-	rpcHandler = WebViewRPCHandler.create(diagramViewPanel.webview, langClient);
-	const html = render(context, langClient, editor.document.uri);
+	rpcHandler = WebViewRPCHandler.create(diagramViewPanel, langClient);
+	const html = render(editor.document.uri);
 	if (diagramViewPanel && html) {
 		diagramViewPanel.webview.html = html;
 	}
-	// Handle messages from the webview
-	diagramViewPanel.webview.onDidReceiveMessage(message => {
-		switch (message.command) {
-			case 'astModified':
-				if (activeEditor && activeEditor.document.fileName.endsWith('.bal')) {
-					preventDiagramUpdate = true;
-					const ast = JSON.parse(message.ast);
-					langClient.triggerASTDidChange(ast, activeEditor.document.uri)
-						.then(() => {
-							preventDiagramUpdate = false;
-						});	
-				}
-				return;
-		}
-	}, undefined, context.subscriptions);
 
 	diagramViewPanel.onDidDispose(() => {
 		diagramViewPanel = undefined;
@@ -106,9 +96,12 @@ function showDiagramEditor(context: ExtensionContext, langClient: ExtendedLangCl
 }
 
 export function activate(ballerinaExtInstance: BallerinaExtension) {
-    let context = <ExtensionContext> ballerinaExtInstance.context;
-    let langClient = <ExtendedLangClient> ballerinaExtInstance.langClient;
+	const reporter = ballerinaExtInstance.telemetryReporter;
+    const context = <ExtensionContext> ballerinaExtInstance.context;
+	const langClient = <ExtendedLangClient> ballerinaExtInstance.langClient;
+
 	const diagramRenderDisposable = commands.registerCommand('ballerina.showDiagram', () => {
+		reporter.sendTelemetryEvent(TM_EVENT_OPEN_DIAGRAM, { component: CMP_DIAGRAM_VIEW });
 		return ballerinaExtInstance.onReady()
 		.then(() => {
 			const { experimental } = langClient.initializeResult!.capabilities;
@@ -126,19 +119,8 @@ export function activate(ballerinaExtInstance: BallerinaExtension) {
 			} else {
 				ballerinaExtInstance.showPluginActivationError();
 			}
+			reporter.sendTelemetryException(e, { component: CMP_DIAGRAM_VIEW });
 		});
 	});
-
-    ballerinaExtInstance.onReady().then(() => {
-        langClient.onNotification('window/showTextDocument', (location: Location) => {
-            if (location.uri !== undefined) {
-                window.showTextDocument(Uri.parse(location.uri.toString()), {selection: location.range});
-            }
-        });
-    	})
-        .catch((e) => {
-            window.showErrorMessage('Could not start openFile capability listener', e.message);
-        });
-
 	context.subscriptions.push(diagramRenderDisposable);
 }

@@ -19,36 +19,31 @@ package org.ballerinalang.net.grpc.listener;
 
 import com.google.protobuf.Descriptors;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
-import org.ballerinalang.bre.bvm.CallableUnitCallback;
-import org.ballerinalang.connector.api.BLangConnectorSPIUtil;
-import org.ballerinalang.connector.api.Executor;
-import org.ballerinalang.connector.api.ParamDetail;
-import org.ballerinalang.connector.api.Resource;
-import org.ballerinalang.model.types.BErrorType;
-import org.ballerinalang.model.types.BType;
-import org.ballerinalang.model.values.BError;
-import org.ballerinalang.model.values.BInteger;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BValue;
+import io.netty.handler.codec.http.HttpHeaders;
+import org.ballerinalang.jvm.BallerinaValues;
+import org.ballerinalang.jvm.observability.ObservabilityConstants;
+import org.ballerinalang.jvm.observability.ObserveUtils;
+import org.ballerinalang.jvm.observability.ObserverContext;
+import org.ballerinalang.jvm.types.BType;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.connector.CallableUnitCallback;
 import org.ballerinalang.net.grpc.CallStreamObserver;
-import org.ballerinalang.net.grpc.GrpcCallableUnitCallBack;
 import org.ballerinalang.net.grpc.GrpcConstants;
 import org.ballerinalang.net.grpc.Message;
 import org.ballerinalang.net.grpc.MessageUtils;
 import org.ballerinalang.net.grpc.ServerCall;
+import org.ballerinalang.net.grpc.ServiceResource;
 import org.ballerinalang.net.grpc.Status;
 import org.ballerinalang.net.grpc.StreamObserver;
-import org.ballerinalang.net.grpc.exception.ServerRuntimeException;
-import org.ballerinalang.util.codegen.ProgramFile;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.ballerinalang.net.grpc.callback.UnaryCallableUnitCallBack;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.ballerinalang.net.grpc.GrpcConstants.CALLER_ID;
 import static org.ballerinalang.net.grpc.GrpcConstants.MESSAGE_HEADERS;
-import static org.ballerinalang.net.grpc.MessageUtils.getHeaderStruct;
-import static org.ballerinalang.net.grpc.MessageUtils.getProgramFile;
+import static org.ballerinalang.net.grpc.MessageUtils.getHeaderObject;
 
 /**
  * Interface to initiate processing of incoming remote calls.
@@ -62,8 +57,7 @@ public abstract class ServerCallHandler {
 
     static final String TOO_MANY_REQUESTS = "Too many requests";
     static final String MISSING_REQUEST = "Half-closed without a request";
-    private Descriptors.MethodDescriptor methodDescriptor;
-    private static final Logger LOG = LoggerFactory.getLogger(ServerCallHandler.class);
+    protected Descriptors.MethodDescriptor methodDescriptor;
 
     ServerCallHandler(Descriptors.MethodDescriptor methodDescriptor) {
         this.methodDescriptor = methodDescriptor;
@@ -146,12 +140,11 @@ public abstract class ServerCallHandler {
      * @param responseObserver client responder instance.
      * @return instance of endpoint type.
      */
-    private BValue getConnectionParameter(Resource resource, StreamObserver responseObserver) {
-        ProgramFile programFile = getProgramFile(resource);
+    ObjectValue getConnectionParameter(StreamObserver responseObserver) {
         // generate client responder struct on request message with response observer and response msg type.
-        BMap<String, BValue> clientEndpoint = BLangConnectorSPIUtil.createBStruct(programFile,
-                GrpcConstants.PROTOCOL_STRUCT_PACKAGE_GRPC, GrpcConstants.CALLER);
-        clientEndpoint.put(CALLER_ID, new BInteger(responseObserver.hashCode()));
+        ObjectValue clientEndpoint = BallerinaValues.createObjectValue(GrpcConstants.PROTOCOL_GRPC_PKG_ID,
+                GrpcConstants.CALLER);
+        clientEndpoint.set(CALLER_ID, responseObserver.hashCode());
         clientEndpoint.addNativeData(GrpcConstants.RESPONSE_OBSERVER, responseObserver);
         clientEndpoint.addNativeData(GrpcConstants.RESPONSE_MESSAGE_DEFINITION, methodDescriptor.getOutputType());
         return clientEndpoint;
@@ -166,51 +159,40 @@ public abstract class ServerCallHandler {
         return methodDescriptor != null && MessageUtils.isEmptyResponse(methodDescriptor.getOutputType());
     }
 
-    void onErrorInvoke(Resource resource, StreamObserver responseObserver, Message error) {
-        if (resource == null) {
-            String message = "Error in listener service definition. onError resource does not exists";
-            LOG.error(message);
-            throw new ServerRuntimeException(message);
+    void onMessageInvoke(ServiceResource resource, Message request, StreamObserver responseObserver,
+                         ObserverContext context) {
+        CallableUnitCallback callback = new UnaryCallableUnitCallBack(responseObserver, isEmptyResponse(), context);
+        Object requestParam = request != null ? request.getbMessage() : null;
+        HttpHeaders headers = request != null ? request.getHeaders() : null;
+        Object[] requestParams = computeResourceParams(resource, requestParam, headers, responseObserver);
+        Map<String, Object> properties = new HashMap<>();
+        if (ObserveUtils.isObservabilityEnabled()) {
+            properties.put(ObservabilityConstants.KEY_OBSERVER_CONTEXT, context);
         }
-        List<ParamDetail> paramDetails = resource.getParamDetails();
-        BValue[] signatureParams = new BValue[paramDetails.size()];
-        signatureParams[0] = getConnectionParameter(resource, responseObserver);
-        BType errorType = paramDetails.get(1).getVarType();
-        BError errorStruct = MessageUtils.getConnectorError((BErrorType) errorType, error.getError());
-        signatureParams[1] = errorStruct;
-        BMap<String, BValue> headerStruct = getHeaderStruct(resource);
-        if (headerStruct != null) {
-            headerStruct.addNativeData(MESSAGE_HEADERS, error.getHeaders());
-        }
-
-        if (headerStruct != null && signatureParams.length == 3) {
-            signatureParams[2] = headerStruct;
-        }
-        CallableUnitCallback callback = new GrpcCallableUnitCallBack(null);
-        Executor.submit(resource, callback, null, null, signatureParams);
+        resource.getRuntime().invokeMethodAsync(resource.getService(), resource.getFunctionName(), callback,
+                properties, requestParams);
     }
 
-    void onMessageInvoke(Resource resource, Message request, StreamObserver responseObserver) {
-        CallableUnitCallback callback = new GrpcCallableUnitCallBack(responseObserver, isEmptyResponse());
-        Executor.submit(resource, callback, null, null, computeMessageParams(resource, request, responseObserver));
-    }
-
-    BValue[] computeMessageParams(Resource resource, Message request, StreamObserver responseObserver) {
-        List<ParamDetail> paramDetails = resource.getParamDetails();
-        BValue[] signatureParams = new BValue[paramDetails.size()];
-        signatureParams[0] = getConnectionParameter(resource, responseObserver);
-        BMap<String, BValue> headerStruct = getHeaderStruct(resource);
-        if (headerStruct != null) {
-            headerStruct.addNativeData(MESSAGE_HEADERS, request.getHeaders());
+    Object[] computeResourceParams(ServiceResource resource, Object requestParam, HttpHeaders headers,
+                                   StreamObserver responseObserver) {
+        List<BType> signatureParams = resource.getParamTypes();
+        Object[] paramValues = new Object[signatureParams.size() * 2];
+        paramValues[0] = getConnectionParameter(responseObserver);
+        paramValues[1] = true;
+        ObjectValue headerStruct = null;
+        if (resource.isHeaderRequired()) {
+            headerStruct = getHeaderObject();
+            headerStruct.addNativeData(MESSAGE_HEADERS, headers);
         }
-        BValue requestParam = request != null ? request.getbMessage() : null;
         if (requestParam != null) {
-            signatureParams[1] = requestParam;
+            paramValues[2] = requestParam;
+            paramValues[3] = true;
         }
-        if (headerStruct != null) {
-            signatureParams[signatureParams.length - 1] = headerStruct;
+        if (headerStruct != null && signatureParams.size() == 3) {
+            paramValues[4] = headerStruct;
+            paramValues[5] = true;
         }
-        return signatureParams;
+        return paramValues;
     }
 
     /**

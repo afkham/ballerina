@@ -42,27 +42,106 @@ public class TypeTags {
     // All the above types are branded types
     public static final int ANY = INVOKABLE + 1;
     public static final int ENDPOINT = ANY + 1;
-    public static final int SERVICE = ENDPOINT + 1;
-    public static final int ARRAY = SERVICE + 1;
+    public static final int ARRAY = ENDPOINT + 1;
     public static final int UNION = ARRAY + 1;
-    public static final int PACKAGE = UNION + 1;
+    public static final int INTERSECTION = UNION + 1;
+    public static final int PACKAGE = INTERSECTION + 1;
     public static final int NONE = PACKAGE + 1;
     public static final int VOID = NONE + 1;
     public static final int XMLNS = VOID + 1;
     public static final int ANNOTATION = XMLNS + 1;
-    public static final int XML_ATTRIBUTES = ANNOTATION + 1;
-    public static final int SEMANTIC_ERROR = XML_ATTRIBUTES + 1;
+    public static final int SEMANTIC_ERROR = ANNOTATION + 1;
     public static final int ERROR = SEMANTIC_ERROR + 1;
     public static final int ITERATOR = ERROR + 1;
     public static final int TUPLE = ITERATOR + 1;
     public static final int FUTURE = TUPLE + 1;
-    public static final int INTERMEDIATE_COLLECTION = FUTURE + 1;
-    public static final int FINITE = INTERMEDIATE_COLLECTION + 1;
+    public static final int FINITE = FUTURE + 1;
     public static final int OBJECT = FINITE + 1;
+    public static final int SERVICE = OBJECT;
     public static final int BYTE_ARRAY = OBJECT + 1;
     public static final int FUNCTION_POINTER = BYTE_ARRAY + 1;
-    public static final int CHANNEL = BYTE_ARRAY + 1;
+    public static final int HANDLE = FUNCTION_POINTER + 1;
+    public static final int READONLY = HANDLE + 1;
+
+    // Subtypes
+    public static final int SIGNED32_INT = READONLY + 1;
+    public static final int SIGNED16_INT = SIGNED32_INT + 1;
+    public static final int SIGNED8_INT = SIGNED16_INT + 1;
+    public static final int UNSIGNED32_INT = SIGNED8_INT + 1;
+    public static final int UNSIGNED16_INT = UNSIGNED32_INT + 1;
+    public static final int UNSIGNED8_INT = UNSIGNED16_INT + 1;
+    public static final int CHAR_STRING = UNSIGNED8_INT + 1;
+    public static final int XML_ELEMENT = CHAR_STRING + 1;
+    public static final int XML_PI = XML_ELEMENT + 1;
+    public static final int XML_COMMENT = XML_PI + 1;
+    public static final int XML_TEXT = XML_COMMENT + 1;
+    public static final int NEVER = XML_TEXT + 1;
+
+    public static final int NULL_SET = XML_TEXT + 1;
+    public static final int PARAMETERIZED_TYPE = NULL_SET + 1;
 
     private TypeTags() {
+
+    }
+
+    public static boolean isIntegerTypeTag(int tag) {
+
+        // TODO : Fix byte type. Ideally, byte belongs to here. But we have modeled it differently.
+        switch (tag) {
+            case INT:
+            case SIGNED32_INT:
+            case SIGNED16_INT:
+            case SIGNED8_INT:
+            case UNSIGNED32_INT:
+            case UNSIGNED16_INT:
+            case UNSIGNED8_INT:
+                return true;
+        }
+        return false;
+    }
+
+    public static boolean isSignedIntegerTypeTag(int tag) {
+
+        switch (tag) {
+            case INT:
+            case SIGNED32_INT:
+            case SIGNED16_INT:
+            case SIGNED8_INT:
+                return true;
+        }
+        return false;
+    }
+
+    public static boolean isXMLTypeTag(int tag) {
+        switch (tag) {
+            case XML:
+            case XML_ELEMENT:
+            case XML_PI:
+            case XML_COMMENT:
+            case XML_TEXT:
+                return true;
+        }
+        return false;
+    }
+
+    public static boolean isXMLNonSequenceType(int tag) {
+        switch (tag) {
+            case XML_ELEMENT:
+            case XML_PI:
+            case XML_COMMENT:
+            case XML_TEXT:
+                return true;
+        }
+        return false;
+    }
+
+    public static boolean isStringTypeTag(int tag) {
+
+        switch (tag) {
+            case STRING:
+            case CHAR_STRING:
+                return true;
+        }
+        return false;
     }
 }

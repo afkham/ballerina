@@ -45,21 +45,23 @@ import org.wso2.ballerinalang.compiler.tree.BLangTypeDefinition;
 import org.wso2.ballerinalang.compiler.tree.BLangXMLNS;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangConstant;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
-import org.wso2.ballerinalang.compiler.tree.statements.BLangForever;
+import org.wso2.ballerinalang.compiler.tree.expressions.BLangLetExpression;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.Name;
 import org.wso2.ballerinalang.compiler.util.Names;
-import org.wso2.ballerinalang.compiler.util.diagnotic.BLangDiagnosticLog;
+import org.wso2.ballerinalang.compiler.util.diagnotic.BLangDiagnosticLogHelper;
 import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -79,15 +81,14 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
     private SymbolResolver symResolver;
     private Names names;
     private final Types types;
-    private BLangDiagnosticLog dlog;
+    private BLangDiagnosticLogHelper dlog;
 
     private DiagnosticPos defaultPos;
     private CompilerContext context;
     private List<CompilerPlugin> pluginList;
-    private Map<DefinitionID, List<CompilerPlugin>> processorMap;
+    private Map<DefinitionID, Set<CompilerPlugin>> processorMap;
     private Map<CompilerPlugin, List<DefinitionID>> resourceTypeProcessorMap;
     private Map<CompilerPlugin, BType> serviceListenerMap;
-    private boolean pluginLoaded = false;
 
 
     public static CompilerPluginRunner getInstance(CompilerContext context) {
@@ -107,13 +108,16 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
         this.symResolver = SymbolResolver.getInstance(context);
         this.names = Names.getInstance(context);
         this.types = Types.getInstance(context);
-        this.dlog = BLangDiagnosticLog.getInstance(context);
+        this.dlog = BLangDiagnosticLogHelper.getInstance(context);
         this.context = context;
 
         this.pluginList = new ArrayList<>();
         this.processorMap = new HashMap<>();
         this.resourceTypeProcessorMap = new HashMap<>();
         this.serviceListenerMap = new HashMap<>();
+
+        ServiceLoader<CompilerPlugin> pluginLoader = ServiceLoader.load(CompilerPlugin.class);
+        pluginLoader.forEach(plugin -> pluginList.add(plugin));
     }
 
     public BLangPackage runPlugins(BLangPackage pkgNode) {
@@ -127,7 +131,7 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
         if (pkgNode.completedPhases.contains(CompilerPhase.COMPILER_PLUGIN)) {
             return;
         }
-
+        pluginList.forEach(plugin -> plugin.pluginExecutionStarted(pkgNode.packageID));
         pluginList.forEach(plugin -> plugin.process(pkgNode));
 
         // Then visit each top-level element sorted using the compilation unit
@@ -137,6 +141,7 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
             this.defaultPos = testablePackage.pos;
             visit(testablePackage);
         });
+        pluginList.forEach(plugin -> plugin.pluginExecutionCompleted(pkgNode.packageID));
         pkgNode.completedPhases.add(CompilerPhase.COMPILER_PLUGIN);
     }
 
@@ -193,29 +198,20 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
     public void visit(BLangXMLNS xmlnsNode) {
     }
 
-    public void visit(BLangForever foreverStatement) {
+    public void visit(BLangConstant constant) {
         /* ignore */
     }
 
-    public void visit(BLangConstant constant) {
-        /* ignore */
+    public void visit(BLangLetExpression letExpression) {
     }
 
     // private methods
 
     private void loadPlugins() {
-        if (pluginLoaded) {
-            return;
-        }
-        ServiceLoader<CompilerPlugin> pluginLoader = ServiceLoader.load(CompilerPlugin.class);
-        pluginLoader.forEach(this::initPlugin);
-        pluginLoaded = true;
+        pluginList.forEach(this::initPlugin);
     }
 
     private void initPlugin(CompilerPlugin plugin) {
-        // Cache the plugin implementation class
-        pluginList.add(plugin);
-
         handleAnnotationProcesses(plugin);
         handleServiceTypeProcesses(plugin);
         plugin.setCompilerContext(context);
@@ -240,9 +236,8 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
             List<BAnnotationSymbol> annotationSymbols = getAnnotationSymbols(annPackage);
             annotationSymbols.forEach(annSymbol -> {
                 DefinitionID definitionID = new DefinitionID(annSymbol.pkgID.name.value, annSymbol.name.value);
-                List<CompilerPlugin> processorList = processorMap.computeIfAbsent(
-                        definitionID, k -> new ArrayList<>());
-                processorList.add(plugin);
+                Set<CompilerPlugin> processors = processorMap.computeIfAbsent(definitionID, k -> new HashSet<>());
+                processors.add(plugin);
             });
         }
     }
@@ -276,12 +271,11 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
                 continue;
             }
 
-            List<CompilerPlugin> procList = processorMap.get(aID);
-            procList.forEach(proc -> {
+            for (CompilerPlugin proc : processorMap.get(aID)) {
                 List<AnnotationAttachmentNode> attachmentNodes =
                         attachmentMap.computeIfAbsent(proc, k -> new ArrayList<>());
                 attachmentNodes.add(attachment);
-            });
+            }
         }
 
 
@@ -312,8 +306,8 @@ public class CompilerPluginRunner extends BLangNodeVisitor {
             BPackageSymbol symbol = this.packageCache.getSymbol(packageQName);
             if (symbol != null) {
                 SymbolEnv pkgEnv = symTable.pkgEnvMap.get(symbol);
-                final BSymbol listenerSymbol = symResolver.lookupSymbol(pkgEnv, listenerName, SymTag.OBJECT);
-                if (listenerSymbol != symTable.notFoundSymbol) {
+                BSymbol listenerSymbol = symResolver.lookupSymbolInMainSpace(pkgEnv, listenerName);
+                if ((listenerSymbol.tag & SymTag.OBJECT) == SymTag.OBJECT) {
                     listenerType = listenerSymbol.type;
                 }
             }

@@ -21,9 +21,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.ballerinalang.langserver.completion.util.FileUtils;
+import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManagerImpl;
+import org.ballerinalang.langserver.util.FileUtils;
 import org.ballerinalang.langserver.util.TestUtil;
 import org.eclipse.lsp4j.jsonrpc.Endpoint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -45,9 +48,12 @@ public class WorkspaceTest {
 
     private JsonParser parser = new JsonParser();
 
+    private static final Logger log = LoggerFactory.getLogger(WorkspaceTest.class);
+
     @BeforeClass
     public void init() throws Exception {
         this.serviceEndpoint = TestUtil.initializeLanguageSever();
+        WorkspaceDocumentManagerImpl.getInstance().clearAllFilePaths();
         this.openDocuments();
     }
     
@@ -70,6 +76,7 @@ public class WorkspaceTest {
 
     @DataProvider(name = "workspace-data-provider")
     public Object[][] workspaceSymbolDataProvider() {
+        log.info("Test workspace/symbol");
         return new Object[][] {
                 {"workspaceSymbolWithQuery.json", "test"},
                 {"workspaceSymbol.json", ""},
@@ -77,17 +84,17 @@ public class WorkspaceTest {
     }
     
     private void openDocuments() throws IOException {
-        Path projectPath = FileUtils.RES_DIR.resolve("workspace").resolve("project");
-        TestUtil.openDocument(this.serviceEndpoint, projectPath.resolve("pkg1").resolve("pkg1Source.bal"));
-        TestUtil.openDocument(this.serviceEndpoint, projectPath.resolve("pkg2").resolve("pkg2Source.bal"));
-        TestUtil.openDocument(this.serviceEndpoint, projectPath.resolve("pkg3").resolve("pkg3Source.bal"));
+        Path sourcerootPath = FileUtils.RES_DIR.resolve("workspace").resolve("project").resolve("src");
+        TestUtil.openDocument(this.serviceEndpoint, sourcerootPath.resolve("pkg1").resolve("pkg1Source.bal"));
+        TestUtil.openDocument(this.serviceEndpoint, sourcerootPath.resolve("pkg2").resolve("pkg2Source.bal"));
+        TestUtil.openDocument(this.serviceEndpoint, sourcerootPath.resolve("pkg3").resolve("pkg3Source.bal"));
     }
     
     private void closeDocuments() throws IOException {
-        Path projectPath = FileUtils.RES_DIR.resolve("workspace").resolve("project");
-        TestUtil.closeDocument(this.serviceEndpoint, projectPath.resolve("pkg1").resolve("pkg1Source.bal"));
-        TestUtil.closeDocument(this.serviceEndpoint, projectPath.resolve("pkg2").resolve("pkg2Source.bal"));
-        TestUtil.closeDocument(this.serviceEndpoint, projectPath.resolve("pkg3").resolve("pkg3Source.bal"));
+        Path sourceRootPath = FileUtils.RES_DIR.resolve("workspace").resolve("project").resolve("src");
+        TestUtil.closeDocument(this.serviceEndpoint, sourceRootPath.resolve("pkg1").resolve("pkg1Source.bal"));
+        TestUtil.closeDocument(this.serviceEndpoint, sourceRootPath.resolve("pkg2").resolve("pkg2Source.bal"));
+        TestUtil.closeDocument(this.serviceEndpoint, sourceRootPath.resolve("pkg3").resolve("pkg3Source.bal"));
     }
     
     @AfterClass

@@ -17,8 +17,9 @@
 */
 package org.ballerinalang.net.http;
 
-import org.ballerinalang.connector.api.Struct;
-import org.ballerinalang.connector.api.Value;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.values.MapValue;
+import org.ballerinalang.jvm.values.api.BString;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,12 +31,12 @@ import java.util.List;
  */
 public class CorsHeaders {
 
-    private static final String ALLOW_CREDENTIALS_FIELD = "allowCredentials";
-    private static final String ALLOW_HEADERS_FIELD = "allowHeaders";
-    private static final String ALLOW_METHODS_FIELD = "allowMethods";
-    private static final String ALLOWS_ORIGINS_FIELD = "allowOrigins";
-    private static final String EXPOSE_HEADERS_FIELD = "exposeHeaders";
-    private static final String MAX_AGE_FIELD = "maxAge";
+    private static final BString ALLOW_CREDENTIALS_FIELD = StringUtils.fromString("allowCredentials");
+    private static final BString ALLOW_HEADERS_FIELD = StringUtils.fromString("allowHeaders");
+    private static final BString ALLOW_METHODS_FIELD = StringUtils.fromString("allowMethods");
+    private static final BString ALLOWS_ORIGINS_FIELD = StringUtils.fromString("allowOrigins");
+    private static final BString EXPOSE_HEADERS_FIELD = StringUtils.fromString("exposeHeaders");
+    private static final BString MAX_AGE_FIELD = StringUtils.fromString("maxAge");
 
     private boolean available;
     private List<String> allowOrigins;
@@ -45,7 +46,7 @@ public class CorsHeaders {
     private long maxAge;
     private List<String> exposeHeaders;
 
-    public CorsHeaders() {
+    private CorsHeaders() {
         available = false;
         allowCredentials = -1;
         maxAge = -1;
@@ -77,11 +78,11 @@ public class CorsHeaders {
         this.allowCredentials = allowCredentials;
     }
 
-    public List<String> getAllowMethods() {
+    List<String> getAllowMethods() {
         return allowMethods;
     }
 
-    public void setAllowMethods(List<String> allowMethods) {
+    void setAllowMethods(List<String> allowMethods) {
         if (allowMethods != null) {
             available = true;
         }
@@ -121,30 +122,30 @@ public class CorsHeaders {
         this.exposeHeaders = exposeHeaders;
     }
 
-    public static CorsHeaders buildCorsHeaders(Struct corsConfig) {
+    static CorsHeaders buildCorsHeaders(MapValue corsConfig) {
         CorsHeaders corsHeaders = new CorsHeaders();
 
         if (corsConfig == null) {
             return corsHeaders;
         }
 
-        corsHeaders.setAllowHeaders(getAsStringList(corsConfig.getArrayField(ALLOW_HEADERS_FIELD)));
-        corsHeaders.setAllowMethods(getAsStringList(corsConfig.getArrayField(ALLOW_METHODS_FIELD)));
-        corsHeaders.setAllowOrigins(getAsStringList(corsConfig.getArrayField(ALLOWS_ORIGINS_FIELD)));
-        corsHeaders.setExposeHeaders(getAsStringList(corsConfig.getArrayField(EXPOSE_HEADERS_FIELD)));
-        corsHeaders.setAllowCredentials(corsConfig.getBooleanField(ALLOW_CREDENTIALS_FIELD) ? 1 : 0);
-        corsHeaders.setMaxAge(corsConfig.getIntField(MAX_AGE_FIELD));
+        corsHeaders.setAllowHeaders(getAsStringList(corsConfig.getArrayValue(ALLOW_HEADERS_FIELD).getStringArray()));
+        corsHeaders.setAllowMethods(getAsStringList(corsConfig.getArrayValue(ALLOW_METHODS_FIELD).getStringArray()));
+        corsHeaders.setAllowOrigins(getAsStringList(corsConfig.getArrayValue(ALLOWS_ORIGINS_FIELD).getStringArray()));
+        corsHeaders.setExposeHeaders(getAsStringList(corsConfig.getArrayValue(EXPOSE_HEADERS_FIELD).getStringArray()));
+        corsHeaders.setAllowCredentials(corsConfig.getBooleanValue(ALLOW_CREDENTIALS_FIELD) ? 1 : 0);
+        corsHeaders.setMaxAge(corsConfig.getIntValue(MAX_AGE_FIELD));
 
         return corsHeaders;
     }
 
-    private static List<String> getAsStringList(Value[] values) {
+    private static List<String> getAsStringList(Object[] values) {
         if (values == null) {
             return null;
         }
         List<String> valuesList = new ArrayList<>();
-        for (Value val : values) {
-            valuesList.add(val.getStringValue().trim());
+        for (Object val : values) {
+            valuesList.add(val.toString().trim());
         }
         return !valuesList.isEmpty() ? valuesList : null;
     }

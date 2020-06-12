@@ -18,60 +18,38 @@
 
 package org.ballerinalang.net.http.mock.nonlistening;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.connector.api.BLangConnectorSPIUtil;
-import org.ballerinalang.connector.api.ParamDetail;
-import org.ballerinalang.connector.api.Service;
-import org.ballerinalang.connector.api.Struct;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
+import org.ballerinalang.jvm.scheduling.Scheduler;
+import org.ballerinalang.jvm.types.AttachedFunction;
+import org.ballerinalang.jvm.types.BType;
+import org.ballerinalang.jvm.values.ObjectValue;
 import org.ballerinalang.net.http.HTTPServicesRegistry;
 import org.ballerinalang.net.http.HttpConstants;
-import org.ballerinalang.net.http.WebSocketConstants;
-import org.ballerinalang.net.http.WebSocketService;
-import org.ballerinalang.net.http.WebSocketServicesRegistry;
-
-import static org.ballerinalang.net.http.HttpConstants.MOCK_LISTENER_ENDPOINT;
+import org.ballerinalang.net.http.websocket.WebSocketConstants;
+import org.ballerinalang.net.http.websocket.server.WebSocketServerService;
+import org.ballerinalang.net.http.websocket.server.WebSocketServicesRegistry;
 
 /**
- * Get the ID of the connection.
+ * Register a service to the mock listener.
  *
  * @since 0.966
  */
-
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "register",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = MOCK_LISTENER_ENDPOINT,
-                structPackage = "ballerina.http"),
-        args = {@Argument(name = "serviceType", type = TypeKind.TYPEDESC),
-                @Argument(name = "annotationData", type = TypeKind.MAP)},
-        isPublic = true
-)
 public class NonListeningRegister extends org.ballerinalang.net.http.serviceendpoint.Register {
-
-    @Override
-    public void execute(Context context) {
-        Service service = BLangConnectorSPIUtil.getServiceRegistered(context);
-        Struct serviceEndpoint = BLangConnectorSPIUtil.getConnectorEndpointStruct(context);
-
+    public static void register(ObjectValue serviceEndpoint, ObjectValue service) {
         HTTPServicesRegistry httpServicesRegistry = getHttpServicesRegistry(serviceEndpoint);
         WebSocketServicesRegistry webSocketServicesRegistry = getWebSocketServicesRegistry(serviceEndpoint);
 
-        ParamDetail param;
-        if (service.getResources().length > 0 && (param = service.getResources()[0].getParamDetails().get(0)) != null) {
-            String callerType = param.getVarType().toString();
+        BType param;
+        AttachedFunction[] resourceList = service.getType().getAttachedFunctions();
+        if (resourceList.length > 0 && (param = resourceList[0].getParameterType()[0]) != null) {
+            String callerType = param.getName();
             if (HttpConstants.HTTP_CALLER_NAME.equals(callerType)) {
                 httpServicesRegistry.registerService(service);
             } else if (WebSocketConstants.WEBSOCKET_CALLER_NAME.equals(callerType)) {
-                WebSocketService webSocketService = new WebSocketService(service);
-                webSocketServicesRegistry.registerService(webSocketService);
+                webSocketServicesRegistry.registerService(
+                        new WebSocketServerService(service, Scheduler.getStrand().scheduler));
             }
         } else {
             httpServicesRegistry.registerService(service);
         }
-        context.setReturnValues();
     }
 }

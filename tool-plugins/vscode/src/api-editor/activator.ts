@@ -16,18 +16,23 @@
  * under the License.
  *
  */
-import { workspace, commands, window, ViewColumn, ExtensionContext, TextEditor, WebviewPanel, TextDocumentChangeEvent, Uri } from 'vscode';
+import { workspace, commands, window, ViewColumn, ExtensionContext, TextEditor, WebviewPanel, TextDocumentChangeEvent, Uri, Position } from 'vscode';
 import { ExtendedLangClient } from '../core/extended-language-client';
 import * as _ from 'lodash';
 import { apiEditorRender } from './renderer';
 import { BallerinaExtension } from '../core';
-import { WebViewRPCHandler, WebViewMethod } from '../utils';
+import { API_DESIGNER_NO_SERVICE } from '../core/messages';
+import { WebViewRPCHandler, WebViewMethod, getCommonWebViewOptions } from '../utils';
+import { join } from "path";
+import { readFileSync } from "fs";
+import { TM_EVENT_OPEN_API_DESIGNER, CMP_API_DESIGNER } from '../telemetry';
 
 const DEBOUNCE_WAIT = 500;
+const CMD_SHOW_API_EDITOR = "ballerina.showAPIEditor";
 
 let oasEditorPanel: WebviewPanel | undefined;
 let activeEditor: TextEditor | undefined;
-let preventAPIDesignerUpdate = false
+let preventAPIDesignerUpdate = false;
 
 function updateOASWebView(docUri: Uri, resp: string, stale: boolean): void {
 	if (oasEditorPanel) {
@@ -40,7 +45,7 @@ function updateOASWebView(docUri: Uri, resp: string, stale: boolean): void {
 	}
 }
 
-function showAPIEditorPanel(context: ExtensionContext, langClient: ExtendedLangClient) : any {
+function showAPIEditorPanel(context: ExtensionContext, langClient: ExtendedLangClient, serviceName: string) : any {
 
     workspace.onDidChangeTextDocument(
         _.debounce((e: TextDocumentChangeEvent) => {
@@ -54,11 +59,11 @@ function showAPIEditorPanel(context: ExtensionContext, langClient: ExtendedLangC
                 const docUri = e.document.uri;
                 if(oasEditorPanel){
                     langClient.getBallerinaOASDef(docUri, oasEditorPanel.title.split('-')[1].trim()).then((resp)=>{
-                        if(resp.ballerinaOASJson != undefined) {
+                        if(resp.ballerinaOASJson !== undefined) {
                             updateOASWebView(docUri, JSON.stringify(resp.ballerinaOASJson), false);
                             preventAPIDesignerUpdate = true;
                         }
-                    })
+                    });
                 }
             }
     }, DEBOUNCE_WAIT));
@@ -92,12 +97,11 @@ function showAPIEditorPanel(context: ExtensionContext, langClient: ExtendedLangC
                                     }
                                 }
                             }
-                        })
+                        });
                     }
             }
     });
     
-    let selectedService : string;
     const editor = window.activeTextEditor;
 
     // TODO : proper handler if not the active editor
@@ -106,23 +110,51 @@ function showAPIEditorPanel(context: ExtensionContext, langClient: ExtendedLangC
     }
     activeEditor = editor;
 
-    langClient.getServiceListForActiveFile(activeEditor.document.uri).then(resp => {
-        if (resp.services && resp.services.length > 1) {
-            window.showQuickPick(resp.services).then(service => {
-                if (service && activeEditor ) {
-                    selectedService = service
-                    let renderHtml = apiEditorRender(context, 
-                        langClient, editor.document.uri, service);
-                    createAPIEditorPanel(selectedService, renderHtml, langClient, context);
+    let executeCreateAPIEditor = function (serviceName: string) {
+        let renderHtml = apiEditorRender(context,
+            langClient, editor.document.uri, serviceName);
+        createAPIEditorPanel(serviceName, renderHtml, langClient, context);
+    };
+
+    if (serviceName) {
+        executeCreateAPIEditor(serviceName);
+    } else {
+        langClient.getServiceListForActiveFile(activeEditor.document.uri).then(resp => {
+            if (resp.services.length === 0) {
+                const actions:string[] = [];
+                // Provide an action to fill up empty bal files with a default service
+                const actionAddService = "Add HTTP Service";
+                if (activeEditor && activeEditor.document.getText().trim().length === 0) {
+                    actions.push(actionAddService);
                 }
-            });
-        } else {
-            selectedService = resp.services[0];
-            let renderHtml = apiEditorRender(context, 
-                langClient, editor.document.uri, selectedService);
-            createAPIEditorPanel(selectedService, renderHtml, langClient, context);
-        }
-    });
+                window.showInformationMessage(API_DESIGNER_NO_SERVICE, ...actions)
+                    .then((selection) => {
+                        if (selection === actionAddService) {
+                            const svcTemplatePath = join(context.extensionPath, "resources", 
+                                            "templates", "http-service.bal");
+                            const svcTemplate = readFileSync(svcTemplatePath).toString();
+                            if (activeEditor) {
+                                activeEditor.edit((editBuilder) => {
+                                    editBuilder.insert(new Position(0, 0), svcTemplate);
+                                }).then((insertSuccess) => {
+                                    if (insertSuccess) {
+                                        commands.executeCommand(CMD_SHOW_API_EDITOR);
+                                    }
+                                });
+                            }
+                        }
+                    });
+            } else if (resp.services && resp.services.length > 1) {
+                window.showQuickPick(resp.services).then(service => {
+                    if (service && activeEditor) {
+                        executeCreateAPIEditor(service);
+                    }
+                });
+            } else {
+                executeCreateAPIEditor(resp.services[0]);
+            }
+        });
+    }
 }
 
 function createAPIEditorPanel(selectedService: string, renderHtml: string,
@@ -132,30 +164,32 @@ function createAPIEditorPanel(selectedService: string, renderHtml: string,
         oasEditorPanel = window.createWebviewPanel(
             'ballerinaOASEditor',
             'Ballerina API Designer - ' + selectedService,
-            { viewColumn: ViewColumn.Two, preserveFocus: true } ,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-            }
-        )
+            { viewColumn: ViewColumn.One, preserveFocus: true } ,
+            getCommonWebViewOptions()
+        );
     }
 
     oasEditorPanel.webview.html = renderHtml;
 
     const remoteMethods: WebViewMethod[] = [
         {
-            methodName: "getSwaggerDef",
+            methodName: "getOpenApiDef",
             handler: (args: any[]): Thenable<any> => {
                 return langClient.getBallerinaOASDef(args[0], args[1]);
             }
         },{
-            methodName: 'triggerSwaggerDefChange',
+            methodName: 'triggerOpenApiDefChange',
             handler: (args: any[]) => {
-                return langClient.triggerSwaggerDefChange(args[0], args[1]);
+                return langClient.triggerOpenApiDefChange(args[0], args[1]);
             }
         }
     ];
-    WebViewRPCHandler.create(oasEditorPanel.webview, langClient, remoteMethods);
+    WebViewRPCHandler.create(oasEditorPanel, langClient, remoteMethods);
+
+    oasEditorPanel.iconPath = {
+		light: Uri.file(join(context.extensionPath, 'resources/images/icons/api-design.svg')),
+		dark: Uri.file(join(context.extensionPath, 'resources/images/icons/api-design-inverse.svg'))
+	};
 
     oasEditorPanel.webview.onDidReceiveMessage(message => {
         switch (message.command) {
@@ -173,9 +207,11 @@ function createAPIEditorPanel(selectedService: string, renderHtml: string,
 }
 
 export function activate(ballerinaExtInstance: BallerinaExtension) {
-    let context = <ExtensionContext> ballerinaExtInstance.context;
-    let langClient = <ExtendedLangClient> ballerinaExtInstance.langClient;
-    const showAPIRenderer = commands.registerCommand('ballerina.showAPIEditor', () => {
+    const reporter = ballerinaExtInstance.telemetryReporter;
+    const context = <ExtensionContext> ballerinaExtInstance.context;
+    const langClient = <ExtendedLangClient> ballerinaExtInstance.langClient;
+    const showAPIRenderer = commands.registerCommand(CMD_SHOW_API_EDITOR, serviceNameArg => {
+        reporter.sendTelemetryEvent(TM_EVENT_OPEN_API_DESIGNER, { component: CMP_API_DESIGNER});
         ballerinaExtInstance.onReady()
         .then(() => {
             const { experimental } = langClient.initializeResult!.capabilities;
@@ -185,15 +221,15 @@ export function activate(ballerinaExtInstance: BallerinaExtension) {
                 ballerinaExtInstance.showMessageServerMissingCapability();
                 return;
             }
-
-            showAPIEditorPanel(context, langClient)
+            showAPIEditorPanel(context, langClient, (serviceNameArg) ? serviceNameArg.argumentV : "");
         })
 		.catch((e) => {
 			if (!ballerinaExtInstance.isValidBallerinaHome()) {
 				ballerinaExtInstance.showMessageInvalidBallerinaHome();
 			} else {
 				ballerinaExtInstance.showPluginActivationError();
-			}
+            }
+            reporter.sendTelemetryException(e, { component: CMP_API_DESIGNER});
 		});
     });
     

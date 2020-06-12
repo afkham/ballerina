@@ -1,12 +1,9 @@
 {
-  "nodeType": "function",
+  "nodeType": "FUNCTION",
   "nodeLine": "3",
   "expected": {
     "result":{
       "edit":{
-        "changes":{
-
-        },
         "documentChanges":[
           {
             "edits":[

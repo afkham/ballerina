@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,12 +21,18 @@ import java.util.List;
 import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
 
-public interface BallerinaDocumentationText extends BallerinaCompositeElement {
+public interface BallerinaDocumentationText extends PsiElement {
 
   @NotNull
   List<BallerinaBacktickedBlock> getBacktickedBlockList();
 
   @NotNull
   List<BallerinaDocumentationReference> getDocumentationReferenceList();
+
+  @NotNull
+  List<BallerinaDocumentationTextContent> getDocumentationTextContentList();
+
+  @NotNull
+  List<BallerinaReferenceType> getReferenceTypeList();
 
 }

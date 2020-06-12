@@ -14,6 +14,18 @@ export class DiagramConfig {
 
     public statement = {
         actionHeight: STATEMENT_HEIGHT * 2,
+        expanded: {
+            bottomMargin: 10,
+            collapserHeight: 14,
+            collapserWidth: 20,
+            footer: 10,
+            header: 40,
+            labelGutter: 2,
+            margin: 20,
+            offset: 60,
+            rightMargin: 30,
+            topMargin: 10,
+        },
         height: STATEMENT_HEIGHT,
         margin: {
             bottom: 0,
@@ -55,7 +67,7 @@ export class DiagramConfig {
         },
         title: {
             margin: {
-                left: 25
+                left: 20
             }
         }
     };
@@ -72,6 +84,23 @@ export class DiagramConfig {
     };
 
     public lifeLine = {
+        footer: {
+            height: 30,
+        },
+        gutter: {
+            h: 50,
+        },
+        header: {
+            height: 30,
+        },
+        leftMargin: 120 / 2,
+        line: {
+            height: 135,
+        },
+        width: 120,
+    };
+
+    public clientLine = {
         footer: {
             height: 30,
         },
@@ -116,13 +145,27 @@ export class DiagramConfig {
         },
         leftMargin: STATEMENT_HEIGHT,
         leftMarginDefault: 60,
+        paddingTop: STATEMENT_HEIGHT / 4,
         rightMargin: STATEMENT_HEIGHT,
         whileGap: STATEMENT_HEIGHT,
     };
 
     public block = {
         bottomMargin: STATEMENT_HEIGHT,
-        menuTriggerMargin: 12,
+        hoverRect: {
+            leftMargin: 30
+        },
+        menuTriggerMargin: 12
+    };
+
+    public frame = {
+        header: {
+            height: STATEMENT_HEIGHT,
+            width: 70
+        },
+        leftMarginDefault: 60,
+        rightMargin: STATEMENT_HEIGHT,
+        topMargin: 5,
     };
 }
 

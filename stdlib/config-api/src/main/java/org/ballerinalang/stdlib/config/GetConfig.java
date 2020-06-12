@@ -18,18 +18,19 @@
 
 package org.ballerinalang.stdlib.config;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
 import org.ballerinalang.config.ConfigRegistry;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BBoolean;
-import org.ballerinalang.model.values.BFloat;
-import org.ballerinalang.model.values.BInteger;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
+import org.ballerinalang.jvm.BallerinaErrors;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.types.BArrayType;
+import org.ballerinalang.jvm.types.BMapType;
+import org.ballerinalang.jvm.types.BTypes;
+import org.ballerinalang.jvm.values.MapValue;
+import org.ballerinalang.jvm.values.MapValueImpl;
+import org.ballerinalang.jvm.values.api.BArray;
+import org.ballerinalang.jvm.values.api.BString;
+import org.ballerinalang.jvm.values.api.BValueCreator;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,59 +38,61 @@ import java.util.Map;
  *
  * @since 0.970.0-alpha3
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "config",
-        functionName = "get",
-        args = {@Argument(name = "key", type = TypeKind.STRING), @Argument(name = "vType", type = TypeKind.RECORD)}
-)
-public class GetConfig extends BlockingNativeCallableUnit {
-
+public class GetConfig {
     private static final ConfigRegistry configRegistry = ConfigRegistry.getInstance();
+    private static final String LOOKUP_ERROR_REASON = "{ballerina/config}LookupError";
+    private static final BMapType mapType = new BMapType(BTypes.typeAnydata);
+    private static final BArrayType arrayType = new BArrayType(BTypes.typeAnydata);
 
-    @Override
-    public void execute(Context context) {
-        String configKey = context.getStringArgument(0);
-        BString type = (BString) context.getNullableRefArgument(0);
-
-        // TODO: Add a try-catch
-        switch (type.stringValue()) {
-            case "STRING":
-                String val = configRegistry.getAsString(configKey);
-                context.setReturnValues(val != null ? new BString(val) : null);
-                break;
-            case "INT":
-                context.setReturnValues(new BInteger(configRegistry.getAsInt(configKey)));
-                break;
-            case "FLOAT":
-                context.setReturnValues(new BFloat(configRegistry.getAsFloat(configKey)));
-                break;
-            case "BOOLEAN":
-                context.setReturnValues(new BBoolean(configRegistry.getAsBoolean(configKey)));
-                break;
-            case "MAP":
-                context.setReturnValues(buildBMap(configRegistry.getAsMap(configKey)));
-                break;
-            default:
-                throw new IllegalStateException("invalid value type: " + type.stringValue());
+    public static Object get(BString configKey, BString type) {
+        try {
+            switch (type.getValue()) {
+                case "STRING":
+                    return StringUtils.fromString(configRegistry.getAsString(configKey.getValue()));
+                case "INT":
+                    return configRegistry.getAsInt(configKey.getValue());
+                case "FLOAT":
+                    return configRegistry.getAsFloat(configKey.getValue());
+                case "BOOLEAN":
+                    return configRegistry.getAsBoolean(configKey.getValue());
+                case "MAP":
+                    return buildMapValue(configRegistry.getAsMap(configKey.getValue()));
+                case "ARRAY":
+                    return buildArrayValue(configRegistry.getAsArray(configKey.getValue()));
+                default:
+                    throw new IllegalStateException("invalid value type: " + type);
+            }
+        } catch (IllegalArgumentException e) {
+            throw BallerinaErrors.createError(LOOKUP_ERROR_REASON, e.getMessage());
         }
     }
 
-    private BMap buildBMap(Map<String, Object> section) {
-        BMap map = new BMap();
-
-        section.entrySet().forEach(entry -> {
-            Object val = entry.getValue();
-            if (val instanceof String) {
-                map.put(entry.getKey(), new BString((String) val));
-            } else if (val instanceof Long) {
-                map.put(entry.getKey(), new BInteger((Long) val));
-            } else if (val instanceof Double) {
-                map.put(entry.getKey(), new BFloat((Double) val));
-            } else if (val instanceof Boolean) {
-                map.put(entry.getKey(), new BBoolean((Boolean) val));
-            }
-        });
-
+    @SuppressWarnings("unchecked")
+    private static MapValue<BString, Object> buildMapValue(Map<String, Object> section) {
+        MapValue<BString, Object> map = new MapValueImpl<>(mapType);
+        for (Map.Entry<String, Object> entry : section.entrySet()) {
+            map.put(StringUtils.fromString(entry.getKey()), getConvertedValue(entry.getValue()));
+        }
         return map;
+    }
+
+    private static BArray buildArrayValue(List value) {
+        Object[] convertedValues = new Object[value.size()];
+        for (Object entry : value) {
+            convertedValues[value.indexOf(entry)] = getConvertedValue(entry);
+        }
+        return BValueCreator.createArrayValue(convertedValues, arrayType);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object getConvertedValue(Object obj) {
+        if (obj instanceof Long || obj instanceof Double || obj instanceof Boolean) {
+            return obj;
+        } else if (obj instanceof Map) {
+            return buildMapValue((Map<String, Object>) obj);
+        } else if (obj instanceof List) {
+            return buildArrayValue((List) obj);
+        }
+        return StringUtils.fromString(String.valueOf(obj));
     }
 }

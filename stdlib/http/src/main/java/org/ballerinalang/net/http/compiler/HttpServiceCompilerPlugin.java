@@ -22,16 +22,18 @@ import org.ballerinalang.mime.util.MimeUtil;
 import org.ballerinalang.model.tree.AnnotationAttachmentNode;
 import org.ballerinalang.model.tree.ServiceNode;
 import org.ballerinalang.model.tree.expressions.ExpressionNode;
+import org.ballerinalang.model.tree.expressions.RecordLiteralNode;
+import org.ballerinalang.net.http.websocket.WebSocketConstants;
 import org.ballerinalang.util.diagnostic.Diagnostic;
 import org.ballerinalang.util.diagnostic.DiagnosticLog;
 import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachment;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangArrayLiteral;
+import org.wso2.ballerinalang.compiler.tree.expressions.BLangListConstructorExpr;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangRecordLiteral;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangSimpleVarRef;
 
+import java.util.ArrayList;
 import java.util.List;
-import javax.activation.MimeTypeParseException;
 
 import static org.ballerinalang.net.http.HttpConstants.ANN_CONFIG_ATTR_COMPRESSION;
 import static org.ballerinalang.net.http.HttpConstants.ANN_CONFIG_ATTR_COMPRESSION_CONTENT_TYPES;
@@ -61,6 +63,15 @@ public class HttpServiceCompilerPlugin extends AbstractCompilerPlugin {
     @SuppressWarnings("unchecked")
     @Override
     public void process(ServiceNode serviceNode, List<AnnotationAttachmentNode> annotations) {
+        List<BLangFunction> resources = (List<BLangFunction>) serviceNode.getResources();
+        // If first resource's first parameter is WebSocketCaller, do not process in this plugin.
+        // This is done on the assumption of resources does not mix each other (HTTP and WebSocket)
+        if (resources.size() > 0 &&
+                resources.get(0).getParameters().size() > 0 &&
+                WebSocketConstants.WEBSOCKET_CALLER_NAME.equals(
+                        resources.get(0).getParameters().get(0).type.toString())) {
+            return;
+        }
         int serviceConfigCount = 0;
         for (AnnotationAttachmentNode annotation : annotations) {
             if (annotation.getAnnotationName().getValue().equals(ANN_NAME_HTTP_SERVICE_CONFIG)) {
@@ -73,17 +84,9 @@ public class HttpServiceCompilerPlugin extends AbstractCompilerPlugin {
                                "multiple service configuration annotations found in service : " +
                                        serviceNode.getName().getValue());
         }
-        //        final UserDefinedTypeNode serviceType = serviceNode.getServiceTypeStruct();
-        //        if (serviceType != null && HttpConstants.HTTP_SERVICE_TYPE.equals(serviceType.getTypeName()
-        // .getValue())) {
-        List<BLangFunction> resources = (List<BLangFunction>) serviceNode.getResources();
         resources.forEach(res -> {
-            ResourceSignatureValidator.validateAnnotation(res, dlog);
-            ResourceSignatureValidator.validate(res.getParameters(), dlog, res.pos);
+            ResourceSignatureValidator.validate(res, dlog, res.pos);
         });
-        //        }
-        // get value from endpoint.
-        // ((BLangSimpleVarRef) serviceNode.getBoundEndpoints().get(0)).varSymbol.getType().tsymbol.name.value
     }
 
     private void handleServiceConfigAnnotation(ServiceNode serviceNode, BLangAnnotationAttachment annotation) {
@@ -91,30 +94,33 @@ public class HttpServiceCompilerPlugin extends AbstractCompilerPlugin {
         if (annotation.getExpression() == null) {
             return;
         }
-        List<BLangRecordLiteral.BLangRecordKeyValue> annotationValues =
-                ((BLangRecordLiteral) annotation.getExpression()).keyValuePairs;
+        List<BLangRecordLiteral.BLangRecordKeyValueField> annotationValues = new ArrayList<>();
+        for (RecordLiteralNode.RecordField field : ((BLangRecordLiteral) annotation.getExpression()).fields) {
+            annotationValues.add((BLangRecordLiteral.BLangRecordKeyValueField) field);
+        }
+
         int compressionConfigCount = 0;
 
-        for (BLangRecordLiteral.BLangRecordKeyValue keyValue : annotationValues) {
+        for (BLangRecordLiteral.BLangRecordKeyValueField keyValue : annotationValues) {
             // Validate compression configuration
-            if (checkMatchingConfigKey(keyValue, ANN_CONFIG_ATTR_COMPRESSION)) {
+            if (checkMatchingConfigKey(keyValue, ANN_CONFIG_ATTR_COMPRESSION.getValue())) {
                 if (compressionConfigCount++ == 1) {
                     dlog.logDiagnostic(Diagnostic.Kind.ERROR, serviceNode.getPosition(),
                                        "Invalid multiple configurations for compression");
                     return;
                 }
-                for (BLangRecordLiteral.BLangRecordKeyValue compressionConfig
-                        : ((BLangRecordLiteral) keyValue.valueExpr).getKeyValuePairs()) {
-                    if (checkMatchingConfigKey(compressionConfig, ANN_CONFIG_ATTR_COMPRESSION_CONTENT_TYPES)) {
-                        BLangArrayLiteral valueArray = (BLangArrayLiteral) compressionConfig.valueExpr;
+                for (RecordLiteralNode.RecordField field : ((BLangRecordLiteral) keyValue.valueExpr).getFields()) {
+                    BLangRecordLiteral.BLangRecordKeyValueField compressionConfig =
+                            (BLangRecordLiteral.BLangRecordKeyValueField) field;
+                    if (checkMatchingConfigKey(compressionConfig,
+                                               ANN_CONFIG_ATTR_COMPRESSION_CONTENT_TYPES.getValue())) {
+                        BLangListConstructorExpr valueArray = (BLangListConstructorExpr) compressionConfig.valueExpr;
                         if (valueArray.getExpressions().isEmpty()) {
                             break;
                         }
                         for (ExpressionNode expressionNode : valueArray.getExpressions()) {
                             String contentType = expressionNode.toString();
-                            try {
-                                MimeUtil.validateContentType(contentType);
-                            } catch (MimeTypeParseException e) {
+                            if (!MimeUtil.isValidateContentType(contentType)) {
                                 dlog.logDiagnostic(Diagnostic.Kind.ERROR, serviceNode.getPosition(),
                                                    "Invalid Content-Type value for compression: '" + contentType + "'");
                                 return;
@@ -126,7 +132,7 @@ public class HttpServiceCompilerPlugin extends AbstractCompilerPlugin {
         }
     }
 
-    private boolean checkMatchingConfigKey(BLangRecordLiteral.BLangRecordKeyValue keyValue, String key) {
+    private boolean checkMatchingConfigKey(BLangRecordLiteral.BLangRecordKeyValueField keyValue, String key) {
         return ((BLangSimpleVarRef) (keyValue.key).expr).variableName.getValue().equals(key);
     }
 }

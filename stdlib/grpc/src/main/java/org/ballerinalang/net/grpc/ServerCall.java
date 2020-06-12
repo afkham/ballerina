@@ -19,11 +19,11 @@ package org.ballerinalang.net.grpc;
 
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders;
-import org.ballerinalang.net.grpc.exception.ServerRuntimeException;
+import org.ballerinalang.jvm.observability.ObserverContext;
+import org.ballerinalang.net.grpc.exception.StatusRuntimeException;
 import org.ballerinalang.net.grpc.listener.ServerCallHandler;
-import org.wso2.transport.http.netty.contract.ServerConnectorException;
+import org.wso2.transport.http.netty.contract.exceptions.ServerConnectorException;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
@@ -62,6 +62,7 @@ public final class ServerCall {
     private boolean messageSent;
     private Compressor compressor;
     private final String messageAcceptEncoding;
+    private ObserverContext context = null;
 
     private DecompressorRegistry decompressorRegistry;
     private CompressorRegistry compressorRegistry;
@@ -116,27 +117,33 @@ public final class ServerCall {
             // Send response headers.
             inboundMessage.respond(outboundMessage.getResponseMessage());
         } catch (ServerConnectorException e) {
-            throw new ServerRuntimeException("Error while sending the response.", e);
+            throw Status.Code.CANCELLED.toStatus().withCause(e).withDescription("Failed to send response headers. "
+                    + e.getMessage()).asRuntimeException();
         }
         sendHeadersCalled = true;
     }
 
     public void sendMessage(Message message) {
         if (!sendHeadersCalled) {
-            throw new IllegalStateException("sendHeaders has not been called");
+            throw Status.Code.CANCELLED.toStatus().withDescription("Response headers has not been sent properly.")
+                    .asRuntimeException();
         }
         if (closeCalled) {
-            throw new IllegalStateException("call is closed");
+            throw Status.Code.CANCELLED.toStatus().withDescription("Call already closed.")
+                    .asRuntimeException();
         }
         if (method.getType().serverSendsOneMessage() && messageSent) {
             outboundMessage.complete(Status.Code.INTERNAL.toStatus().withDescription(TOO_MANY_RESPONSES), new
                     DefaultHttpHeaders());
             return;
         }
-        messageSent = true;
+
         try {
             InputStream resp = method.streamResponse(message);
             outboundMessage.sendMessage(resp);
+            messageSent = true;
+        } catch (StatusRuntimeException ex) {
+            close(ex.getStatus(), new DefaultHttpHeaders());
         } catch (Exception e) {
             close(Status.fromThrowable(e), new DefaultHttpHeaders());
         }
@@ -145,12 +152,22 @@ public final class ServerCall {
     public void setCompression(String compressorName) {
         // Added here to give a better error message.
         if (sendHeadersCalled) {
-            throw new IllegalStateException("sendHeaders has been called");
+            throw Status.Code.CANCELLED.toStatus().withDescription("Failed to set compression headers. Response " +
+                    "headers already sent.").asRuntimeException();
         }
         compressor = compressorRegistry.lookupCompressor(compressorName);
         if (compressor == null) {
-            throw new IllegalArgumentException("Unable to find compressor by name " + compressorName);
+            throw Status.Code.INVALID_ARGUMENT.toStatus().withDescription("Unable to find compressor by name "
+                    + compressorName).asRuntimeException();
         }
+    }
+
+    void setObserverContext(ObserverContext context) {
+        this.context = context;
+    }
+
+    public ObserverContext getObserverContext() {
+        return context;
     }
 
     public void setMessageCompression(boolean enable) {
@@ -163,7 +180,8 @@ public final class ServerCall {
 
     public void close(Status status, HttpHeaders trailers) {
         if (closeCalled) {
-            throw new ServerRuntimeException("call already closed");
+            throw Status.Code.CANCELLED.toStatus().withDescription("Call already closed.")
+                    .asRuntimeException();
         }
         closeCalled = true;
 
@@ -185,6 +203,10 @@ public final class ServerCall {
 
     public MethodDescriptor getMethodDescriptor() {
         return method;
+    }
+
+    public HttpHeaders getHeaders() {
+        return inboundMessage.getHeaders();
     }
 
     /**
@@ -210,15 +232,13 @@ public final class ServerCall {
                 Message request = call.method.parseRequest(message);
                 request.setHeaders(call.inboundMessage.getHeaders());
                 listener.onMessage(request);
+            } catch (StatusRuntimeException ex) {
+                throw ex;
             } catch (Exception ex) {
-                MessageUtils.closeQuietly(message);
-                throw new ServerRuntimeException(ex);
+                throw Status.Code.CANCELLED.toStatus().withCause(ex).withDescription("Failed to dispatch inbound " +
+                        "message. " + ex.getMessage()).asRuntimeException();
             } finally {
-                try {
-                    message.close();
-                } catch (IOException ignore) {
-                    // ignore the error.
-                }
+                MessageUtils.closeQuietly(message);
             }
         }
 

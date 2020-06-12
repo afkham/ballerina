@@ -17,46 +17,38 @@
 */
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
-import org.ballerinalang.model.types.ConstrainedType;
+import org.ballerinalang.model.types.SelectivelyImmutableReferenceType;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
-import org.wso2.ballerinalang.compiler.util.TypeTags;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.Symbols;
+import org.wso2.ballerinalang.util.Flags;
 
 /**
  * @since 0.94
  */
-public class BJSONType extends BBuiltInRefType implements ConstrainedType {
+public class BJSONType extends BBuiltInRefType implements SelectivelyImmutableReferenceType {
 
-    public BType constraint;
     private boolean nullable = true;
+    public BIntersectionType immutableType;
 
-    public BJSONType(int tag, BType constraint, BTypeSymbol tsymbol) {
+    public BJSONType(int tag, BTypeSymbol tsymbol) {
         super(tag, tsymbol);
-        this.constraint = constraint;
     }
 
-    public BJSONType(int tag, BType constraint, BTypeSymbol tsymbol, boolean nullable) {
-        this(tag, constraint, tsymbol);
+    public BJSONType(int tag, BTypeSymbol tsymbol, boolean nullable) {
+        this(tag, tsymbol);
         this.nullable = nullable;
     }
 
-    @Override
-    public BType getConstraint() {
-        return constraint;
+    public BJSONType(int tag, BTypeSymbol tsymbol, boolean nullable, int flags) {
+        this(tag, tsymbol);
+        this.nullable = nullable;
+        this.flags = flags;
     }
 
     @Override
     public <T, R> R accept(BTypeVisitor<T, R> visitor, T t) {
         return visitor.visit(this, t);
-    }
-
-    @Override
-    public String toString() {
-        if (constraint.tag == TypeTags.NONE || constraint.tag == TypeTags.SEMANTIC_ERROR) {
-            return super.toString();
-        }
-
-        return super.toString() + "<" + constraint + ">";
     }
 
     public boolean isNullable() {
@@ -68,11 +60,18 @@ public class BJSONType extends BBuiltInRefType implements ConstrainedType {
     }
 
     @Override
-    public String getDesc() {
-        if (constraint.tag == TypeTags.NONE || constraint.tag == TypeTags.SEMANTIC_ERROR) {
-            return TypeDescriptor.SIG_JSON + ";";
-        }
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
 
-        return TypeDescriptor.SIG_JSON + constraint.getQualifiedTypeName() + ";";
+    @Override
+    public BIntersectionType getImmutableType() {
+        return this.immutableType;
+    }
+
+    @Override
+    public String toString() {
+        return !Symbols.isFlagOn(flags, Flags.READONLY) ? getKind().typeName() :
+                getKind().typeName().concat(" & readonly");
     }
 }

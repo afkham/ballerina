@@ -27,54 +27,78 @@ import java.util.Set;
  * @since 0.974.0
  */
 public class AttachPoints {
-    public static final int SERVICE = 1;
-    public static final int RESOURCE = SERVICE << 1;
-    public static final int REMOTE = RESOURCE << 1;
-    public static final int FUNCTION = REMOTE << 1;
-    public static final int OBJECT = FUNCTION << 1;
-    public static final int CLIENT = OBJECT << 1;
-    public static final int TYPE = CLIENT << 1;
-    public static final int LISTENER = TYPE << 1;
-    public static final int PARAMETER = LISTENER << 1;
-    public static final int ANNOTATION = PARAMETER << 1;
-    public static final int CHANNEL = ANNOTATION << 1;
+    public static final int TYPE = 1;
+    public static final int OBJECT = TYPE << 1;
+    public static final int FUNCTION = OBJECT << 1;
+    public static final int OBJECT_METHOD = FUNCTION << 1;
+    public static final int RESOURCE = OBJECT_METHOD << 1;
+    public static final int PARAMETER = RESOURCE << 1;
+    public static final int RETURN = PARAMETER << 1;
+    public static final int SERVICE = RETURN << 1;
+    public static final int FIELD = SERVICE << 1;
+    public static final int OBJECT_FIELD = FIELD << 1;
+    public static final int RECORD_FIELD = OBJECT_FIELD << 1;
+    public static final int LISTENER = RECORD_FIELD << 1;
+    public static final int ANNOTATION = LISTENER << 1;
+    public static final int EXTERNAL = ANNOTATION << 1;
+    public static final int VAR = EXTERNAL << 1;
+    public static final int CONST = VAR << 1;
+    public static final int WORKER = CONST << 1;
 
-    public static int asMask(Set<AttachPoint> attachPoints) {
+    public static int asMask(Set<AttachPoint.Point> attachPoints) {
         int mask = 0;
-        for (AttachPoint point : attachPoints) {
+        for (AttachPoint.Point point : attachPoints) {
             switch (point) {
-                case SERVICE:
-                    mask |= SERVICE;
-                    break;
-                case RESOURCE:
-                    mask |= RESOURCE;
-                    break;
-                case REMOTE:
-                    mask |= REMOTE;
-                    break;
-                case FUNCTION:
-                    mask |= FUNCTION;
+                case TYPE:
+                    mask |= TYPE;
                     break;
                 case OBJECT:
                     mask |= OBJECT;
                     break;
-                case CLIENT:
-                    mask |= CLIENT;
+                case FUNCTION:
+                    mask |= FUNCTION;
                     break;
-                case TYPE:
-                    mask |= TYPE;
+                case OBJECT_METHOD:
+                    mask |= OBJECT_METHOD;
                     break;
-                case LISTENER:
-                    mask |= LISTENER;
+                case RESOURCE:
+                    mask |= RESOURCE;
                     break;
                 case PARAMETER:
                     mask |= PARAMETER;
                     break;
+                case RETURN:
+                    mask |= RETURN;
+                    break;
+                case SERVICE:
+                    mask |= SERVICE;
+                    break;
+                case FIELD:
+                    mask |= FIELD;
+                    break;
+                case OBJECT_FIELD:
+                    mask |= OBJECT_FIELD;
+                    break;
+                case RECORD_FIELD:
+                    mask |= RECORD_FIELD;
+                    break;
+                case LISTENER:
+                    mask |= LISTENER;
+                    break;
                 case ANNOTATION:
                     mask |= ANNOTATION;
                     break;
-                case CHANNEL:
-                    mask |= CHANNEL;
+                case EXTERNAL:
+                    mask |= EXTERNAL;
+                    break;
+                case VAR:
+                    mask |= VAR;
+                    break;
+                case CONST:
+                    mask |= CONST;
+                    break;
+                case WORKER:
+                    mask |= WORKER;
                     break;
             }
         }

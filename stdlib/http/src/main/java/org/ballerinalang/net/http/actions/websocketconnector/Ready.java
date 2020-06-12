@@ -18,53 +18,46 @@
 
 package org.ballerinalang.net.http.actions.websocketconnector;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.CallableUnitCallback;
-import org.ballerinalang.model.NativeCallableUnit;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BBoolean;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
-import org.ballerinalang.net.http.HttpUtil;
-import org.ballerinalang.net.http.WebSocketConstants;
-import org.ballerinalang.net.http.WebSocketOpenConnectionInfo;
-import org.ballerinalang.net.http.WebSocketUtil;
+import org.ballerinalang.jvm.scheduling.Scheduler;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.net.http.websocket.WebSocketConstants;
+import org.ballerinalang.net.http.websocket.WebSocketException;
+import org.ballerinalang.net.http.websocket.WebSocketUtil;
+import org.ballerinalang.net.http.websocket.observability.WebSocketObservabilityConstants;
+import org.ballerinalang.net.http.websocket.observability.WebSocketObservabilityUtil;
+import org.ballerinalang.net.http.websocket.server.WebSocketConnectionInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code Get} is the GET action implementation of the HTTP Connector.
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "ready",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = WebSocketConstants.WEBSOCKET_CONNECTOR,
-                             structPackage = "ballerina/http"),
-        args = {
-                @Argument(name = "wsConnector", type = TypeKind.OBJECT),
-        }
-)
-public class Ready implements NativeCallableUnit {
+public class Ready {
+    private static final Logger log = LoggerFactory.getLogger(Ready.class);
 
-    @Override
-    public void execute(Context context, CallableUnitCallback callback) {
-        BMap<String, BValue> webSocketConnector = (BMap<String, BValue>) context.getRefArgument(0);
-        WebSocketOpenConnectionInfo connectionInfo = (WebSocketOpenConnectionInfo) webSocketConnector
-                .getNativeData(WebSocketConstants.NATIVE_DATA_WEBSOCKET_CONNECTION_INFO);
-        boolean isReady = ((BBoolean) webSocketConnector.get(WebSocketConstants.CONNECTOR_IS_READY_FIELD))
-                .booleanValue();
-        if (!isReady) {
-            WebSocketUtil.readFirstFrame(connectionInfo.getWebSocketConnection(), webSocketConnector);
-            context.setReturnValues();
-        } else {
-            context.setReturnValues(HttpUtil.getError(context, "Already started reading frames"));
+    public static Object ready(ObjectValue wsConnector) {
+        WebSocketConnectionInfo connectionInfo = (WebSocketConnectionInfo) wsConnector
+                    .getNativeData(WebSocketConstants.NATIVE_DATA_WEBSOCKET_CONNECTION_INFO);
+        WebSocketObservabilityUtil.observeResourceInvocation(Scheduler.getStrand(), connectionInfo,
+                WebSocketConstants.RESOURCE_NAME_READY);
+        try {
+            boolean isReady = wsConnector.getBooleanValue(WebSocketConstants.CONNECTOR_IS_READY_FIELD);
+            if (!isReady) {
+                WebSocketUtil.readFirstFrame(connectionInfo.getWebSocketConnection(), wsConnector);
+                connectionInfo.getWebSocketEndpoint().getMapValue(WebSocketConstants.CLIENT_ENDPOINT_CONFIG).
+                        put(WebSocketConstants.CLIENT_READY_ON_CONNECT, true);
+            } else {
+                return new WebSocketException("Already started reading frames");
+            }
+        } catch (Exception e) {
+            log.error("Error occurred when calling ready", e);
+            WebSocketObservabilityUtil.observeError(connectionInfo, WebSocketObservabilityConstants.ERROR_TYPE_READY,
+                                                    e.getMessage());
+            return WebSocketUtil.createErrorByType(e);
         }
-        callback.notifySuccess();
+        return null;
     }
 
-    @Override
-    public boolean isBlocking() {
-        return false;
+    private Ready() {
     }
 }

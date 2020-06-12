@@ -19,6 +19,50 @@ function name3() {
     name2({
         a: "apple",
         b: "banana",
-        c: "cherry"
+        c:
+            "cherry"
     });
+}
+
+public function main() {
+    string text = "Sample String";
+    int number = 34;
+    string anotherText = <@untainted string>text;
+    int anotherNumber = <@untainted int>number;
+}
+
+public function test1() {
+    string text = "Sample String";
+    int number = 34;
+    string anotherText = <
+            @untainted string
+        >
+        text;
+    int anotherNumber =
+        <
+            @untainted
+            int
+        >
+        number
+    ;
+
+    string anotherText1 =
+        <
+            @untainted string
+        >
+        text;
+    int anotherNumber2 =
+        <
+            @untainted
+            int
+        >
+        number
+    ;
+
+    string anotherText2 = <
+            @untainted
+            string
+        >
+        text
+    ;
 }

@@ -1,38 +1,28 @@
 {
   "range": {
     "start": {
-      "line": 23,
+      "line": 25,
       "character": 11
     },
     "end": {
-      "line": 23,
+      "line": 25,
       "character": 11
     }
   },
   "expected": {
-    "size": 3,
+    "size": 2,
     "actions": {
-      "createConstructor": {
-        "title":"Create Initializer",
-        "command":"CREATE_INITIALIZER",
-        "arguments":[
-          {
-            "argumentK":"node.line",
-            "argumentV":"23"
-          }
-        ]
-      },
       "documentThis": {
         "title": "Document This",
         "command": "ADD_DOC",
         "arguments": [
           {
             "argumentK": "node.type",
-            "argumentV": "object"
+            "argumentV": "OBJECT"
           },
           {
             "argumentK": "node.line",
-            "argumentV": "23"
+            "argumentV": "25"
           }
         ]
       },

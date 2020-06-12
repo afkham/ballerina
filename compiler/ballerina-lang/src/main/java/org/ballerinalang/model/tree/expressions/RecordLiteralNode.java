@@ -17,24 +17,50 @@
 */
 package org.ballerinalang.model.tree.expressions;
 
+import org.ballerinalang.model.tree.Node;
+
 import java.util.List;
 
 /**
- * {key1:value1, key2:value2, string`key{{n}}`:value3, ...}.
+ * {key1:value1, key2:value2, string`key${n}`:value3, ...}.
  *
  * @since 0.94
  */
 public interface RecordLiteralNode extends ExpressionNode {
 
-    List<? extends RecordKeyValueNode> getKeyValuePairs();
+    List<? extends RecordField> getFields();
+
+    /**
+     * @since 1.2.0
+     */
+    interface RecordField extends Node {
+        boolean isKeyValueField();
+    }
 
     /**
      * @since 0.94
      */
-    interface RecordKeyValueNode {
+    interface RecordKeyValueFieldNode extends RecordField {
 
         ExpressionNode getKey();
 
         ExpressionNode getValue();
+    }
+
+    /**
+     * @since 1.2.0
+     */
+    interface RecordVarNameFieldNode extends RecordField, SimpleVariableReferenceNode {
+
+    }
+
+    /**
+     * @since 1.2.0
+     */
+    interface RecordSpreadOperatorFieldNode extends RecordField {
+
+        ExpressionNode getExpression();
+
+        void setExpression(ExpressionNode expr);
     }
 }

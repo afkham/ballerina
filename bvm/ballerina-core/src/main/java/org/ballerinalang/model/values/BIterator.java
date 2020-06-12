@@ -56,11 +56,6 @@ public interface BIterator extends BRefType {
     }
 
     @Override
-    default void stamp(BType type) {
-
-    }
-
-    @Override
     default BValue copy(Map<BValue, BValue> refs) {
         return null;
     }

@@ -17,15 +17,20 @@ package org.ballerinalang.langserver.command.testgen;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.ballerinalang.langserver.command.testgen.TestGenerator.TestFunctionGenerator;
+import org.ballerinalang.langserver.common.ImportsAcceptor;
+import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.ballerinalang.model.elements.PackageID;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BObjectTypeSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BArrayType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BField;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BFiniteType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BInvokableType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BMapType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BObjectType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BRecordType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BTupleType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BUnionType;
@@ -36,12 +41,12 @@ import org.wso2.ballerinalang.compiler.tree.statements.BLangAssignment;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangTupleDestructure;
 import org.wso2.ballerinalang.compiler.tree.types.BLangFunctionTypeNode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -65,8 +70,8 @@ public class ValueSpaceGenerator {
      * @return {@link String}  modified templates
      * @see #createTemplateArray(int)
      */
-    public static String[] getValueSpaceByNode(BiConsumer<String, String> importsAcceptor, PackageID currentPkgId,
-                                               BLangNode bLangNode, String[] template) {
+    public static String[] getValueSpaceByNode(ImportsAcceptor importsAcceptor, PackageID currentPkgId,
+                                               BLangNode bLangNode, String[] template, LSContext context) {
         if (bLangNode.type == null && bLangNode instanceof BLangTupleDestructure) {
             // Check for tuple assignment eg. (int, int)
             List<BLangExpression> varRefs = ((BLangTupleDestructure) bLangNode).getVariableRefs();
@@ -75,7 +80,7 @@ public class ValueSpaceGenerator {
                 BLangExpression bLangExpression = varRefs.get(j);
                 if (bLangExpression.type != null) {
                     String[] values = getValueSpaceByType(importsAcceptor, currentPkgId, bLangExpression.type,
-                                                          createTemplateArray(template.length));
+                                                          createTemplateArray(template.length), context);
                     IntStream.range(0, values.length).forEach(i -> list[i][j] = values[i]);
                 }
             });
@@ -90,7 +95,8 @@ public class ValueSpaceGenerator {
             return (String[]) Stream.of(template).map(s -> s.replace(PLACE_HOLDER, "0")).toArray();
         } else if (bLangNode instanceof BLangFunctionTypeNode) {
             BLangFunctionTypeNode funcType = (BLangFunctionTypeNode) bLangNode;
-            TestFunctionGenerator generator = new TestFunctionGenerator(importsAcceptor, currentPkgId, funcType);
+            TestFunctionGenerator generator = new TestFunctionGenerator(importsAcceptor, currentPkgId, funcType,
+                                                                        context);
             StringJoiner params = new StringJoiner(", ");
             String[][] valueSpace = generator.getValueSpace();
             String[] typeSpace = generator.getTypeSpace();
@@ -108,8 +114,8 @@ public class ValueSpaceGenerator {
             });
             return template;
         }
-        return (bLangNode.type != null) ? getValueSpaceByType(importsAcceptor, currentPkgId, bLangNode.type, template) :
-                template;
+        return (bLangNode.type != null) ? getValueSpaceByType(importsAcceptor, currentPkgId, bLangNode.type, template,
+                                                              context) : template;
     }
 
     /**
@@ -121,8 +127,8 @@ public class ValueSpaceGenerator {
      * @param template        templates to be modified
      * @return {@link String}  modified templates
      */
-    public static String[] getValueSpaceByType(BiConsumer<String, String> importsAcceptor, PackageID currentPkgId,
-                                               BType bType, String[] template) {
+    public static String[] getValueSpaceByType(ImportsAcceptor importsAcceptor, PackageID currentPkgId,
+                                               BType bType, String[] template, LSContext context) {
         if ((bType.tsymbol == null || bType.tsymbol.name.value.isEmpty()) && bType instanceof BArrayType) {
             BArrayType bArrayType = (BArrayType) bType;
             String[] values = getValueSpaceByTypeSymbol(bArrayType.eType.tsymbol, createTemplateArray(template.length));
@@ -133,16 +139,16 @@ public class ValueSpaceGenerator {
         } else if (bType instanceof BFiniteType) {
             // Check for finite set assignment
             BFiniteType bFiniteType = (BFiniteType) bType;
-            Set<BLangExpression> valueSpace = bFiniteType.valueSpace;
+            Set<BLangExpression> valueSpace = bFiniteType.getValueSpace();
             if (!valueSpace.isEmpty()) {
                 return getValueSpaceByNode(importsAcceptor, currentPkgId, valueSpace.stream().findFirst().get(),
-                                           template);
+                                           template, context);
             }
         } else if (bType instanceof BMapType && ((BMapType) bType).constraint != null) {
             // Check for constrained map assignment eg. map<Student>
             BType constraintType = ((BMapType) bType).constraint;
             String[] values = getValueSpaceByType(importsAcceptor, currentPkgId, constraintType,
-                                                  createTemplateArray(template.length));
+                                                  createTemplateArray(template.length), context);
             IntStream.range(0, template.length).forEach(index -> {
                 template[index] = template[index].replace(PLACE_HOLDER, "{key: " + values[index] + "}");
             });
@@ -150,10 +156,10 @@ public class ValueSpaceGenerator {
         } else if (bType instanceof BUnionType) {
             // Check for union assignment int|string
             BUnionType bUnionType = (BUnionType) bType;
-            Set<BType> memberTypes = bUnionType.memberTypes;
+            Set<BType> memberTypes = bUnionType.getMemberTypes();
             if (!memberTypes.isEmpty()) {
                 return getValueSpaceByType(importsAcceptor, currentPkgId, memberTypes.stream().findFirst().get(),
-                                           template);
+                                           template, context);
             }
         } else if (bType instanceof BTupleType) {
             // Check for tuple assignment (int, string)
@@ -163,11 +169,30 @@ public class ValueSpaceGenerator {
             IntStream.range(0, tupleTypes.size()).forEach(j -> {
                 BType type = tupleTypes.get(j);
                 String[] values = getValueSpaceByType(importsAcceptor, currentPkgId, type,
-                                                      createTemplateArray(template.length));
+                                                      createTemplateArray(template.length), context);
                 IntStream.range(0, values.length).forEach(i -> vSpace[i][j] = values[i]);
             });
             IntStream.range(0, template.length).forEach(index -> {
                 template[index] = template[index].replace(PLACE_HOLDER, "(" + String.join(", ", vSpace[index]) + ")");
+            });
+            return template;
+        } else if (bType instanceof BRecordType) {
+            BRecordType bRecordType = (BRecordType) bType;
+            List<BField> params = new ArrayList<>(bRecordType.fields.values());
+            String[][] list = new String[template.length][params.size()];
+            IntStream.range(0, params.size()).forEach(paramIndex -> {
+                BField field = params.get(paramIndex);
+                String[] values = getValueSpaceByType(importsAcceptor, currentPkgId, field.type,
+                                                      createTemplateArray(template.length), context);
+                IntStream.range(0, values.length).forEach(valIndex -> {
+                    list[valIndex][paramIndex] = field.name + ": " + values[valIndex];
+                });
+            });
+
+            IntStream.range(0, template.length).forEach(index -> {
+                String paramsStr = String.join(", ", list[index]);
+                String newObjStr = "{" + paramsStr + "}";
+                template[index] = template[index].replace(PLACE_HOLDER, newObjStr);
             });
             return template;
         } else if (bType instanceof BObjectType && ((BObjectType) bType).tsymbol instanceof BObjectTypeSymbol) {
@@ -177,20 +202,15 @@ public class ValueSpaceGenerator {
             IntStream.range(0, params.size()).forEach(paramIndex -> {
                 BVarSymbol param = params.get(paramIndex);
                 String[] values = getValueSpaceByType(importsAcceptor, currentPkgId, param.type,
-                                                      createTemplateArray(template.length));
+                                                      createTemplateArray(template.length), context);
                 IntStream.range(0, values.length).forEach(valIndex -> {
                     list[valIndex][paramIndex] = values[valIndex];
                 });
             });
 
             IntStream.range(0, template.length).forEach(index -> {
-                String pkgPrefix = "";
-                if (!bStructSymbol.pkgID.equals(currentPkgId)) {
-                    pkgPrefix = bStructSymbol.pkgID.name.value + ":";
-                    if (importsAcceptor != null) {
-                        importsAcceptor.accept(bStructSymbol.pkgID.orgName.value, bStructSymbol.pkgID.name.value);
-                    }
-                }
+                String pkgPrefix = CommonUtil.getPackagePrefix(importsAcceptor, currentPkgId, bStructSymbol.pkgID,
+                                                               context);
                 String paramsStr = String.join(", ", list[index]);
                 String newObjStr = "new " + pkgPrefix + bStructSymbol.name.getValue() + "(" + paramsStr + ")";
                 template[index] = template[index].replace(PLACE_HOLDER, newObjStr);
@@ -198,7 +218,8 @@ public class ValueSpaceGenerator {
             return template;
         } else if (bType instanceof BInvokableType) {
             BInvokableType invokableType = (BInvokableType) bType;
-            TestFunctionGenerator generator = new TestFunctionGenerator(importsAcceptor, currentPkgId, invokableType);
+            TestFunctionGenerator generator = new TestFunctionGenerator(importsAcceptor, currentPkgId, invokableType,
+                                                                        context);
             StringJoiner params = new StringJoiner(", ");
             String[][] valueSpace = generator.getValueSpace();
             String[] typeSpace = generator.getTypeSpace();
@@ -275,6 +296,11 @@ public class ValueSpaceGenerator {
             case "byte":
                 String[] resultBlob = new String[]{"0"};
                 populateValueSpace(resultBlob, template, () -> String.valueOf("0"));
+                break;
+            case "error":
+                String[] resultErr = new String[]{"error(\"\")"};
+                String msg = RandomStringUtils.randomAlphabetic(RANDOM_WORDS_LENGTH);
+                populateValueSpace(resultErr, template, () -> "error(\"" + msg + "\")");
                 break;
             default:
                 String[] result = new String[]{"()"};

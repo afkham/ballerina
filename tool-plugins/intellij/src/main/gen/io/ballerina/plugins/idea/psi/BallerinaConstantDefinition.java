@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@ package io.ballerina.plugins.idea.psi;
 import java.util.List;
 import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
+import io.ballerina.plugins.idea.psi.impl.BallerinaTopLevelDefinition;
 
-public interface BallerinaConstantDefinition extends BallerinaCompositeElement {
+public interface BallerinaConstantDefinition extends BallerinaTopLevelDefinition {
 
   @Nullable
-  BallerinaExpression getExpression();
+  BallerinaConstantExpression getConstantExpression();
 
   @Nullable
   BallerinaTypeName getTypeName();
@@ -32,16 +33,16 @@ public interface BallerinaConstantDefinition extends BallerinaCompositeElement {
   @Nullable
   PsiElement getAssign();
 
+  @Nullable
+  PsiElement getSemicolon();
+
   @NotNull
   PsiElement getConst();
 
   @Nullable
-  PsiElement getPublic();
-
-  @Nullable
-  PsiElement getSemicolon();
-
-  @Nullable
   PsiElement getIdentifier();
+
+  @Nullable
+  PsiElement getPublic();
 
 }

@@ -34,6 +34,10 @@ public enum Flag {
      */
     REMOTE,
     /**
+     * Indicates Flagged node is a transactional function.
+     */
+    TRANSACTIONAL,
+    /**
      * Indicates Flagged node is a native construct.
      */
     NATIVE,
@@ -62,10 +66,6 @@ public enum Flag {
      */
     LISTENER,
     /**
-     * Indicates Flagged node is deprecated.
-     */
-    DEPRECATED,
-    /**
      * Indicates Flagged node is a read only node.
      */
     READONLY,
@@ -86,9 +86,9 @@ public enum Flag {
      */
     RECORD,
     /**
-     * Temporary indicator for compensation variables.
+     * Indicator for ANONYMOUS types.
      */
-    COMPENSATE,
+    ANONYMOUS,
     /**
      * Indicates Flagged node is a abstract node.
      */
@@ -117,4 +117,16 @@ public enum Flag {
      * Indicates flagged node is a constant node.
      */
     CONSTANT,
+    /**
+     * Indicates flagged node is a paramType.
+     */
+    TYPE_PARAM,
+    /**
+     * Indicates flagged node is a lang library function.
+     */
+    LANG_LIB,
+    /**
+     * Indicates flagged node is a worker inside fork stmt.
+     */
+    FORKED
 }

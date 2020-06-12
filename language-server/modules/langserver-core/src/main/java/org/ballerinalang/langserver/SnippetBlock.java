@@ -17,9 +17,17 @@
 */
 package org.ballerinalang.langserver;
 
+import org.apache.commons.lang3.tuple.Pair;
+import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.CompletionItemKind;
-import org.eclipse.lsp4j.InsertTextFormat;
+import org.eclipse.lsp4j.TextEdit;
+import org.wso2.ballerinalang.compiler.tree.BLangImportPackage;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represent an insert text block having both plain text and snippet format strings.
@@ -32,33 +40,52 @@ public class SnippetBlock {
     private String detail = "";
     private String snippet;
     private SnippetType snippetType;
+    private final Pair<String, String>[] imports;
+
+    public SnippetBlock(String snippet, SnippetType snippetType) {
+        this.snippet = snippet;
+        this.snippetType = snippetType;
+        this.imports = null;
+    }
 
     public SnippetBlock(String label, String snippet, String detail, SnippetType snippetType) {
         this.label = label;
         this.snippet = snippet;
         this.detail = detail;
         this.snippetType = snippetType;
+        this.imports = null;
     }
 
-    public SnippetBlock(String snippet,  SnippetType snippetType) {
+    public SnippetBlock(String label, String snippet, String detail, SnippetType snippetType,
+                        Pair<String, String>... importsByOrgAndAlias) {
+        this.label = label;
         this.snippet = snippet;
+        this.detail = detail;
         this.snippetType = snippetType;
+        this.imports = importsByOrgAndAlias;
     }
 
     /**
      * Create a given completionItem's insert text.
      *
-     * @param completionItem     CompletionItem to modify
-     * @param isSnippetSupported Whether snippet is expected or plain text expected
+     * @param ctx   LS Context
      * @return modified Completion Item
      */
-    public CompletionItem build(CompletionItem completionItem, boolean isSnippetSupported) {
-        if (isSnippetSupported) {
-            completionItem.setInsertText(this.snippet);
-            completionItem.setInsertTextFormat(InsertTextFormat.Snippet);
-        } else {
-            completionItem.setInsertText(getPlainTextSnippet());
-            completionItem.setInsertTextFormat(InsertTextFormat.PlainText);
+    public CompletionItem build(LSContext ctx) {
+        CompletionItem completionItem = new CompletionItem();
+        completionItem.setInsertText(this.snippet);
+        List<BLangImportPackage> currentDocImports = ctx.get(DocumentServiceKeys.CURRENT_DOC_IMPORTS_KEY);
+        if (imports != null) {
+            List<TextEdit> importTextEdits = new ArrayList<>();
+            for (Pair<String, String> pair : imports) {
+                boolean pkgAlreadyImported = currentDocImports.stream()
+                        .anyMatch(importPkg -> importPkg.orgName.value.equals(pair.getLeft())
+                                && importPkg.alias.value.equals(pair.getRight()));
+                if (!pkgAlreadyImported) {
+                    importTextEdits.addAll(CommonUtil.getAutoImportTextEdits(pair.getLeft(), pair.getRight(), ctx));
+                }
+            }
+            completionItem.setAdditionalTextEdits(importTextEdits);
         }
         if (!label.isEmpty()) {
             completionItem.setLabel(label);
@@ -73,19 +100,10 @@ public class SnippetBlock {
     /**
      * Get the Snippet String.
      *
-     * @param isSnippet         Whether the snippet or plain text expected
      * @return {@link String}
      */
-    public String getString(boolean isSnippet) {
-        return isSnippet ? this.snippet : getPlainTextSnippet();
-    }
-    
-    // Private Methods
-    
-    private String getPlainTextSnippet() {
-        return this.snippet
-                .replaceAll("(\\$\\{\\d:)([a-zA-Z]*:*[a-zA-Z]*)(\\})", "$2")
-                .replaceAll("(\\$\\{\\d\\})", "");
+    public String getString() {
+        return this.snippet;
     }
 
     /**
@@ -99,7 +117,6 @@ public class SnippetBlock {
                 return CompletionItemKind.Keyword;
             case SNIPPET:
             case STATEMENT:
-                return CompletionItemKind.Snippet;
             default:
                 return CompletionItemKind.Snippet;
         }
@@ -107,6 +124,10 @@ public class SnippetBlock {
 
     public String getLabel() {
         return label;
+    }
+
+    public SnippetType getSnippetType() {
+        return snippetType;
     }
 
     /**

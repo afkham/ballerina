@@ -24,11 +24,13 @@ import org.wso2.ballerinalang.compiler.semantics.model.symbols.BInvokableSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangStatement;
+import org.wso2.ballerinalang.compiler.util.ClosureVarSymbol;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * @since 0.94
@@ -40,20 +42,23 @@ public class BLangFunction extends BLangInvokableNode implements FunctionNode {
     //TODO remove this and use ATTACHED flag instead
     // TODO remove when removing struct
     public boolean attachedFunction;
-    public boolean attachedOuterFunction;
     public boolean objInitFunction;
 
     public boolean interfaceFunction;
 
-    public Set<BVarSymbol> closureVarSymbols =  new LinkedHashSet<>();
-
+    public TreeMap<Integer, BVarSymbol> paramClosureMap = new TreeMap<>();
+    public BVarSymbol mapSymbol;
     public Map<BSymbol, BLangStatement> initFunctionStmts = new LinkedHashMap<>();
+
+    // Used to track uninitialized closure variables in DataFlowAnalyzer.
+    public Set<ClosureVarSymbol> closureVarSymbols = new LinkedHashSet<>();
 
     public BInvokableSymbol originalFuncSymbol;
 
-    public boolean isTypeChecked = false;
-
     public LinkedHashSet<String> sendsToThis = new LinkedHashSet<>();
+
+    // This only set when we encounter worker inside a fork statement.
+    public String anonForkName;
 
     public SimpleVariableNode getReceiver() {
         return receiver;
@@ -77,5 +82,4 @@ public class BLangFunction extends BLangInvokableNode implements FunctionNode {
     public String toString() {
         return "BLangFunction: " + super.toString();
     }
-    
 }

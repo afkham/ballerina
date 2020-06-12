@@ -18,8 +18,13 @@
 package org.wso2.ballerinalang.util;
 
 import org.ballerinalang.compiler.BLangCompilerException;
+import org.ballerinalang.toml.exceptions.TomlException;
+import org.ballerinalang.toml.model.Manifest;
+import org.ballerinalang.toml.parser.ManifestProcessor;
 import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
+import org.wso2.ballerinalang.compiler.util.ProjectDirs;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -27,6 +32,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Properties;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.regex.Pattern;
 
 /**
@@ -43,11 +50,18 @@ public class RepoUtils {
     private static final String USER_HOME = "user.home";
     private static final String DEFAULT_TERMINAL_SIZE = "80";
     private static final String BALLERINA_CLI_WIDTH = "BALLERINA_CLI_WIDTH";
-    private static final String PRODUCTION_URL = "https://api.central.ballerina.io/packages/";
-    private static final String STAGING_URL = "https://api.staging-central.ballerina.io/packages/";
-    private static final boolean BALLERINA_DEV_STAGE_CENTRAL = Boolean.parseBoolean(
-            System.getenv("BALLERINA_DEV_STAGE_CENTRAL"));
+    private static final String PRODUCTION_URL = "https://api.central.ballerina.io/1.0";
+    private static final String STAGING_URL = "https://api.staging-central.ballerina.io";
+    private static final String PREPROD_URL = "https://api.preprod-central.ballerina.io/1.0";
 
+    private static final String BALLERINA_ORG = "ballerina";
+    private static final String BALLERINAX_ORG = "ballerinax";
+
+    public static final boolean BALLERINA_DEV_STAGE_CENTRAL = Boolean.parseBoolean(
+            System.getenv("BALLERINA_DEV_STAGE_CENTRAL"));
+    public static final boolean BALLERINA_DEV_PREPROD_CENTRAL = Boolean.parseBoolean(
+            System.getenv("BALLERINA_DEV_PREPROD_CENTRAL"));
+    
     /**
      * Create and get the home repository path.
      *
@@ -75,16 +89,49 @@ public class RepoUtils {
     }
 
     /**
-     * Checks if the path is a project repo.
+     * Checks if the path is a project.
      *
-     * @param path dir path
+     * @param sourceRoot source root of the project.
      * @return true if the directory is a project repo, false if its the home repo
      */
-    public static boolean hasProjectRepo(Path path) {
-        path = path.resolve(ProjectDirConstants.DOT_BALLERINA_DIR_NAME);
-        return !path.equals(createAndGetHomeReposPath()) && Files.exists(path, LinkOption.NOFOLLOW_LINKS) &&
-                Files.isDirectory(path);
+    public static boolean isBallerinaProject(Path sourceRoot) {
+        Path manifest = sourceRoot.resolve(ProjectDirConstants.MANIFEST_FILE_NAME);
+        return Files.isDirectory(sourceRoot) && Files.exists(manifest) && Files.isRegularFile(manifest);
     }
+
+    /**
+     * Checks if the path is a standalone file.
+     *
+     * @param file path to bal file
+     * @return true if the file is a standalone bal file
+     */
+    public static boolean isBallerinaStandaloneFile(Path file) {
+        // Check if the file is a regular file
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        // Check if it is a file with bal extention.
+        if (!file.toString().endsWith(ProjectDirConstants.BLANG_SOURCE_EXT)) {
+            return false;
+        }
+        // Check if it is inside a project
+        Path projectRoot = ProjectDirs.findProjectRoot(file.getParent());
+        if (null != projectRoot) {
+            // Check if it is inside a module
+            Path src = projectRoot.resolve(ProjectDirConstants.SOURCE_DIR_NAME);
+            Path parent = file.getParent();
+            while (parent != null) {
+                if (src.equals(parent)) {
+                    return false;
+                }
+                parent = parent.getParent();
+            }
+            return true;
+        } else {
+            return true;
+        }
+    }
+
 
     /**
      * Get the remote repo URL.
@@ -94,8 +141,19 @@ public class RepoUtils {
     public static String getRemoteRepoURL() {
         if (BALLERINA_DEV_STAGE_CENTRAL) {
             return STAGING_URL;
+        } else if (BALLERINA_DEV_PREPROD_CENTRAL) {
+            return PREPROD_URL;
         }
         return PRODUCTION_URL;
+    }
+
+    /**
+     * Get the staging URL.
+     *
+     * @return URL of the remote repository
+     */
+    public static String getStagingURL() {
+            return STAGING_URL;
     }
 
     public static Path getLibDir() {
@@ -159,11 +217,67 @@ public class RepoUtils {
     /**
      * Validates the org-name and package name.
      *
-     * @param pkgName The org-name or package name.
-     * @return True if valid org-name or package name, else false.
+     * @param pkgName The package name.
+     * @return True if valid package name, else false.
      */
     public static boolean validatePkg(String pkgName) {
         String validRegex = "^[a-zA-Z0-9_.]*$";
         return Pattern.matches(validRegex, pkgName);
     }
+
+    /**
+     * Check if the org-name is a reserved org-name in ballerina.
+     *
+     * @param orgName The org-name
+     * @return True if the org-name is reserved, else false.
+     */
+    public static boolean isReservedOrgName(String orgName) {
+        return orgName.equals(BALLERINA_ORG) || orgName.equals(BALLERINAX_ORG);
+    }
+
+    /**
+     * Check if ballerina version is from a stable release or a nightly build.
+     *
+     * @return True if ballerina version is from a nightly build, else false.
+     */
+    public static boolean isANightlyBuild() {
+        return getBallerinaVersion().contains("SNAPSHOT");
+    }
+    
+    /**
+     * Get the Ballerina.toml from a balo file.
+     *
+     * @param baloPath The path to balo file.
+     * @return Ballerina.toml contents.
+     */
+    public static Manifest getManifestFromBalo(Path baloPath) {
+        try (JarFile jar = new JarFile(baloPath.toString())) {
+            java.util.Enumeration enumEntries = jar.entries();
+            while (enumEntries.hasMoreElements()) {
+                JarEntry file = (JarEntry) enumEntries.nextElement();
+                if (file.getName().contains(ProjectDirConstants.MANIFEST_FILE_NAME)) {
+                    if (file.isDirectory()) { // if its a directory, ignore
+                        continue;
+                    }
+                    // get the input stream
+                    Manifest manifest;
+                    try (InputStream is = jar.getInputStream(file)) {
+                        manifest = ManifestProcessor.parseTomlContentAsStream(is);
+                    }
+                    
+                    return manifest;
+                }
+            }
+        } catch (IOException e) {
+            throw new BLangCompilerException("unable to read balo file: " + baloPath +
+                                             ". balo file seems to be corrupted.");
+        } catch (TomlException e) {
+            throw new BLangCompilerException("unable to read balo file: " + baloPath +
+                                             ". balo file seems to be corrupted: " + e.getMessage());
+        }
+    
+        throw new BLangCompilerException("unable to find '/metadata/Ballerina.toml' file in balo file: " +
+                                         baloPath + "");
+    }
+    
 }

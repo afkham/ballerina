@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,21 +21,30 @@ import java.util.List;
 import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
 
-public interface BallerinaErrorBindingPattern extends BallerinaCompositeElement {
-
-  @Nullable
-  BallerinaRecordBindingPattern getRecordBindingPattern();
-
-  @Nullable
-  PsiElement getComma();
-
-  @Nullable
-  PsiElement getLeftParenthesis();
-
-  @Nullable
-  PsiElement getRightParenthesis();
+public interface BallerinaErrorBindingPattern extends PsiElement {
 
   @NotNull
+  List<BallerinaErrorDetailBindingPattern> getErrorDetailBindingPatternList();
+
+  @Nullable
+  BallerinaErrorFieldBindingPatterns getErrorFieldBindingPatterns();
+
+  @Nullable
+  BallerinaErrorRestBindingPattern getErrorRestBindingPattern();
+
+  @Nullable
+  BallerinaTypeName getTypeName();
+
+  @NotNull
+  PsiElement getLeftParenthesis();
+
+  @NotNull
+  PsiElement getRightParenthesis();
+
+  @Nullable
   PsiElement getError();
+
+  @Nullable
+  PsiElement getIdentifier();
 
 }

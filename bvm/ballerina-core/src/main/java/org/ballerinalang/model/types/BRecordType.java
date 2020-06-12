@@ -17,10 +17,9 @@
  */
 package org.ballerinalang.model.types;
 
+import org.ballerinalang.model.util.Flags;
 import org.ballerinalang.model.values.BMap;
 import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.util.codegen.RecordTypeInfo;
-import org.ballerinalang.util.codegen.TypeInfo;
 
 /**
  * {@code BRecordType} represents a user defined record type in Ballerina.
@@ -29,36 +28,44 @@ import org.ballerinalang.util.codegen.TypeInfo;
  */
 public class BRecordType extends BStructureType {
 
-    public RecordTypeInfo recordTypeInfo;
-
     public boolean sealed;
     public BType restFieldType;
 
     /**
      * Create a {@code BStructType} which represents the user defined struct type.
      *
-     * @param recordTypeInfo record type info object
      * @param typeName string name of the type
      * @param pkgPath  package of the struct
      * @param flags of the record type
      */
-    public BRecordType(RecordTypeInfo recordTypeInfo, String typeName, String pkgPath, int flags) {
+    public BRecordType(String typeName, String pkgPath, int flags) {
         super(typeName, pkgPath, flags, BMap.class);
-        this.recordTypeInfo = recordTypeInfo;
-    }
-
-    public TypeInfo getTypeInfo() {
-        return recordTypeInfo;
     }
 
     @Override
     public <V extends BValue> V getZeroValue() {
-        return null;
+        BMap<String, BValue> implicitInitValue = new BMap<>(this);
+        this.fields.entrySet().stream()
+                .filter(entry -> !Flags.isFlagOn(entry.getValue().flags, Flags.OPTIONAL))
+                .forEach(entry -> {
+                    BValue value = entry.getValue().fieldType.getZeroValue();
+                    implicitInitValue.put(entry.getKey(), value);
+                });
+
+        return (V) implicitInitValue;
     }
 
     @Override
     public <V extends BValue> V getEmptyValue() {
-        return (V) new BMap<>(this);
+        BMap<String, BValue> implicitInitValue = new BMap<>(this);
+        this.fields.entrySet().stream()
+                .filter(entry -> !Flags.isFlagOn(entry.getValue().flags, Flags.OPTIONAL))
+                .forEach(entry -> {
+                    BValue value = entry.getValue().fieldType.getEmptyValue();
+                    implicitInitValue.put(entry.getKey(), value);
+                });
+
+        return (V) implicitInitValue;
     }
 
     @Override

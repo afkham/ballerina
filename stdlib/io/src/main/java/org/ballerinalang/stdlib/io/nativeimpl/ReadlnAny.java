@@ -17,13 +17,8 @@
  */
 package org.ballerinalang.stdlib.io.nativeimpl;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.ReturnType;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.values.api.BString;
 
 import java.nio.charset.Charset;
 import java.util.Scanner;
@@ -33,21 +28,14 @@ import java.util.Scanner;
  *
  * @since 0.97
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "io",
-        functionName = "readln",
-        returnType = {@ReturnType(type = TypeKind.STRING)},
-        isPublic = true
-)
-public class ReadlnAny extends BlockingNativeCallableUnit {
+public class ReadlnAny {
 
-    public void execute(Context ctx) {
-        BValue result = ctx.getNullableRefArgument(0);
+    private static Scanner sc = new Scanner(System.in, Charset.defaultCharset().displayName());
+
+    public static BString readln(Object result) {
         if (result != null) {
-            System.out.print(result.stringValue());
+            System.out.print(result.toString());
         }
-        Scanner sc = new Scanner(System.in, Charset.defaultCharset().displayName());
-        String input = sc.nextLine();
-        ctx.setReturnValues(new BString(input));
+        return StringUtils.fromString(sc.nextLine());
     }
 }

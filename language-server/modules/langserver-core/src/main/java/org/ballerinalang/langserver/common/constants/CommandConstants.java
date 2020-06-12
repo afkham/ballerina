@@ -26,25 +26,54 @@ public class CommandConstants {
     public static final String UNDEFINED_FUNCTION = "undefined function";
     public static final String VAR_ASSIGNMENT_REQUIRED = "variable assignment is required";
     public static final String UNRESOLVED_MODULE = "cannot resolve module";
-    public static final Pattern UNRESOLVED_MODULE_PATTERN = Pattern.compile("cannot resolve module '(.*)'");
+    public static final String TAINTED_PARAM_PASSED = "tainted value passed to untainted parameter";
+    public static final String NO_IMPL_FOUND_FOR_FUNCTION = "no implementation found for the function";
+    public static final String FUNC_IMPL_FOUND_IN_ABSTRACT_OBJ = "cannot have a body";
+    public static final Pattern UNUSED_IMPORT_MODULE_PATTERN = Pattern.compile(
+            "unused import module '(\\S*)\\s*(?:version\\s(.*))?(.*)'");
+    public static final Pattern UNRESOLVED_MODULE_PATTERN = Pattern.compile(
+            "cannot resolve module '(\\S*)\\s*(?:version\\s(.*))?(.*)'");
+    public static final Pattern TAINTED_PARAM_PATTERN = Pattern.compile(
+            "tainted value passed to untainted parameter '(.*)'");
     public static final Pattern UNDEFINED_FUNCTION_PATTERN = Pattern.compile("undefined function '(.*)'");
-
+    public static final String INCOMPATIBLE_TYPES = "incompatible types";
+    public static final Pattern INCOMPATIBLE_TYPE_PATTERN = Pattern.compile(
+            "incompatible types: expected '(.*)', found '(.*)'");
+    public static final Pattern NO_IMPL_FOUND_FOR_FUNCTION_PATTERN = Pattern.compile(
+            "no implementation found for the function '(.*)' of non-abstract object '(.*)'");
+    public static final Pattern FUNC_IN_ABSTRACT_OBJ_PATTERN = Pattern.compile(
+            "function '(.*)' in abstract object '(.*)' cannot have a body");
+    public static final Pattern FQ_TYPE_PATTERN = Pattern.compile("(.*)/([^:]*):(?:.*:)?(.*)");
+    public static final Pattern NO_CONCAT_PATTERN = Pattern.compile("^\\\"[^\\\"]*\\\"$|^[^\\\"\\+]*$");
+    public static final Pattern RESOURCE_PATH_NOT_FOUND = Pattern.compile(
+            "Couldn't find a Ballerina service resource for the path '(.*)' which is documented in the OpenAPI " +
+                    "contract");
+    public static final Pattern RESOURCE_METHOD_NOT_FOUND = Pattern.compile(
+            "Couldn't find Ballerina service resource\\(s\\) for http method\\(s\\) '(.*)' for the path '(.*)' which " +
+                    "is documented in the OpenAPI contract");
+    public static final Pattern RESOURCE_METHOD_NOT_FOUND_IN_OPENAPI = Pattern.compile(
+            "Ballerina service contains a Resource that is not documented in the OpenAPI contract. Error Resource " +
+                    "path '(.*)'");
+    public static final Pattern PARAMETER_FOR_THE_METHOD_NOT_FOUND_IN_OPENAPI =
+            Pattern.compile(
+                    "'(.*)' parameter for the method '(.*)' of the resource associated with the path '(.*)' is not " +
+                            "documented in the OpenAPI contract");
+    public static final Pattern PARAMETER_FOR_THE_METHOD_NOT_FOUND_IN_BALLERINA =
+            Pattern.compile(
+                    "Couldn't find '(.*)' parameter in the Ballerina service resource for the method '(.*)' of the " +
+                            "path '(.*)' which is documented in the OpenAPI contract");
+    public static final Pattern METHOD_FOR_THE_PATH_NOT_FOUND_IN_OPENAPI =
+            Pattern.compile(
+                    "OpenAPI contract doesn't contain the documentation for http method\\(s\\) '(.*)' for the path '(" +
+                            ".*)'");
     // Command Arguments
     public static final String ARG_KEY_DOC_URI = "doc.uri";
 
     public static final String ARG_KEY_MODULE_NAME = "module";
 
-    public static final String ARG_KEY_FUNC_NAME = "function.name";
+    public static final String ARG_KEY_SERVICE_NAME = "service.name";
 
-    public static final String ARG_KEY_FUNC_LOCATION = "function.location";
-
-    public static final String ARG_KEY_RETURN_TYPE = "function.returns";
-
-    public static final String ARG_KEY_VAR_NAME = "var.name";
-
-    public static final String ARG_KEY_RETURN_DEFAULT_VAL = "function.returns.default";
-
-    public static final String ARG_KEY_FUNC_ARGS = "function.arguments";
+    public static final String ARG_KEY_FUNCTION_NAME = "function.name";
 
     public static final String ARG_KEY_NODE_TYPE = "node.type";
 
@@ -52,13 +81,26 @@ public class CommandConstants {
 
     public static final String ARG_KEY_NODE_COLUMN = "node.column";
 
+    public static final String ARG_KEY_MESSAGE_TYPE = "message.type";
+
+    public static final String ARG_KEY_MESSAGE = "message";
+
+    public static final String ARG_KEY_PATH = "path";
+
+    public static final String ARG_KEY_METHOD = "method";
+
+    public static final String ARG_KEY_PARAMETER = "parameter";
 
     // Command Titles
-    public static final String IMPORT_MODULE_TITLE = "Import Module ";
+    public static final String IMPORT_MODULE_TITLE = "Import Module '%s'";
 
     public static final String CREATE_VARIABLE_TITLE = "Create Local Variable";
 
+    public static final String IGNORE_RETURN_TITLE = "Ignore Return Value";
+
     public static final String CREATE_FUNCTION_TITLE = "Create Function ";
+
+    public static final String MARK_UNTAINTED_TITLE = "Mark '%s' as Untainted";
 
     public static final String CREATE_TEST_FUNC_TITLE = "Create Test For Function";
 
@@ -72,20 +114,32 @@ public class CommandConstants {
 
     public static final String PULL_MOD_TITLE = "Pull from Ballerina Central";
 
-    // Commands List
-    public static final String CMD_IMPORT_MODULE = "IMPORT_MODULE";
+    public static final String CHANGE_RETURN_TYPE_TITLE = "Change Return Type to '";
 
-    public static final String CMD_CREATE_FUNCTION = "CREATE_FUNC";
+    public static final String MAKE_OBJ_ABSTRACT_TITLE = "Make '%s' an Abstract Object";
 
-    public static final String CMD_CREATE_TEST = "CREATE_TEST";
+    public static final String MAKE_OBJ_NON_ABSTRACT_TITLE = "Make '%s' an Non-Abstract Object";
 
-    public static final String CMD_CREATE_VARIABLE = "CREATE_VAR";
+    public static final String TYPE_GUARD_TITLE = "Type Guard '%s'";
 
-    public static final String CMD_ADD_DOCUMENTATION = "ADD_DOC";
+    public static final String CREATE_SERVICE_RESOURCE = "Create service resource for the path '%s'";
 
-    public static final String CMD_ADD_ALL_DOC = "ADD_ALL_DOC";
+    public static final String CREATE_SERVICE_RESOURCE_METHOD =
+            "Create service resource for http method '%s' for the path '%s'";
 
-    public static final String CMD_CREATE_INITIALIZER = "CREATE_INITIALIZER";
+    public static final String CREATE_SERVICE_RESOURCE_METHOD_IN_OPENAPI =
+            "Create service resource for the path '%s' in the OpenAPI contract";
 
-    public static final String CMD_PULL_MODULE = "PULL_MODULE";
+    public static final String ADD_MISSING_PARAMETER_IN_OPENAPI =
+            "Add missing parameter '%s' for the method '%s' for the path '%s' in the OpenAPI contract";
+
+    public static final String ADD_MISSING_PARAMETER_IN_BALLERINA =
+            "Add missing parameter '%s' for the method '%s' for the path '%s'";
+
+    public static final String CREATE_MISSING_METHOD_FOR_THE_PATH_IN_OPENAPI =
+            "Create missing http method '%s' for the path '%s'";
+
+    public static final String IMPLEMENT_FUNCS_TITLE = "Implement All Functions";
+
+    public static final String OPTIMIZE_IMPORTS_TITLE = "Optimize All Imports";
 }

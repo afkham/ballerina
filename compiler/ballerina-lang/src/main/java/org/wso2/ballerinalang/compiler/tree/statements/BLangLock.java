@@ -18,18 +18,15 @@
 package org.wso2.ballerinalang.compiler.tree.statements;
 
 import org.ballerinalang.model.tree.NodeKind;
-import org.ballerinalang.model.tree.statements.BlockNode;
+import org.ballerinalang.model.tree.statements.BlockStatementNode;
 import org.ballerinalang.model.tree.statements.LockNode;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BVarSymbol;
 import org.wso2.ballerinalang.compiler.tree.BLangNodeVisitor;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangIndexBasedAccess.BLangStructFieldAccessExpr;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangLiteral;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangVariableReference;
+import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
 
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation for the lock tree node.
@@ -39,10 +36,6 @@ import java.util.Set;
 public class BLangLock extends BLangStatement implements LockNode {
 
     public BLangBlockStmt body;
-
-    public Set<BVarSymbol> lockVariables = new HashSet<>();
-
-    public Map<BVarSymbol, Set<BLangStructFieldAccessExpr>> fieldVariables = new HashMap<>();
 
     public String uuid;
 
@@ -55,7 +48,7 @@ public class BLangLock extends BLangStatement implements LockNode {
     }
 
     @Override
-    public void setBody(BlockNode body) {
+    public void setBody(BlockStatementNode body) {
         this.body = (BLangBlockStmt) body;
     }
 
@@ -69,25 +62,61 @@ public class BLangLock extends BLangStatement implements LockNode {
         return NodeKind.LOCK;
     }
 
-    public boolean addLockVariable(BVarSymbol variable) {
-        return lockVariables.add(variable);
-    }
-
-    public void addFieldVariable(BLangStructFieldAccessExpr expr) {
-        fieldVariables.putIfAbsent((BVarSymbol) ((BLangVariableReference) expr.expr).symbol,
-                new HashSet<>());
-
-        Set<BLangStructFieldAccessExpr> exprList = fieldVariables.get(((BLangVariableReference) expr.expr).symbol);
-
-        // remove the existing one to avoid duplicates if same field already exist
-        exprList.removeIf(fieldExpr ->
-                ((BLangLiteral) fieldExpr.indexExpr).value.equals(((BLangLiteral) expr.indexExpr).value));
-        exprList.add(expr);
-    }
-
     @Override
     public String toString() {
         return "lock {"
                 + (body != null ? String.valueOf(body) : "") + "}";
+    }
+
+    /**
+     * Implementation for the lock statement, used only in desugar phase.
+     *
+     * @since 1.0.0
+     */
+    public static class BLangLockStmt extends BLangLock {
+
+        public Set<BVarSymbol> lockVariables = new HashSet<>();
+
+        public BLangLockStmt(DiagnosticPos pos) {
+            this.pos = pos;
+        }
+
+        @Override
+        public void accept(BLangNodeVisitor visitor) {
+            visitor.visit(this);
+        }
+
+        @Override
+        public String toString() {
+            return "lock [" + lockVariables.stream().map(s -> s.name.value).collect(Collectors.joining(", "));
+        }
+
+        public boolean addLockVariable(BVarSymbol variable) {
+            return lockVariables.add(variable);
+        }
+    }
+
+    /**
+     * Implementation for the unlock statement, used only in desugar phase.
+     *
+     * @since 1.0.0
+     */
+    public static class BLangUnLockStmt extends BLangLock {
+
+        public BLangLockStmt relatedLock;
+
+        public BLangUnLockStmt(DiagnosticPos pos) {
+            this.pos = pos;
+        }
+
+        @Override
+        public void accept(BLangNodeVisitor visitor) {
+            visitor.visit(this);
+        }
+
+        @Override
+        public String toString() {
+            return "unlock []";
+        }
     }
 }

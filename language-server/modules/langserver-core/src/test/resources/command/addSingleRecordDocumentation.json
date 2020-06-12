@@ -1,10 +1,9 @@
 {
-  "nodeType": "record",
+  "nodeType": "RECORD",
   "nodeLine": "14",
   "expected": {
     "result": {
       "edit": {
-        "changes": {},
         "documentChanges": [
           {
             "edits": [

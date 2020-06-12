@@ -15,22 +15,25 @@
  */
 package org.ballerinalang.langserver.command.testgen;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.ballerinalang.compiler.CompilerPhase;
 import org.ballerinalang.langserver.command.testgen.renderer.BLangPkgBasedRendererOutput;
 import org.ballerinalang.langserver.command.testgen.renderer.RendererOutput;
 import org.ballerinalang.langserver.command.testgen.renderer.TemplateBasedRendererOutput;
 import org.ballerinalang.langserver.command.testgen.template.RootTemplate;
+import org.ballerinalang.langserver.common.ImportsAcceptor;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
-import org.ballerinalang.langserver.compiler.LSCompiler;
-import org.ballerinalang.langserver.compiler.LSCompilerException;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
+import org.ballerinalang.langserver.compiler.ExtendedLSCompiler;
 import org.ballerinalang.langserver.compiler.common.modal.BallerinaFile;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentException;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
+import org.ballerinalang.langserver.compiler.exception.CompilationFailedException;
 import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.model.tree.TopLevelNode;
+import org.ballerinalang.model.types.TypeKind;
 import org.eclipse.lsp4j.TextEdit;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BInvokableType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BNilType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
 import org.wso2.ballerinalang.compiler.tree.BLangNode;
@@ -44,6 +47,7 @@ import org.wso2.ballerinalang.compiler.tree.expressions.BLangSimpleVarRef;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangTypeInit;
 import org.wso2.ballerinalang.compiler.tree.types.BLangFunctionTypeNode;
 import org.wso2.ballerinalang.compiler.tree.types.BLangType;
+import org.wso2.ballerinalang.compiler.tree.types.BLangValueType;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,7 +63,7 @@ import java.util.stream.IntStream;
 import static org.ballerinalang.langserver.command.testgen.ValueSpaceGenerator.createTemplateArray;
 import static org.ballerinalang.langserver.command.testgen.ValueSpaceGenerator.getValueSpaceByNode;
 import static org.ballerinalang.langserver.command.testgen.ValueSpaceGenerator.getValueSpaceByType;
-import static org.ballerinalang.langserver.common.utils.CommonUtil.FunctionGenerator.generateTypeDefinition;
+import static org.ballerinalang.langserver.common.utils.FunctionGenerator.generateTypeDefinition;
 
 /**
  * This class is responsible for generating tests for a given source file.
@@ -75,20 +79,22 @@ public class TestGenerator {
      * Creates a test file for a given BLangPackage in source file path.
      *
      * @param documentManager   document manager
-     * @param bLangNodePair     A pair of {@link BLangNode} and fallback node
+     * @param bLangNode         A pair of {@link BLangNode} and fallback node
      * @param focusLineAcceptor focus line acceptor
      * @param builtSourceFile   built {@link BLangPackage} source file
      * @param pkgRelativePath   package relative path
      * @param testFile          test file
+     * @param context  {@link LSContext}
      * @return generated test file path
      * @throws TestGeneratorException when test case generation fails
      */
     public static List<TextEdit> generate(WorkspaceDocumentManager documentManager,
-                                          Pair<BLangNode, Object> bLangNodePair,
+                                          BLangNode bLangNode,
                                           BiConsumer<Integer, Integer> focusLineAcceptor,
                                           BLangPackage builtSourceFile, String pkgRelativePath,
-                                          File testFile) throws TestGeneratorException {
-        RootTemplate template = getRootTemplate(pkgRelativePath, bLangNodePair, builtSourceFile, focusLineAcceptor);
+                                          File testFile, LSContext context) throws TestGeneratorException {
+        RootTemplate template = getRootTemplate(pkgRelativePath, bLangNode, builtSourceFile, focusLineAcceptor,
+                                                context);
         RendererOutput rendererOutput = getRendererOutput(documentManager, testFile, focusLineAcceptor);
         template.render(rendererOutput);
         return rendererOutput.getRenderedTextEdits();
@@ -117,8 +123,8 @@ public class TestGenerator {
             // Create tests from blang package
             BallerinaFile ballerinaFile;
             try {
-                ballerinaFile = LSCompiler.compileContent(testContent, CompilerPhase.COMPILER_PLUGIN);
-            } catch (LSCompilerException e) {
+                ballerinaFile = ExtendedLSCompiler.compileContent(testContent, CompilerPhase.COMPILER_PLUGIN);
+            } catch (CompilationFailedException e) {
                 throw new TestGeneratorException("Could not compile the test content", e);
             }
             Optional<BLangPackage> optBLangPackage = ballerinaFile.getBLangPackage();
@@ -132,21 +138,18 @@ public class TestGenerator {
         return fileTemplate;
     }
 
-    private static RootTemplate getRootTemplate(String fileName, Pair<BLangNode, Object> nodes,
+    private static RootTemplate getRootTemplate(String fileName, BLangNode bLangNode,
                                                 BLangPackage builtTestFile,
-                                                BiConsumer<Integer, Integer> focusLineAcceptor)
+                                                BiConsumer<Integer, Integer> focusLineAcceptor,
+                                                LSContext context)
             throws TestGeneratorException {
-
-        BLangNode bLangNode = nodes.getLeft();
-        Object otherNode = nodes.getRight();
-
-        if (bLangNode == null && otherNode == null) {
+        if (bLangNode == null) {
             throw new TestGeneratorException("Target test construct not found!");
         }
 
         if (bLangNode instanceof BLangFunction) {
             // A function
-            return RootTemplate.fromFunction((BLangFunction) bLangNode, builtTestFile, focusLineAcceptor);
+            return RootTemplate.fromFunction((BLangFunction) bLangNode, builtTestFile, focusLineAcceptor, context);
 
         } else if (bLangNode instanceof BLangService || hasServiceConstructor(bLangNode)) {
             // A Service
@@ -168,10 +171,12 @@ public class TestGenerator {
                 if ("http".equals(owner)) {
                     switch (serviceTypeName) {
                         case "Listener":
-                            t[0] = RootTemplate.fromHttpService(service, init, builtTestFile, focusLineAcceptor);
+                            t[0] = RootTemplate.fromHttpService(service, init, builtTestFile, focusLineAcceptor,
+                                                                context);
                             break;
                         case "WebSocketListener":
-                            t[0] = RootTemplate.fromHttpWSService(service, init, builtTestFile, focusLineAcceptor);
+                            t[0] = RootTemplate.fromHttpWSService(service, init, builtTestFile, focusLineAcceptor,
+                                                                  context);
                             break;
                         default:
                             // do nothing
@@ -188,7 +193,7 @@ public class TestGenerator {
             return t[0];
         }
         // Whole file
-        return new RootTemplate(fileName, builtTestFile, focusLineAcceptor);
+        return new RootTemplate(fileName, builtTestFile, focusLineAcceptor, context);
     }
 
     private static boolean hasServiceConstructor(BLangNode bLangNode) {
@@ -200,19 +205,24 @@ public class TestGenerator {
         if (service.attachedExprs.isEmpty()) {
             return Optional.empty();
         }
-        BLangExpression bLangExpression = service.attachedExprs.get(0);
+        BLangExpression expr = service.attachedExprs.get(0);
+        if (expr instanceof BLangTypeInit) {
+            // If in-line listener
+            return Optional.of((BLangTypeInit) expr);
+        }
         String[] variableName = {""};
-        if (bLangExpression instanceof BLangSimpleVarRef) {
-            BLangSimpleVarRef varRef = (BLangSimpleVarRef) bLangExpression;
+        if (expr instanceof BLangSimpleVarRef) {
+            // variable ref listener
+            BLangSimpleVarRef varRef = (BLangSimpleVarRef) expr;
             variableName[0] = varRef.variableName.value;
         }
 
         for (TopLevelNode topLevelNode : builtTestFile.topLevelNodes) {
             if (topLevelNode instanceof BLangSimpleVariable) {
                 BLangSimpleVariable var = (BLangSimpleVariable) topLevelNode;
-                BLangExpression expr = var.expr;
-                if (expr instanceof BLangTypeInit && variableName[0].equals(var.name.value)) {
-                    return Optional.of((BLangTypeInit) expr);
+                BLangExpression varExpr = var.expr;
+                if (varExpr instanceof BLangTypeInit && variableName[0].equals(var.name.value)) {
+                    return Optional.of((BLangTypeInit) varExpr);
                 }
             }
         }
@@ -229,20 +239,23 @@ public class TestGenerator {
         private String[] namesSpace;
         private String functionName;
         private String returnType;
+        private int paramsCount;
 
-        public TestFunctionGenerator(BiConsumer<String, String> importsAcceptor, PackageID currentPkgId,
-                                     BLangFunction function) {
+        public TestFunctionGenerator(ImportsAcceptor importsAcceptor, PackageID currentPkgId,
+                                     BLangFunction function, LSContext context) {
             List<BLangSimpleVariable> params = function.requiredParams;
             List<BLangType> paramTypes = params.stream().map(variable -> variable.typeNode).collect(
                     Collectors.toList());
             List<String> paramNames = new ArrayList<>();
             params.forEach(variable -> paramNames.add(variable.name.value));
-            init(importsAcceptor, currentPkgId, function.name.value, paramNames, paramTypes, function.returnTypeNode);
+            init(importsAcceptor, currentPkgId, function.name.value, paramNames, paramTypes, function.returnTypeNode,
+                 context);
         }
 
-        public TestFunctionGenerator(BiConsumer<String, String> importsAcceptor, PackageID currentPkgId,
-                                     BLangFunctionTypeNode type) {
+        public TestFunctionGenerator(ImportsAcceptor importsAcceptor, PackageID currentPkgId,
+                                     BLangFunctionTypeNode type, LSContext context) {
             List<BLangVariable> params = type.params;
+            this.paramsCount = type.params.size();
             List<BLangType> paramTypes = params.stream().map(variable -> variable.typeNode).collect(
                     Collectors.toList());
             List<String> paramNames = new ArrayList<>();
@@ -253,13 +266,19 @@ public class TestGenerator {
                     paramNames.add(null);
                 }
             });
-            init(importsAcceptor, currentPkgId, "", paramNames, paramTypes, type.returnTypeNode);
+            init(importsAcceptor, currentPkgId, "", paramNames, paramTypes, type.returnTypeNode, context);
         }
 
-        public TestFunctionGenerator(BiConsumer<String, String> importsAcceptor, PackageID currentPkgId,
-                                     BInvokableType invokableType) {
+        public TestFunctionGenerator(ImportsAcceptor importsAcceptor, PackageID currentPkgId,
+                                     BInvokableType invokableType, LSContext context) {
+            boolean hasReturnType = true;
+            if (invokableType.retType == null || invokableType.retType instanceof BNilType) {
+                // No return type
+                hasReturnType = false;
+            }
             this.functionName = "";
             List<BType> params = invokableType.paramTypes;
+            this.paramsCount = params.size();
             BType returnBType = invokableType.retType;
             this.valueSpace = new String[VALUE_SPACE_LENGTH][params.size() + 1];
             this.typeSpace = new String[params.size() + 1];
@@ -269,7 +288,7 @@ public class TestGenerator {
             Set<String> lookupSet = new HashSet<>();
             for (int i = 0; i < params.size(); i++) {
                 String paramType = generateTypeDefinition(importsAcceptor, currentPkgId,
-                                                          params.get(i));
+                                                          params.get(i), context);
                 String paramName = CommonUtil.generateName(1, lookupSet);
                 lookupSet.add(paramName);
 
@@ -277,7 +296,7 @@ public class TestGenerator {
                 this.namesSpace[i] = paramName;
 
                 String[] pValueSpace = getValueSpaceByType(importsAcceptor, currentPkgId, params.get(i),
-                                                           createTemplateArray(VALUE_SPACE_LENGTH));
+                                                           createTemplateArray(VALUE_SPACE_LENGTH), context);
 
                 for (int j = 0; j < pValueSpace.length; j++) {
                     // Need to apply transpose of `pValueSpace`
@@ -287,31 +306,41 @@ public class TestGenerator {
             }
 
             // Populate target function's return type
-            this.returnType = generateTypeDefinition(importsAcceptor, currentPkgId, returnBType);
-            String[] rtValSpace = getValueSpaceByType(importsAcceptor, currentPkgId, returnBType,
-                                                      createTemplateArray(VALUE_SPACE_LENGTH));
+            if (hasReturnType) {
+                this.returnType = generateTypeDefinition(importsAcceptor, currentPkgId, returnBType, context);
+                String[] rtValSpace = getValueSpaceByType(importsAcceptor, currentPkgId, returnBType,
+                                                          createTemplateArray(VALUE_SPACE_LENGTH), context);
 
-            this.typeSpace[params.size()] = returnType;
-            this.namesSpace[params.size()] = "expected";
+                this.typeSpace[params.size()] = returnType;
+                this.namesSpace[params.size()] = "expected";
 
-            IntStream.range(0, rtValSpace.length).forEach(index -> {
-                valueSpace[index][params.size()] = rtValSpace[index];
-            });
+                IntStream.range(0, rtValSpace.length).forEach(index -> {
+                    valueSpace[index][params.size()] = rtValSpace[index];
+                });
+            }
         }
 
-        private void init(BiConsumer<String, String> importsAcceptor, PackageID currentPkgId,
+        private void init(ImportsAcceptor importsAcceptor, PackageID currentPkgId,
                           String functionName,
-                          List<String> paramNames, List<BLangType> paramTypes, BLangType returnTypeNode) {
+                          List<String> paramNames, List<BLangType> paramTypes, BLangType returnTypeNode,
+                          LSContext context) {
+            boolean hasReturnType = true;
+            if (returnTypeNode instanceof BLangValueType &&
+                    (TypeKind.NIL.equals(((BLangValueType) returnTypeNode).getTypeKind()))) {
+                // No return type
+                hasReturnType = false;
+            }
             this.functionName = functionName;
-            this.valueSpace = new String[VALUE_SPACE_LENGTH][paramNames.size() + 1];
-            this.typeSpace = new String[paramNames.size() + 1];
-            this.namesSpace = new String[paramNames.size() + 1];
+            this.paramsCount = paramNames.size();
+            this.valueSpace = new String[VALUE_SPACE_LENGTH][paramNames.size() + ((hasReturnType ? 1 : 0))];
+            this.typeSpace = new String[paramNames.size() + ((hasReturnType ? 1 : 0))];
+            this.namesSpace = new String[paramNames.size() + ((hasReturnType ? 1 : 0))];
 
             // Populate target function's parameters
             Set<String> lookupSet = new HashSet<>();
             for (int i = 0; i < paramNames.size(); i++) {
                 String paramType = generateTypeDefinition(importsAcceptor, currentPkgId,
-                                                          paramTypes.get(i));
+                                                          paramTypes.get(i), context);
                 String paramName = paramNames.get(i);
                 if (paramName == null) {
                     // If null, generate a param name
@@ -321,7 +350,7 @@ public class TestGenerator {
                 this.namesSpace[i] = paramName;
 
                 String[] pValueSpace = getValueSpaceByNode(importsAcceptor, currentPkgId, paramTypes.get(i),
-                                                           createTemplateArray(VALUE_SPACE_LENGTH));
+                                                           createTemplateArray(VALUE_SPACE_LENGTH), context);
                 for (int j = 0; j < pValueSpace.length; j++) {
                     // Need to apply transpose of `pValueSpace`
                     // i.e. valueSpace = (pValueSpace)^T
@@ -331,17 +360,19 @@ public class TestGenerator {
             }
 
             // Populate target function's return type
-            this.returnType = generateTypeDefinition(importsAcceptor, currentPkgId,
-                                                     returnTypeNode);
-            String[] rtValSpace = getValueSpaceByNode(importsAcceptor, currentPkgId, returnTypeNode,
-                                                      createTemplateArray(VALUE_SPACE_LENGTH));
+            if (hasReturnType) {
+                this.returnType = generateTypeDefinition(importsAcceptor, currentPkgId,
+                                                         returnTypeNode, context);
+                String[] rtValSpace = getValueSpaceByNode(importsAcceptor, currentPkgId, returnTypeNode,
+                                                          createTemplateArray(VALUE_SPACE_LENGTH), context);
 
-            this.typeSpace[paramNames.size()] = returnType;
-            this.namesSpace[paramNames.size()] = "expected";
+                this.typeSpace[paramNames.size()] = returnType;
+                this.namesSpace[paramNames.size()] = "expected";
 
-            IntStream.range(0, rtValSpace.length).forEach(index -> {
-                valueSpace[index][paramNames.size()] = rtValSpace[index];
-            });
+                IntStream.range(0, rtValSpace.length).forEach(index -> {
+                    valueSpace[index][paramNames.size()] = rtValSpace[index];
+                });
+            }
         }
 
         /**
@@ -394,7 +425,7 @@ public class TestGenerator {
          */
         public String getTargetFuncInvocation() {
             StringJoiner paramsInvokeStr = new StringJoiner(", ");
-            IntStream.range(0, this.namesSpace.length - 1).forEach(i -> paramsInvokeStr.add(this.namesSpace[i]));
+            IntStream.range(0, this.paramsCount).forEach(i -> paramsInvokeStr.add(this.namesSpace[i]));
             return this.functionName + "(" + paramsInvokeStr.toString() + ")";
         }
 
@@ -466,6 +497,16 @@ public class TestGenerator {
          */
         public String[] getNamesSpace() {
             return namesSpace.clone();
+        }
+
+
+        /**
+         * Returns params count of the function.
+         *
+         * @return params count
+         */
+        public int getParamsCount() {
+            return paramsCount;
         }
     }
 }

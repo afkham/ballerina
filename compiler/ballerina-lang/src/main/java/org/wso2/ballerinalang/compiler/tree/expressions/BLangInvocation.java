@@ -17,14 +17,16 @@
 */
 package org.wso2.ballerinalang.compiler.tree.expressions;
 
+import org.ballerinalang.model.elements.Flag;
+import org.ballerinalang.model.tree.ActionNode;
+import org.ballerinalang.model.tree.AnnotationAttachmentNode;
 import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.NodeKind;
 import org.ballerinalang.model.tree.expressions.ExpressionNode;
 import org.ballerinalang.model.tree.expressions.InvocationNode;
-import org.wso2.ballerinalang.compiler.semantics.model.BLangBuiltInMethod;
-import org.wso2.ballerinalang.compiler.semantics.model.iterable.IterableContext;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
+import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachment;
 import org.wso2.ballerinalang.compiler.tree.BLangIdentifier;
 import org.wso2.ballerinalang.compiler.tree.BLangNodeVisitor;
 import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
@@ -32,6 +34,7 @@ import org.wso2.ballerinalang.compiler.util.diagnotic.DiagnosticPos;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Implementation of {@link org.ballerinalang.model.tree.expressions.InvocationNode}.
@@ -46,21 +49,16 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
     //caching since at desugar level we need to identify whether this is actually attached function or not
     public BSymbol exprSymbol;
     public boolean functionPointerInvocation;
-    /* Variables Required for Iterable Operation */
-    public boolean iterableOperationInvocation;
-    public IterableContext iContext;
-    public boolean actionInvocation;
+    public boolean langLibInvocation;
     public boolean async;
-    /* Cached values for Built-in function invocation */
-    public boolean builtinMethodInvocation;
-    public BLangBuiltInMethod builtInMethod;
+    public Set<Flag> flagSet;
+    public List<BLangAnnotationAttachment> annAttachments = new ArrayList<>();
 
     /*
      * Below expressions are used by typechecker, desugar and codegen phases.
      * Above phases must rely on below expr lists, rather than {@link #argExprs}
      */
     public List<BLangExpression> requiredArgs = new ArrayList<>();
-    public List<BLangExpression> namedArgs = new ArrayList<>();
     public List<BLangExpression> restArgs = new ArrayList<>();
 
     @Override
@@ -76,6 +74,11 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
     @Override
     public List<? extends ExpressionNode> getArgumentExpressions() {
         return argExprs;
+    }
+
+    @Override
+    public List<? extends ExpressionNode> getRequiredArgs() {
+        return this.requiredArgs;
     }
 
     @Override
@@ -97,7 +100,7 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
         } else if (pkgAlias != null && !pkgAlias.getValue().isEmpty()) {
             br.append(String.valueOf(pkgAlias)).append(":");
         }
-        br.append(String.valueOf(name));
+        br.append(name == null ? String.valueOf(symbol.name) : String.valueOf(name));
         br.append("(");
         if (argExprs.size() > 0) {
             String s = Arrays.toString(argExprs.toArray());
@@ -114,17 +117,33 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
 
     @Override
     public boolean isIterableOperation() {
-        return iterableOperationInvocation;
+
+        return false;
     }
 
     @Override
-    public boolean isActionInvocation() {
-        return this.actionInvocation;
-    }
-    
-    @Override
     public boolean isAsync() {
         return async;
+    }
+
+    @Override
+    public Set<Flag> getFlags() {
+        return flagSet;
+    }
+
+    @Override
+    public void addFlag(Flag flag) {
+        this.getFlags().add(flag);
+    }
+
+    @Override
+    public List<BLangAnnotationAttachment> getAnnotationAttachments() {
+        return annAttachments;
+    }
+
+    @Override
+    public void addAnnotationAttachment(AnnotationAttachmentNode annAttachment) {
+        this.getAnnotationAttachments().add((BLangAnnotationAttachment) annAttachment);
     }
 
     /**
@@ -132,13 +151,18 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
      */
     public static class BFunctionPointerInvocation extends BLangInvocation {
 
-        public BFunctionPointerInvocation(BLangInvocation parent, BLangVariableReference varRef) {
+        public BFunctionPointerInvocation(DiagnosticPos pos, BLangExpression varRef, BSymbol bSymbol, BType retType) {
+            this.pos = pos;
+            this.expr = varRef;
+            this.symbol = bSymbol;
+            this.type = retType;
+        }
+
+        public BFunctionPointerInvocation(BLangInvocation parent, BLangExpression varRef) {
             this.pos = parent.pos;
             this.name = parent.name;
             this.requiredArgs = parent.requiredArgs;
-            this.namedArgs = parent.namedArgs;
             this.restArgs = parent.restArgs;
-            this.regIndex = parent.regIndex;
             this.symbol = parent.symbol;
             this.async = parent.async;
             this.expr = varRef;
@@ -159,7 +183,6 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
 
         public BLangAttachedFunctionInvocation(DiagnosticPos pos,
                                                List<BLangExpression> requiredArgs,
-                                               List<BLangExpression> namedArgs,
                                                List<BLangExpression> restArgs,
                                                BSymbol symbol,
                                                BType type,
@@ -167,7 +190,6 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
                                                boolean async) {
             this.pos = pos;
             this.requiredArgs = requiredArgs;
-            this.namedArgs = namedArgs;
             this.restArgs = restArgs;
             this.symbol = symbol;
             this.type = type;
@@ -184,22 +206,11 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
     /**
      * @since 0.94
      */
-    public static class BLangActionInvocation extends BLangInvocation {
+    public static class BLangActionInvocation extends BLangInvocation implements ActionNode {
 
-        public BLangActionInvocation(DiagnosticPos pos,
-                                     List<BLangExpression> requiredArgs,
-                                     List<BLangExpression> namedArgs,
-                                     List<BLangExpression> restArgs,
-                                     BSymbol symbol,
-                                     BType type,
-                                     boolean async) {
-            this.pos = pos;
-            this.requiredArgs = requiredArgs;
-            this.namedArgs = namedArgs;
-            this.restArgs = restArgs;
-            this.symbol = symbol;
-            this.type = type;
-            this.async = async;
+        public boolean remoteMethodCall = false;
+
+        public BLangActionInvocation() {
         }
 
         @Override
@@ -207,31 +218,4 @@ public class BLangInvocation extends BLangAccessExpression implements Invocation
             visitor.visit(this);
         }
     }
-
-    /**
-     * @since 0.983.0
-     */
-    public static class BLangBuiltInMethodInvocation extends BLangInvocation {
-
-        public BLangBuiltInMethodInvocation(BLangInvocation iExpr, BLangBuiltInMethod builtInFunction) {
-            this.expr = iExpr.expr;
-            this.type = iExpr.type;
-            this.pkgAlias = iExpr.pkgAlias;
-            this.name = iExpr.name;
-            this.pos = iExpr.pos;
-            this.requiredArgs = iExpr.requiredArgs;
-            this.namedArgs = iExpr.namedArgs;
-            this.restArgs = iExpr.restArgs;
-            this.async = iExpr.async;
-            this.builtInMethod = builtInFunction;
-            this.impConversionExpr = iExpr.impConversionExpr;
-            this.symbol = iExpr.symbol;
-        }
-
-        @Override
-        public void accept(BLangNodeVisitor visitor) {
-            visitor.visit(this);
-        }
-    }
-
 }

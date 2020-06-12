@@ -18,7 +18,6 @@
 package org.ballerinalang.model.types;
 
 import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.util.codegen.TypeInfo;
 
 import java.util.Map;
 
@@ -29,9 +28,9 @@ import java.util.Map;
  */
 public abstract class BStructureType extends BType {
 
-    private Map<String, BField> fields;
-    private int[] fieldTypeCount;
-    private BAttachedFunction[] attachedFunctions;
+    protected Map<String, BField> fields;
+    protected int[] fieldTypeCount;
+    protected BAttachedFunction[] attachedFunctions;
     public BAttachedFunction initializer;
     public BAttachedFunction defaultsValuesInitFunc;
     public int flags;
@@ -73,6 +72,5 @@ public abstract class BStructureType extends BType {
         this.attachedFunctions = attachedFunctions;
     }
 
-    public abstract TypeInfo getTypeInfo();
 }
 

@@ -15,6 +15,8 @@
  */
 package org.ballerinalang.langserver.compiler;
 
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.workspace.LSDocumentIdentifier;
 import org.ballerinalang.langserver.compiler.common.modal.BallerinaPackage;
 import org.ballerinalang.model.elements.PackageID;
 import org.wso2.ballerinalang.compiler.PackageLoader;
@@ -28,6 +30,7 @@ import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Loads the Ballerina builtin core and builtin packages.
@@ -69,13 +72,13 @@ public class LSPackageLoader {
      * @param packageID Package ID to resolve
      * @return {@link BLangPackage} Resolved BLang Package
      */
-    public static BPackageSymbol getPackageSymbolById(CompilerContext context, PackageID packageID) {
+    public static Optional<BPackageSymbol> getPackageSymbolById(CompilerContext context, PackageID packageID) {
         BPackageSymbol packageSymbol;
         synchronized (LSPackageLoader.class) {
             PackageLoader pkgLoader = PackageLoader.getInstance(context);
             packageSymbol = pkgLoader.loadPackageSymbol(packageID, null, null);
         }
-        return packageSymbol;
+        return Optional.ofNullable(packageSymbol);
     }
 
     /**
@@ -97,8 +100,18 @@ public class LSPackageLoader {
                     String[] packageNames = packageDir.list(((dir, name) -> !name.startsWith(DOT)));
                     if (packageNames != null) {
                         for (String name : packageNames) {
-                            BallerinaPackage ballerinaPackage = new BallerinaPackage(repo, name, null);
-                            ballerinaPackages.add(ballerinaPackage);
+                            if (name == null || ("ballerina".equals(repo) && name.contains("__internal"))
+                                    || name.contains(".balx")) {
+                                continue;
+                            }
+                            File versionDir = Paths.get(packageDir.getAbsolutePath(), name).toFile();
+                            String[] versions = versionDir.list();
+                            if (versions != null) {
+                                for (String version : versions) {
+                                    BallerinaPackage ballerinaPackage = new BallerinaPackage(repo, name, version);
+                                    ballerinaPackages.add(ballerinaPackage);
+                                }
+                            }
                         }
                     }
                 }
@@ -153,5 +166,39 @@ public class LSPackageLoader {
 
     public static List<BallerinaPackage> getHomeRepoPackages() {
         return new ArrayList<>(homeRepoPackages);
+    }
+
+    /**
+     * Clear the home repo packages.
+     */
+    public static void clearHomeRepoPackages() {
+        homeRepoPackages.clear();
+    }
+
+    /**
+     * Returns a list of modules available for the current project.
+     *
+     * @param pkg Built {@link BLangPackage}
+     * @param context Built {@link LSContext}
+     * @return List of Ballerina Packages
+     */
+    public static List<BallerinaPackage> getCurrentProjectModules(BLangPackage pkg, LSContext context) {
+        List<BallerinaPackage> packageList = new ArrayList<>();
+        LSDocumentIdentifier lsDocument = context.get(DocumentServiceKeys.LS_DOCUMENT_KEY);
+        
+        /*
+        If the lsDocument instance is null or not within a project, we skip processing
+         */
+        if (lsDocument == null || !lsDocument.isWithinProject()) {
+            return packageList;
+        }
+        String currentModuleName = context.get(DocumentServiceKeys.CURRENT_PKG_NAME_KEY);
+        for (String moduleName : lsDocument.getProjectModules()) {
+            if (currentModuleName.equals(moduleName)) {
+                continue;
+            }
+            packageList.add(new BallerinaPackage(pkg.packageID.orgName.value, moduleName, pkg.packageID.version.value));
+        }
+        return packageList;
     }
 }

@@ -15,16 +15,16 @@
  */
 package org.ballerinalang.langserver.command.executors;
 
-import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.JsonObject;
 import org.apache.commons.io.IOUtils;
 import org.ballerinalang.annotation.JavaSPIService;
-import org.ballerinalang.langserver.command.ExecuteCommandKeys;
-import org.ballerinalang.langserver.command.LSCommandExecutor;
-import org.ballerinalang.langserver.command.LSCommandExecutorException;
+import org.ballerinalang.langserver.client.ExtendedLanguageClient;
 import org.ballerinalang.langserver.common.constants.CommandConstants;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
-import org.ballerinalang.langserver.compiler.LSCompiler;
-import org.ballerinalang.langserver.compiler.LSContext;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.command.ExecuteCommandKeys;
+import org.ballerinalang.langserver.commons.command.LSCommandExecutorException;
+import org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor;
 import org.ballerinalang.langserver.diagnostic.DiagnosticsHelper;
 import org.eclipse.lsp4j.MessageType;
 import org.eclipse.lsp4j.services.LanguageClient;
@@ -46,14 +46,14 @@ import static org.ballerinalang.langserver.command.CommandUtil.notifyClient;
  *
  * @since 0.983.0
  */
-@JavaSPIService("org.ballerinalang.langserver.command.LSCommandExecutor")
+@JavaSPIService("org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor")
 public class PullModuleExecutor implements LSCommandExecutor {
 
     // A newCachedThreadPool with a limited max-threads
     private static ExecutorService executor = new ThreadPoolExecutor(0, Runtime.getRuntime().availableProcessors(), 60L,
                                                                      TimeUnit.SECONDS, new SynchronousQueue<>());
 
-    private static final String COMMAND = "PULL_MODULE";
+    public static final String COMMAND = "PULL_MODULE";
 
     /**
      * {@inheritDoc}
@@ -65,12 +65,15 @@ public class PullModuleExecutor implements LSCommandExecutor {
             String moduleName = "";
             String documentUri = "";
             for (Object arg : context.get(ExecuteCommandKeys.COMMAND_ARGUMENTS_KEY)) {
-                String argKey = ((LinkedTreeMap) arg).get(ARG_KEY).toString();
-                String argVal = ((LinkedTreeMap) arg).get(ARG_VALUE).toString();
-                if (argKey.equals(CommandConstants.ARG_KEY_MODULE_NAME)) {
-                    moduleName = argVal;
-                } else if (argKey.equals(CommandConstants.ARG_KEY_DOC_URI)) {
-                    documentUri = argVal;
+                String argKey = ((JsonObject) arg).get(ARG_KEY).getAsString();
+                String argVal = ((JsonObject) arg).get(ARG_VALUE).getAsString();
+                switch (argKey) {
+                    case CommandConstants.ARG_KEY_MODULE_NAME:
+                        moduleName = argVal;
+                        break;
+                    case CommandConstants.ARG_KEY_DOC_URI:
+                        documentUri = argVal;
+                        break;
                 }
             }
             // If no package, or no doc uri; then just skip
@@ -78,11 +81,10 @@ public class PullModuleExecutor implements LSCommandExecutor {
                 return;
             }
             // Execute `ballerina pull` command
-            String ballerinaHome = Paths.get(CommonUtil.BALLERINA_HOME).resolve("bin").resolve("ballerina").toString();
-            ProcessBuilder processBuilder = new ProcessBuilder(ballerinaHome, "pull", moduleName);
-            LanguageClient client = context.get(ExecuteCommandKeys.LANGUAGE_SERVER_KEY).getClient();
-            LSCompiler lsCompiler = context.get(ExecuteCommandKeys.LS_COMPILER_KEY);
-            DiagnosticsHelper diagnosticsHelper = context.get(ExecuteCommandKeys.DIAGNOSTICS_HELPER_KEY);
+            String ballerinaCmd = Paths.get(CommonUtil.BALLERINA_CMD).toString();
+            ProcessBuilder processBuilder = new ProcessBuilder(ballerinaCmd, "pull", moduleName);
+            LanguageClient client = context.get(ExecuteCommandKeys.LANGUAGE_CLIENT_KEY);
+            DiagnosticsHelper diagnosticsHelper = DiagnosticsHelper.getInstance();
             try {
                 notifyClient(client, MessageType.Info, "Pulling '" + moduleName + "' from the Ballerina Central...");
                 Process process = processBuilder.start();
@@ -98,7 +100,9 @@ public class PullModuleExecutor implements LSCommandExecutor {
 
                 if (error == null || error.isEmpty()) {
                     notifyClient(client, MessageType.Info, "Pulling success for the '" + moduleName + "' module!");
-                    clearDiagnostics(client, lsCompiler, diagnosticsHelper, documentUri);
+                    if (client instanceof ExtendedLanguageClient) {
+                        clearDiagnostics((ExtendedLanguageClient) client, diagnosticsHelper, documentUri, context);
+                    }
                 } else {
                     notifyClient(client, MessageType.Error,
                             "Pulling failed for the '" + moduleName + "' module!\n" + error);

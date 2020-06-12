@@ -17,6 +17,9 @@
  */
 package org.ballerinalang.model.types;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+
 /**
  * This class contains various methods manipulate {@link BType}s in Ballerina.
  *
@@ -31,7 +34,6 @@ public class BTypes {
     public static BType typeBoolean = new BBooleanType(TypeConstants.BOOLEAN_TNAME, null);
     public static BType typeXML = new BXMLType(TypeConstants.XML_TNAME, null);
     public static BType typeJSON = new BJSONType(TypeConstants.JSON_TNAME, null);
-    public static BType typeTable = new BTableType(TypeConstants.TABLE_TNAME, null);
     public static BType typeAny = new BAnyType(TypeConstants.ANY_TNAME, null);
     public static BType typeAnydata = new BAnydataType(TypeConstants.ANYDATA_TNAME, null);
     public static BType typeStream = new BStreamType(TypeConstants.STREAM_TNAME, typeAny, null);
@@ -39,11 +41,16 @@ public class BTypes {
     public static BType typeMap = new BMapType(TypeConstants.MAP_TNAME, typeAny, null);
     public static BType typeFuture = new BFutureType(TypeConstants.FUTURE_TNAME, null);
     public static BType typeNull = new BNullType(TypeConstants.NULL_TNAME, null);
-    public static BType typeXMLAttributes = new BXMLAttributesType(TypeConstants.XML_ATTRIBUTES_TNAME, null);
     public static BType typeIterator = new BIteratorType(TypeConstants.ITERATOR_TNAME, null);
     public static BType typeChannel = new BChannelType(TypeConstants.CHANNEL, null);
     public static BErrorType typeError = new BErrorType(TypeConstants.ERROR, typeString, typeMap, null);
-    public static BType typeAnyService = new BServiceType(null, TypeConstants.SERVICE, null, 0);
+    public static BType typeAnyService = new BServiceType(TypeConstants.SERVICE, null, 0);
+    public static BType typePureType = new BUnionType(new ArrayList<>(Arrays.asList(typeAnydata, typeError)));
+    public static BType typeHandle = new BHandleType("handle", null, null);
+
+    static {
+        typeError.detailType = new BMapType(typePureType);
+    }
 
     private BTypes() {
     }
@@ -80,8 +87,6 @@ public class BTypes {
                 return typeMap;
             case TypeConstants.FUTURE_TNAME:
                 return typeFuture;
-            case TypeConstants.TABLE_TNAME:
-                return typeTable;
             case TypeConstants.STREAM_TNAME:
                 return typeStream;
             case TypeConstants.CHANNEL:
@@ -92,8 +97,6 @@ public class BTypes {
                 return typeDesc;
             case TypeConstants.NULL_TNAME:
                 return typeNull;
-            case TypeConstants.XML_ATTRIBUTES_TNAME:
-                return typeXMLAttributes;
             case TypeConstants.ERROR:
                 return typeError;
             case TypeConstants.ANYDATA_TNAME:

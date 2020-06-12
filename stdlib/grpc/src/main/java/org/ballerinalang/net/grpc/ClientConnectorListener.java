@@ -19,12 +19,13 @@ import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.LastHttpContent;
-import org.ballerinalang.runtime.threadpool.ThreadPoolFactory;
+import org.ballerinalang.jvm.runtime.BLangThreadFactory;
 import org.wso2.transport.http.netty.contract.HttpClientConnectorListener;
 import org.wso2.transport.http.netty.message.HttpCarbonMessage;
 
 import java.nio.charset.Charset;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.ballerinalang.net.grpc.GrpcConstants.CONTENT_ENCODING;
 import static org.ballerinalang.net.grpc.GrpcConstants.DEFAULT_MAX_MESSAGE_SIZE;
@@ -45,11 +46,14 @@ public class ClientConnectorListener implements HttpClientConnectorListener {
     private boolean headersReceived;
     private ClientInboundStateListener stateListener;
 
+    private ExecutorService workerExecutor = Executors.newFixedThreadPool(10,
+            new BLangThreadFactory(new ThreadGroup("grpc-worker"), "grpc-worker-thread-pool"));
+
     ClientConnectorListener(ClientCall.ClientStreamListener streamListener) {
         this.stateListener = new ClientInboundStateListener(DEFAULT_MAX_MESSAGE_SIZE, streamListener);
     }
 
-    public final void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
+    final void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
         stateListener.setDecompressorRegistry(decompressorRegistry);
     }
 
@@ -60,10 +64,10 @@ public class ClientConnectorListener implements HttpClientConnectorListener {
             stateListener.inboundHeadersReceived(inboundMessage.getHeaders());
         }
 
-        final Executor wrappedExecutor = ThreadPoolFactory.getInstance().getWorkerExecutor();
-        wrappedExecutor.execute(() -> {
+        workerExecutor.execute(() -> {
             try {
-                HttpContent httpContent = inboundMessage.getHttpCarbonMessage().getHttpContent();
+                HttpCarbonMessage httpCarbonMessage = inboundMessage.getHttpCarbonMessage();
+                HttpContent httpContent = httpCarbonMessage.getHttpContent();
                 while (true) {
                     if (httpContent == null) {
                         break;
@@ -90,7 +94,7 @@ public class ClientConnectorListener implements HttpClientConnectorListener {
                                     .isFailure()) {
                                 transportError = Status.Code.ABORTED.toStatus().withDescription(lastHttpContent
                                         .decoderResult().cause().getMessage());
-                            } else if (lastHttpContent.trailingHeaders().isEmpty()) {
+                            } else if (httpCarbonMessage.getTrailerHeaders().isEmpty()) {
                                 // This is a protocol violation as we expect to receive trailer headers with Last Http
                                 // content.
                                 transportError = Status.Code.INTERNAL.toStatus().withDescription("Received unexpected" +
@@ -99,12 +103,12 @@ public class ClientConnectorListener implements HttpClientConnectorListener {
                                 stateListener.transportReportStatus(transportError, false, transportErrorMetadata);
                             } else {
                                 // Read Trailer header to get gRPC response status.
-                                transportTrailersReceived(lastHttpContent.trailingHeaders());
+                                transportTrailersReceived(httpCarbonMessage.getTrailerHeaders());
                             }
                             break;
                         }
                     }
-                    httpContent = inboundMessage.getHttpCarbonMessage().getHttpContent();
+                    httpContent = httpCarbonMessage.getHttpContent();
                 }
             } catch (RuntimeException e) {
                 if (transportError != null) {
@@ -150,7 +154,7 @@ public class ClientConnectorListener implements HttpClientConnectorListener {
                 transportError = Status.Code.INTERNAL.toStatus().withDescription("Received headers twice");
                 return false;
             }
-            Integer httpStatus = inboundMessage.getStatus();
+            int httpStatus = inboundMessage.getStatus();
             if (httpStatus >= 100 && httpStatus < 200) {
                 // Ignore the headers. See RFC 7540 §8.1
                 // 1xx (Informational): The request was received, continuing process

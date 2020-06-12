@@ -19,33 +19,35 @@ package org.ballerinalang.testerina.core;
 
 import org.ballerinalang.compiler.plugins.AbstractCompilerPlugin;
 import org.ballerinalang.compiler.plugins.SupportedAnnotationPackages;
+import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.model.tree.AnnotationAttachmentNode;
 import org.ballerinalang.model.tree.FunctionNode;
 import org.ballerinalang.model.tree.PackageNode;
-import org.ballerinalang.model.types.BArrayType;
-import org.ballerinalang.model.types.BType;
-import org.ballerinalang.model.types.TypeTags;
-import org.ballerinalang.testerina.core.entity.Test;
-import org.ballerinalang.testerina.core.entity.TestSuite;
-import org.ballerinalang.testerina.core.entity.TesterinaFunction;
-import org.ballerinalang.util.codegen.FunctionInfo;
-import org.ballerinalang.util.codegen.Instruction;
-import org.ballerinalang.util.codegen.PackageInfo;
-import org.ballerinalang.util.codegen.ProgramFile;
+import org.ballerinalang.model.tree.expressions.RecordLiteralNode;
+import org.ballerinalang.test.runtime.entity.Test;
+import org.ballerinalang.test.runtime.entity.TestSuite;
+import org.ballerinalang.util.diagnostic.Diagnostic;
 import org.ballerinalang.util.diagnostic.DiagnosticLog;
-import org.ballerinalang.util.exceptions.BallerinaException;
+import org.wso2.ballerinalang.compiler.PackageCache;
+import org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolResolver;
+import org.wso2.ballerinalang.compiler.semantics.analyzer.Types;
+import org.wso2.ballerinalang.compiler.semantics.model.SymbolEnv;
+import org.wso2.ballerinalang.compiler.semantics.model.SymbolTable;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BPackageSymbol;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BSymbol;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
-import org.wso2.ballerinalang.compiler.tree.expressions.BLangArrayLiteral;
+import org.wso2.ballerinalang.compiler.tree.BLangTestablePackage;
+import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
+import org.wso2.ballerinalang.compiler.tree.expressions.BLangListConstructorExpr;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangRecordLiteral;
+import org.wso2.ballerinalang.compiler.util.CompilerContext;
+import org.wso2.ballerinalang.compiler.util.Name;
+import org.wso2.ballerinalang.compiler.util.Names;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.Vector;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -75,8 +77,15 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
     private static final String MOCK_ANNOTATION_DELIMITER = "#";
 
     private TesterinaRegistry registry = TesterinaRegistry.getInstance();
-    private TestSuite suite;
     private boolean enabled = true;
+    private CompilerContext compilerContext;
+    private DiagnosticLog diagnosticLog;
+    private Types typeChecker;
+    private SymbolResolver symbolResolver;
+    private BLangPackage parent;
+    private PackageCache packageCache;
+    private Map<BPackageSymbol, SymbolEnv> packageEnvironmentMap;
+
     /**
      * this property is used as a work-around to initialize test suites only once for a package as Compiler
      * Annotation currently emits package import events too to the process method.
@@ -84,25 +93,39 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
 
     @Override
     public void init(DiagnosticLog diagnosticLog) {
-        if (registry.getInstance().isTestSuitesCompiled()) {
+        this.diagnosticLog = diagnosticLog;
+        this.typeChecker = Types.getInstance(compilerContext);
+        this.symbolResolver = SymbolResolver.getInstance(compilerContext);
+        this.packageEnvironmentMap = SymbolTable.getInstance(compilerContext).pkgEnvMap;
+        this.packageCache = PackageCache.getInstance(compilerContext);
+
+        if (TesterinaRegistry.getInstance().isTestSuitesCompiled()) {
             enabled = false;
         }
     }
 
     @Override
+    public void setCompilerContext(CompilerContext context) {
+        this.compilerContext = context;
+    }
+    
+    @Override
     public void process(FunctionNode functionNode, List<AnnotationAttachmentNode> annotations) {
         if (!enabled) {
             return;
         }
-        String packageName = getPackageName((BLangPackage) ((BLangFunction) functionNode).parent);
-        suite = registry.getTestSuites().get(packageName);
+        parent = (BLangPackage) ((BLangFunction) functionNode).parent;
+        String packageName = getPackageName(parent);
+        TestSuite suite = registry.getTestSuites().get(packageName);
         // Check if the registry contains a test suite for the package
         if (suite == null) {
             // Add a test suite to the registry if it does not contain one pertaining to the package name
-            registry.getTestSuites().computeIfAbsent(packageName, func -> new TestSuite(packageName));
-            // Get the test suite related to the package from registry
-            suite = registry.getTestSuites().get(packageName);
+            suite = registry.getTestSuites().computeIfAbsent(packageName, func ->
+                    new TestSuite(parent.packageID.name.value, packageName, parent.packageID.orgName.value,
+                                  parent.packageID.version.value));
         }
+        // Remove the duplicated annotations.
+        annotations = annotations.stream().distinct().collect(Collectors.toList());
         // traverse through the annotations of this function
         for (AnnotationAttachmentNode attachmentNode : annotations) {
             String annotationName = attachmentNode.getAnnotationName().getValue();
@@ -118,22 +141,71 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
                 suite.addAfterEachFunction(functionName);
             } else if (MOCK_ANNOTATION_NAME.equals(annotationName)) {
                 String[] vals = new String[2];
-                // If package property not present the package is .
                 // TODO: when default values are supported in annotation struct we can remove this
-                vals[0] = ".";
+                vals[0] = packageName;
                 if (attachmentNode.getExpression() instanceof BLangRecordLiteral) {
-                    List<BLangRecordLiteral.BLangRecordKeyValue> attributes = ((BLangRecordLiteral) attachmentNode
-                            .getExpression()).getKeyValuePairs();
-                    attributes.forEach(attributeNode -> {
-                        String name = attributeNode.getKey().toString();
-                        String value = attributeNode.getValue().toString();
+                    List<RecordLiteralNode.RecordField> attributes = ((BLangRecordLiteral) attachmentNode
+                            .getExpression()).getFields();
+                    attributes.forEach(field -> {
+                        String name;
+                        BLangExpression valueExpr;
+
+                        if (field.isKeyValueField()) {
+                            BLangRecordLiteral.BLangRecordKeyValueField attributeNode =
+                                    (BLangRecordLiteral.BLangRecordKeyValueField) field;
+                            name = attributeNode.getKey().toString();
+                            valueExpr = attributeNode.getValue();
+                        } else {
+                            BLangRecordLiteral.BLangRecordVarNameField varNameField =
+                                    (BLangRecordLiteral.BLangRecordVarNameField) field;
+                            name = varNameField.variableName.value;
+                            valueExpr = varNameField;
+                        }
+
+                        String value = valueExpr.toString();
+
                         if (MODULE.equals(name)) {
+                            value = formatPackageName(value); // Formats the single module to fully qualified name
                             vals[0] = value;
                         } else if (FUNCTION.equals(name)) {
                             vals[1] = value;
                         }
                     });
-                    suite.addMockFunction(vals[0] + MOCK_ANNOTATION_DELIMITER + vals[1], functionName);
+                    
+                    // Check if Function in annotation is empty
+                    if (vals[1].isEmpty()) {
+                        diagnosticLog.logDiagnostic(Diagnostic.Kind.ERROR, attachmentNode.getPosition(),
+                                "function name cannot be empty");
+                        break;
+                    }
+
+                    // Find functionToMock in the packageID
+                    PackageID functionToMockID = getPackageID(vals[0]);
+                    if (functionToMockID == null) {
+                        diagnosticLog.logDiagnostic(Diagnostic.Kind.ERROR, attachmentNode.getPosition(),
+                                "could not find module specified ");
+                    }
+
+                    BType functionToMockType = getFunctionType(packageEnvironmentMap, functionToMockID, vals[1]);
+                    BType mockFunctionType = getFunctionType(packageEnvironmentMap, parent.packageID,
+                            ((BLangFunction) functionNode).name.toString());
+
+                    if (functionToMockType != null && mockFunctionType != null) {
+                        if (!typeChecker.isAssignable(mockFunctionType, functionToMockType)) {
+                            diagnosticLog.logDiagnostic(Diagnostic.Kind.ERROR, ((BLangFunction) functionNode).pos,
+                                    "incompatible types: expected " + functionToMockType.toString()
+                                            + " but found " + mockFunctionType.toString());
+                        }
+                    } else {
+                        diagnosticLog.logDiagnostic(Diagnostic.Kind.ERROR, attachmentNode.getPosition(),
+                                "could not find functions in module");
+                    }
+
+                    //Creating a bLangTestablePackage to add a mock function
+                    BLangTestablePackage bLangTestablePackage =
+                            (BLangTestablePackage) ((BLangFunction) functionNode).parent;
+                    bLangTestablePackage.addMockFunction(functionToMockID + MOCK_ANNOTATION_DELIMITER + vals[1],
+                                                         functionName);
                 }
             } else if (TEST_ANNOTATION_NAME.equals(annotationName)) {
                 Test test = new Test();
@@ -144,13 +216,27 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
                 boolean shouldIncludeGroups = registry.shouldIncludeGroups();
 
                 if (attachmentNode.getExpression() instanceof BLangRecordLiteral) {
-                    List<BLangRecordLiteral.BLangRecordKeyValue> attributes = ((BLangRecordLiteral) attachmentNode
-                            .getExpression()).getKeyValuePairs();
+                    List<RecordLiteralNode.RecordField> attributes = ((BLangRecordLiteral) attachmentNode
+                            .getExpression()).getFields();
 
-                    attributes.forEach(attributeNode -> {
-                        String name = attributeNode.getKey().toString();
+                    attributes.forEach(field -> {
+                        String name;
+                        BLangExpression valueExpr;
+
+                        if (field.isKeyValueField()) {
+                            BLangRecordLiteral.BLangRecordKeyValueField attributeNode =
+                                    (BLangRecordLiteral.BLangRecordKeyValueField) field;
+                            name = attributeNode.getKey().toString();
+                            valueExpr = attributeNode.getValue();
+                        } else {
+                            BLangRecordLiteral.BLangRecordVarNameField varNameField =
+                                    (BLangRecordLiteral.BLangRecordVarNameField) field;
+                            name = varNameField.variableName.value;
+                            valueExpr = varNameField;
+                        }
+
                         // Check if enable property is present in the annotation
-                        if (TEST_ENABLE_ANNOTATION_NAME.equals(name) && "false".equals(attributeNode.getValue()
+                        if (TEST_ENABLE_ANNOTATION_NAME.equals(name) && "false".equals(valueExpr
                                 .toString())) {
                             // If enable is false, disable the test, no further processing is needed
                             shouldSkip.set(true);
@@ -159,8 +245,8 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
 
                         // check if groups attribute is present in the annotation
                         if (GROUP_ANNOTATION_NAME.equals(name)) {
-                            if (attributeNode.getValue() instanceof BLangArrayLiteral) {
-                                BLangArrayLiteral values = (BLangArrayLiteral) attributeNode.getValue();
+                            if (valueExpr instanceof BLangListConstructorExpr) {
+                                BLangListConstructorExpr values = (BLangListConstructorExpr) valueExpr;
                                 test.setGroups(values.exprs.stream().map(node -> node.toString())
                                                            .collect(Collectors.toList()));
                                 // Check whether user has provided a group list
@@ -186,20 +272,20 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
                             }
                         }
                         if (VALUE_SET_ANNOTATION_NAME.equals(name)) {
-                            test.setDataProvider(attributeNode.getValue().toString());
+                            test.setDataProvider(valueExpr.toString());
                         }
 
                         if (BEFORE_FUNCTION.equals(name)) {
-                            test.setBeforeTestFunction(attributeNode.getValue().toString());
+                            test.setBeforeTestFunction(valueExpr.toString());
                         }
 
                         if (AFTER_FUNCTION.equals(name)) {
-                            test.setAfterTestFunction(attributeNode.getValue().toString());
+                            test.setAfterTestFunction(valueExpr.toString());
                         }
 
                         if (DEPENDS_ON_FUNCTIONS.equals(name)) {
-                            if (attributeNode.getValue() instanceof BLangArrayLiteral) {
-                                BLangArrayLiteral values = (BLangArrayLiteral) attributeNode.getValue();
+                            if (valueExpr instanceof BLangListConstructorExpr) {
+                                BLangListConstructorExpr values = (BLangListConstructorExpr) valueExpr;
                                 values.exprs.stream().map(node -> node.toString()).forEach
                                         (test::addDependsOnTestFunction);
                             }
@@ -222,300 +308,57 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
     }
 
     /**
-     * TODO this is a temporary solution, till we get a proper API from Ballerina Core.
-     * This method will get executed at the completion of the processing of a ballerina module.
-     *
-     * @param programFile {@link ProgramFile} corresponds to the current ballerina module
+     * Get the function type by iterating through the packageEnvironmentMap.
+     * @param pkgEnvMap map of BPackageSymbol and its respective SymbolEnv
+     * @param packageID Fully qualified package ID of the respective function
+     * @param functionName Name of the function
+     * @return Function type if found, null if not found
      */
-    public void packageProcessed(ProgramFile programFile) {
-        if (!enabled) {
-            return;
+    private BType getFunctionType(Map<BPackageSymbol, SymbolEnv> pkgEnvMap, PackageID packageID, String functionName) {
+        // Symbol resolver, Pass the acquired package Symbol from package cache
+        for (Map.Entry<BPackageSymbol, SymbolEnv> entry : pkgEnvMap.entrySet()) {
+            // Multiple packages may be present with same name, so all entries must be checked
+            if (entry.getKey().pkgID.equals(packageID)) {
+                BSymbol symbol = symbolResolver.lookupSymbolInMainSpace(entry.getValue(), new Name(functionName));
+                if (!symbol.getType().toString().equals("other")) {
+                    return symbol.getType();
+                }
+            }
         }
-        //packageInit = false;
-        // TODO the below line is required since this method is currently getting explicitly called from BTestRunner
-        suite = TesterinaRegistry.getInstance().getTestSuites().get(programFile.getEntryPkgName());
-        if (suite == null) {
-            throw new BallerinaException("No test suite found for [module]: " + programFile.getEntryPkgName());
-        }
-        // By default the test init function is set as the init function of the test suite
-        FunctionInfo initFunction = programFile.getEntryPackage().getTestInitFunctionInfo();
-        // But if there is no test init function, then the package init function is set as the init function of the
-        // test suite
-        if (initFunction == null) {
-            initFunction = programFile.getEntryPackage().getInitFunctionInfo();
-        }
-        suite.setInitFunction(new TesterinaFunction(programFile, initFunction, TesterinaFunction.Type.TEST_INIT));
-        // add all functions of the package as utility functions
-        Arrays.stream(programFile.getEntryPackage().getFunctionInfoEntries()).forEach(functionInfo -> {
-            suite.addTestUtilityFunction(new TesterinaFunction(programFile, functionInfo, TesterinaFunction.Type.UTIL));
-        });
-        resolveFunctions(suite);
-        int[] testExecutionOrder = checkCyclicDependencies(suite.getTests());
-        List<Test> sortedTests = orderTests(suite.getTests(), testExecutionOrder);
-        suite.setTests(sortedTests);
-        suite.setProgramFile(programFile);
+        return null;
     }
 
     /**
-     * Process a given {@link TestSuite} and inject the user defined mock functions.
-     *
-     * @param suite a @{@link TestSuite}
+     * Returns a PackageID for the passed moduleName.
+     * @param moduleName Module name passed via function annotation
+     * @return Module packageID
      */
-    public static void injectMocks(TestSuite suite) {
-        ProgramFile programFile = suite.getProgramFile();
-        Map<String, TesterinaFunction> mockFunctions = suite.getMockFunctionsMap();
-        mockFunctions.forEach((k, v) -> {
-            String[] info = k.split(MOCK_ANNOTATION_DELIMITER);
-            if (info.length != 2) {
-                return;
-            }
-
-            for (PackageInfo packageInfo : programFile.getPackageInfoEntries()) {
-                for (Instruction ins : packageInfo.getInstructions()) {
-                    if (ins instanceof Instruction.InstructionCALL) {
-                        // replace the function pointer of the instruction with the mock function pointer
-                        Instruction.InstructionCALL call = (Instruction.InstructionCALL) ins;
-                        if (call.functionInfo.getPkgPath().equals(info[0]) && call.functionInfo.getName().equals
-                                (info[1])) {
-                            suite.addMockedRealFunction(k, call.functionInfo);
-                            call.functionInfo = v.getbFunction();
-                        }
-                    }
-                }
-            }
-        });
+    private PackageID getPackageID(String moduleName) {
+        if (packageCache.getSymbol(moduleName) != null) {
+            return packageCache.getSymbol(moduleName).pkgID;
+        } else {
+            return null;
+        }
     }
 
     /**
-     * Process a given {@link TestSuite} and reset the mock functions with their original pointers.
-     *
-     * @param suite a @{@link TestSuite}
+     * Formats the package name obtained from the mock annotation.
+     * Checks for empty, '.', or single module names and replaces them.
+     * Ballerina modules and fully qualified packages are simply returned
+     * @param value package name
+     * @return formatted package name
      */
-    public static void resetMocks(TestSuite suite) {
-        ProgramFile programFile = suite.getProgramFile();
-        Map<String, TesterinaFunction> mockFunctions = suite.getMockFunctionsMap();
-        Map<String, FunctionInfo> mockedRealFunctionsMap = suite.getMockedRealFunctionsMap();
+    private String formatPackageName(String value) {
+        // If empty or '.' then return the current package ID
+        if (value.isEmpty() || value.equals(Names.DOT.value)) {
+            value = parent.packageID.toString();
 
-        mockFunctions.forEach((k, v) -> {
-            String[] info = k.split(MOCK_ANNOTATION_DELIMITER);
-            if (info.length != 2) {
-                return;
-            }
-
-            for (PackageInfo packageInfo : programFile.getPackageInfoEntries()) {
-                for (Instruction ins : packageInfo.getInstructions()) {
-                    if (ins instanceof Instruction.InstructionCALL) {
-                        Instruction.InstructionCALL call = (Instruction.InstructionCALL) ins;
-                        if (call.functionInfo.getPkgPath().equals(info[0]) && call.functionInfo.getName().equals
-                                (info[1])) {
-                            call.functionInfo = mockedRealFunctionsMap.get(k);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    private static List<Test> orderTests(List<Test> tests, int[] testExecutionOrder) {
-        List<Test> sortedTests = new ArrayList<>();
-//        outStream.println("Test execution order: ");
-        for (int idx : testExecutionOrder) {
-            sortedTests.add(tests.get(idx));
-//            outStream.println(sortedTests.get(sortedTests.size() - 1).getTestFunction().getName());
+        // If value does NOT contain 'ballerina/' then it could be fully qualified
+        } else if (!value.contains(Names.ORG_NAME_SEPARATOR.value) && !value.contains(Names.VERSION_SEPARATOR.value)) {
+            value = new PackageID(parent.packageID.orgName, new Name(value),
+                                  parent.packageID.version).toString();
         }
-//        outStream.println("**********************");
-        return sortedTests;
-    }
-
-    /**
-     * Resolve function names to {@link TesterinaFunction}s.
-     *
-     * @param suite {@link TestSuite} whose functions to be resolved.
-     */
-    private static void resolveFunctions(TestSuite suite) {
-        List<TesterinaFunction> functions = suite.getTestUtilityFunctions();
-        List<String> functionNames = functions.stream().map(testerinaFunction -> testerinaFunction.getName()).collect
-                (Collectors.toList());
-        for (Test test : suite.getTests()) {
-            if (test.getTestName() != null && functionNames.contains(test.getTestName())) {
-                test.setTestFunction(functions.stream().filter(e -> e.getName().equals(test
-                        .getTestName())).findFirst().get());
-            }
-
-            if (test.getBeforeTestFunction() != null) {
-                if (functionNames.contains(test.getBeforeTestFunction())) {
-                    test.setBeforeTestFunctionObj(functions.stream().filter(e -> e.getName().equals(test
-                        .getBeforeTestFunction())).findFirst().get());
-                } else {
-                    String msg = String
-                        .format("Cannot find the specified before function : [%s] for testerina function" +
-                                " : [%s]", test.getBeforeTestFunction(), test.getTestName());
-                    throw new BallerinaException(msg);
-                }
-            }
-            if (test.getAfterTestFunction() != null) {
-                if (functionNames.contains(test.getAfterTestFunction())) {
-                    test.setAfterTestFunctionObj(functions.stream().filter(e -> e.getName().equals(test
-                        .getAfterTestFunction())).findFirst().get());
-                } else {
-                    String msg = String
-                        .format("Cannot find the specified after function : [%s] for testerina function" +
-                                " : [%s]", test.getBeforeTestFunction(), test.getTestName());
-                    throw new BallerinaException(msg);
-                }
-            }
-
-            if (test.getDataProvider() != null && functionNames.contains(test.getDataProvider())) {
-                String dataProvider = test.getDataProvider();
-                test.setDataProviderFunction(functions.stream().filter(e -> e.getName().equals(test.getDataProvider()
-                )).findFirst().map(func -> {
-                    // TODO these validations are not working properly with the latest refactoring
-                    if (func.getbFunction().getRetParamTypes().length == 1) {
-                        BType bType = func.getbFunction().getRetParamTypes()[0];
-                        if (bType.getTag() == TypeTags.ARRAY_TAG) {
-                            BArrayType bArrayType = (BArrayType) bType;
-                            int tag = bArrayType.getElementType().getTag();
-                            if (!(tag == TypeTags.ARRAY_TAG || tag == TypeTags.TUPLE_TAG)) {
-                                String message = String.format("Data provider function [%s] should return an array of" +
-                                        " arrays or an array of tuples.", dataProvider);
-                                throw new BallerinaException(message);
-                            }
-                        } else {
-                            String message = String.format("Data provider function [%s] should return an array of " +
-                                    "arrays or an array of tuples.", dataProvider);
-                            throw new BallerinaException(message);
-                        }
-                    } else {
-                        String message = String.format("Data provider function [%s] should have only one return type" +
-                                ".", dataProvider);
-                        throw new BallerinaException(message);
-                    }
-                    return func;
-                }).get());
-
-                if (test.getDataProviderFunction() == null) {
-                    String message = String.format("Data provider function [%s] cannot be found.", dataProvider);
-                    throw new BallerinaException(message);
-                }
-            }
-            for (String dependsOnFn : test.getDependsOnTestFunctions()) {
-                if (!functions.stream().parallel().anyMatch(func -> func.getName().equals(dependsOnFn))) {
-                    throw new BallerinaException("Cannot find the specified dependsOn function : " + dependsOnFn);
-                }
-                test.addDependsOnTestFunction(functions.stream().filter(e -> e.getName().equals(dependsOnFn))
-                                                       .findFirst().get());
-            }
-        }
-
-        // resolve mock functions
-        suite.getMockFunctionNamesMap().forEach((id, functionName) -> {
-            TesterinaFunction function = suite.getTestUtilityFunctions().stream().filter(e -> e.getName().equals
-                    (functionName)).findFirst().get();
-            suite.addMockFunctionObj(id, function);
-        });
-
-        suite.getBeforeSuiteFunctionNames().forEach(functionName -> {
-            TesterinaFunction function = suite.getTestUtilityFunctions().stream().filter(e -> e.getName().equals
-                    (functionName)).findFirst().get();
-            suite.addBeforeSuiteFunctionObj(function);
-        });
-
-        suite.getAfterSuiteFunctionNames().forEach(functionName -> {
-            TesterinaFunction function = suite.getTestUtilityFunctions().stream().filter(e -> e.getName().equals
-                    (functionName)).findFirst().get();
-            suite.addAfterSuiteFunctionObj(function);
-        });
-
-        suite.getBeforeEachFunctionNames().forEach(functionName -> {
-            TesterinaFunction function = suite.getTestUtilityFunctions().stream().filter(e -> e.getName().equals
-                    (functionName)).findFirst().get();
-            suite.addBeforeEachFunctionObj(function);
-        });
-
-        suite.getAfterEachFunctionNames().forEach(functionName -> {
-            TesterinaFunction function = suite.getTestUtilityFunctions().stream().filter(e -> e.getName().equals
-                    (functionName)).findFirst().get();
-            suite.addAfterEachFunctionObj(function);
-        });
-
-    }
-
-    private static int[] checkCyclicDependencies(List<Test> tests) {
-        int numberOfNodes = tests.size();
-        int[] indegrees = new int[numberOfNodes];
-        int[] sortedElts = new int[numberOfNodes];
-
-        List<Integer> dependencyMatrix[] = new ArrayList[numberOfNodes];
-        for (int i = 0; i < numberOfNodes; i++) {
-            dependencyMatrix[i] = new ArrayList<>();
-        }
-        List<String> testNames = tests.stream().map(k -> k.getTestName()).collect(Collectors.toList());
-
-        int i = 0;
-        for (Test test : tests) {
-            if (!test.getDependsOnTestFunctions().isEmpty()) {
-                for (String dependsOnFn : test.getDependsOnTestFunctions()) {
-                    int idx = testNames.indexOf(dependsOnFn);
-                    if (idx == -1) {
-                        String message = String.format("Test [%s] depends on function [%s], but it couldn't be found" +
-                                                               ".", test.getTestFunction().getName(), dependsOnFn);
-                        throw new BallerinaException(message);
-                    }
-                    dependencyMatrix[i].add(idx);
-                }
-            }
-            i++;
-        }
-
-        // fill in degrees
-        for (int j = 0; j < numberOfNodes; j++) {
-            List<Integer> dependencies = dependencyMatrix[j];
-            for (int node : dependencies) {
-                indegrees[node]++;
-            }
-        }
-
-        // Create a queue and enqueue all vertices with indegree 0
-        Queue<Integer> q = new LinkedList<Integer>();
-        for (i = 0; i < numberOfNodes; i++) {
-            if (indegrees[i] == 0) {
-                q.add(i);
-            }
-        }
-
-        // Initialize count of visited vertices
-        int cnt = 0;
-
-        // Create a vector to store result (A topological ordering of the vertices)
-        Vector<Integer> topOrder = new Vector<Integer>();
-        while (!q.isEmpty()) {
-            // Extract front of queue (or perform dequeue) and add it to topological order
-            int u = q.poll();
-            topOrder.add(u);
-
-            // Iterate through all its neighbouring nodes of dequeued node u and decrease their in-degree by 1
-            for (int node : dependencyMatrix[u]) {
-                // If in-degree becomes zero, add it to queue
-                if (--indegrees[node] == 0) {
-                    q.add(node);
-                }
-            }
-            cnt++;
-        }
-
-        // Check if there was a cycle
-        if (cnt != numberOfNodes) {
-            String message = "Cyclic test dependency detected";
-            throw new BallerinaException(message);
-        }
-
-        i = numberOfNodes - 1;
-        for (int elt : topOrder) {
-            sortedElts[i] = elt;
-            i--;
-        }
-
-        return sortedElts;
+        return value;
     }
 
     /**
@@ -540,4 +383,12 @@ public class TestAnnotationProcessor extends AbstractCompilerPlugin {
         BLangPackage bLangPackage = ((BLangPackage) packageNode);
         return bLangPackage.packageID.toString();
     }
+
+    /*private static int getTestInstructionsPosition(PackageInfo packageInfo) {
+        FunctionInfo testInitFunctionInfo = packageInfo.getTestInitFunctionInfo();
+        if (testInitFunctionInfo != null) {
+            return testInitFunctionInfo.getDefaultWorkerInfo().getCodeAttributeInfo().getCodeAddrs();
+        }
+        return packageInfo.getInstructions().length;
+    }*/
 }

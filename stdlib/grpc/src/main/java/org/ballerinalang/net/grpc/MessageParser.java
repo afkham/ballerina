@@ -17,8 +17,8 @@ package org.ballerinalang.net.grpc;
 
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.Descriptors;
-import org.ballerinalang.model.types.BType;
-import org.ballerinalang.util.codegen.ProgramFile;
+import org.ballerinalang.jvm.types.BType;
+import org.ballerinalang.net.grpc.exception.StatusRuntimeException;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -32,39 +32,46 @@ import java.util.Map;
 public class MessageParser {
 
     private final String messageName;
-    private final ProgramFile programFile;
     private final BType bType;
     private final Map<Integer, Descriptors.FieldDescriptor> fieldDescriptors;
 
-    public MessageParser(String messageName, ProgramFile programFile, BType bType) {
+    public MessageParser(String messageName, BType bType) {
         this.messageName = messageName;
-        this.programFile = programFile;
         this.bType = bType;
-        this.fieldDescriptors = computeFieldTagValues();
+        Descriptors.Descriptor messageDescriptor = MessageRegistry.getInstance().getMessageDescriptor(messageName);
+        this.fieldDescriptors = computeFieldTagValues(messageDescriptor);
+    }
+
+    MessageParser(Descriptors.Descriptor descriptor, BType bType) {
+        this.messageName = descriptor.getName();
+        this.bType = bType;
+        this.fieldDescriptors = computeFieldTagValues(descriptor);
     }
 
     /**
      * Returns message object parse from {@code input}.
      * @param input CodedInputStream of incoming message.
      * @return Message object with bValue
-     * @throws IOException when error occurred.
      */
-    public Message parseFrom(CodedInputStream input) throws
-            IOException {
-        return new Message(messageName, programFile, bType, input, fieldDescriptors);
+    Message parseFrom(CodedInputStream input) throws IOException {
+        return new Message(messageName, bType, input, fieldDescriptors);
     }
 
     /**
      * Returns message instance without bValue.
      * @return message instance without bValue.
      */
-    public Message getDefaultInstance() {
-        return new Message(messageName, null);
+    Message getDefaultInstance() throws IOException {
+        return new Message(messageName, bType, null, fieldDescriptors);
     }
 
-    private Map<Integer, Descriptors.FieldDescriptor> computeFieldTagValues() {
+    private Map<Integer, Descriptors.FieldDescriptor> computeFieldTagValues(Descriptors.Descriptor messageDescriptor) {
+        if (messageDescriptor == null) {
+            throw MessageUtils.getConnectorError(new StatusRuntimeException(Status
+                    .fromCode(Status.Code.INTERNAL).withDescription("Couldn't find message descriptor for the " +
+                            "message name: " + messageName)));
+        }
         Map<Integer, Descriptors.FieldDescriptor> fieldDescriptors = new HashMap<>();
-        Descriptors.Descriptor messageDescriptor = MessageRegistry.getInstance().getMessageDescriptor(messageName);
         for (Descriptors.FieldDescriptor fieldDescriptor : messageDescriptor.getFields()) {
             Descriptors.FieldDescriptor.Type fieldType = fieldDescriptor.getType();
             int number = fieldDescriptor.getNumber();

@@ -15,20 +15,20 @@
  */
 package org.ballerinalang.langserver.command.executors;
 
-import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.JsonObject;
 import org.ballerinalang.annotation.JavaSPIService;
-import org.ballerinalang.langserver.command.ExecuteCommandKeys;
-import org.ballerinalang.langserver.command.LSCommandExecutor;
-import org.ballerinalang.langserver.command.LSCommandExecutorException;
 import org.ballerinalang.langserver.command.docs.DocAttachmentInfo;
 import org.ballerinalang.langserver.common.constants.CommandConstants;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
+import org.ballerinalang.langserver.commons.command.ExecuteCommandKeys;
+import org.ballerinalang.langserver.commons.command.LSCommandExecutorException;
+import org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSCompiler;
-import org.ballerinalang.langserver.compiler.LSCompilerException;
-import org.ballerinalang.langserver.compiler.LSContext;
+import org.ballerinalang.langserver.compiler.LSModuleCompiler;
 import org.ballerinalang.langserver.compiler.common.LSCustomErrorStrategy;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
+import org.ballerinalang.langserver.compiler.exception.CompilationFailedException;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
@@ -41,47 +41,51 @@ import static org.ballerinalang.langserver.command.docs.DocumentationGenerator.g
  * 
  * @since 0.983.0
  */
-@JavaSPIService("org.ballerinalang.langserver.command.LSCommandExecutor")
+@JavaSPIService("org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor")
 public class AddDocumentationExecutor implements LSCommandExecutor {
 
-    private static final String COMMAND = "ADD_DOC";
+    public static final String COMMAND = "ADD_DOC";
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Object execute(LSContext context) throws LSCommandExecutorException {
+    public Object execute(LSContext ctx) throws LSCommandExecutorException {
         String nodeType = "";
         String documentUri;
         int line = 0;
         VersionedTextDocumentIdentifier textDocumentIdentifier = new VersionedTextDocumentIdentifier();
-        for (Object arg : context.get(ExecuteCommandKeys.COMMAND_ARGUMENTS_KEY)) {
-            if (((LinkedTreeMap) arg).get(ARG_KEY).equals(CommandConstants.ARG_KEY_DOC_URI)) {
-                documentUri = (String) ((LinkedTreeMap) arg).get(ARG_VALUE);
-                textDocumentIdentifier.setUri(documentUri);
-                context.put(DocumentServiceKeys.FILE_URI_KEY, documentUri);
-            } else if (((LinkedTreeMap) arg).get(ARG_KEY).equals(CommandConstants.ARG_KEY_NODE_TYPE)) {
-                nodeType = (String) ((LinkedTreeMap) arg).get(ARG_VALUE);
-            } else if (((LinkedTreeMap) arg).get(ARG_KEY).equals(CommandConstants.ARG_KEY_NODE_LINE)) {
-                line = Integer.parseInt((String) ((LinkedTreeMap) arg).get(ARG_VALUE));
+        for (Object arg : ctx.get(ExecuteCommandKeys.COMMAND_ARGUMENTS_KEY)) {
+            switch (((JsonObject) arg).get(ARG_KEY).getAsString()) {
+                case CommandConstants.ARG_KEY_DOC_URI:
+                    documentUri = ((JsonObject) arg).get(ARG_VALUE).getAsString();
+                    textDocumentIdentifier.setUri(documentUri);
+                    ctx.put(DocumentServiceKeys.FILE_URI_KEY, documentUri);
+                    break;
+                case CommandConstants.ARG_KEY_NODE_TYPE:
+                    nodeType = ((JsonObject) arg).get(ARG_VALUE).getAsString();
+                    break;
+                case CommandConstants.ARG_KEY_NODE_LINE:
+                    line = Integer.parseInt(((JsonObject) arg).get(ARG_VALUE).getAsString());
+                    break;
+                default:
+                    break;
             }
         }
 
-        BLangPackage bLangPackage = null;
+        BLangPackage bLangPackage;
         try {
-            WorkspaceDocumentManager documentManager = context.get(ExecuteCommandKeys.DOCUMENT_MANAGER_KEY);
-            LSCompiler lsCompiler = context.get(ExecuteCommandKeys.LS_COMPILER_KEY);
-            bLangPackage = lsCompiler.getBLangPackage(context, documentManager, false,
-                                                      LSCustomErrorStrategy.class, false);
-        } catch (LSCompilerException e) {
+            WorkspaceDocumentManager documentManager = ctx.get(DocumentServiceKeys.DOC_MANAGER_KEY);
+            bLangPackage = LSModuleCompiler.getBLangPackage(ctx, documentManager, LSCustomErrorStrategy.class, false,
+                    false);
+        } catch (CompilationFailedException e) {
             throw new LSCommandExecutorException("Couldn't compile the source", e);
         }
 
-        String relativeSourcePath = context.get(DocumentServiceKeys.RELATIVE_FILE_PATH_KEY);
-        context.put(DocumentServiceKeys.CURRENT_BLANG_PACKAGE_CONTEXT_KEY, bLangPackage);
+        String relativeSourcePath = ctx.get(DocumentServiceKeys.RELATIVE_FILE_PATH_KEY);
         BLangPackage srcOwnerPkg = CommonUtil.getSourceOwnerBLangPackage(relativeSourcePath, bLangPackage);
 
-        DocAttachmentInfo docAttachmentInfo = getDocumentationEditForNodeByPosition(nodeType, srcOwnerPkg, line);
+        DocAttachmentInfo docAttachmentInfo = getDocumentationEditForNodeByPosition(nodeType, srcOwnerPkg, line, ctx);
 
         if (docAttachmentInfo == null) {
             return new Object();
@@ -90,7 +94,7 @@ public class AddDocumentationExecutor implements LSCommandExecutor {
         Range range = new Range(docAttachmentInfo.getDocStartPos(), docAttachmentInfo.getDocStartPos());
 
         return applySingleTextEdit(docAttachmentInfo.getDocAttachment(), range, textDocumentIdentifier,
-                                   context.get(ExecuteCommandKeys.LANGUAGE_SERVER_KEY).getClient());
+                                   ctx.get(ExecuteCommandKeys.LANGUAGE_CLIENT_KEY));
     }
 
     /**

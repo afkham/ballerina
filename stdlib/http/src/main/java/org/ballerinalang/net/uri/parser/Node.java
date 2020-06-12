@@ -19,9 +19,9 @@
 package org.ballerinalang.net.uri.parser;
 
 import org.ballerinalang.net.http.HttpConstants;
+import org.ballerinalang.net.http.HttpResourceArguments;
 import org.ballerinalang.net.uri.URITemplateException;
 
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,19 +35,19 @@ import java.util.Map;
 public abstract class Node<DataType, InboundMsgType> {
 
     protected String token;
-    protected DataElement<DataType, InboundMsgType> dataElement;
-    protected List<Node<DataType, InboundMsgType>> childNodesList = new LinkedList<>();
+    DataElement<DataType, InboundMsgType> dataElement;
+    List<Node<DataType, InboundMsgType>> childNodesList = new LinkedList<>();
 
     protected Node(DataElement<DataType, InboundMsgType> dataElement, String token) {
         this.dataElement = dataElement;
         this.token = token;
     }
 
-    public DataElement<DataType, InboundMsgType> getDataElement() {
+    DataElement<DataType, InboundMsgType> getDataElement() {
         return dataElement;
     }
 
-    public Node<DataType, InboundMsgType> addChild(Node<DataType, InboundMsgType> childNode)
+    Node<DataType, InboundMsgType> addChild(Node<DataType, InboundMsgType> childNode)
             throws URITemplateException {
         Node<DataType, InboundMsgType> node = childNode;
         Node<DataType, InboundMsgType> matchingChildNode = getMatchingChildNode(childNode, childNodesList);
@@ -57,14 +57,13 @@ public abstract class Node<DataType, InboundMsgType> {
             this.childNodesList.add(node);
         }
 
-        Collections.sort(childNodesList, (o1, o2) -> getIntValue(o2) - getIntValue(o1));
+        childNodesList.sort((o1, o2) -> getIntValue(o2) - getIntValue(o1));
 
         return node;
     }
 
-    public boolean matchAll(String uriFragment, Map<String, String> variables,
-                                                          int start, InboundMsgType inboundMsg,
-                                                          DataReturnAgent<DataType> dataReturnAgent) {
+    public boolean matchAll(String uriFragment, HttpResourceArguments variables, int start, InboundMsgType inboundMsg,
+                            DataReturnAgent<DataType> dataReturnAgent) {
         int matchLength = match(uriFragment, variables);
         if (matchLength < 0) {
             return false;
@@ -118,29 +117,35 @@ public abstract class Node<DataType, InboundMsgType> {
         return dataElement != null && dataElement.hasData();
     }
 
-    private void setUriPostFix(Map<String, String> variables, String subUriFragment) {
-        variables.putIfAbsent(HttpConstants.EXTRA_PATH_INFO, "/" + subUriFragment);
+    private void setUriPostFix(HttpResourceArguments variables, String subUriFragment) {
+        variables.getMap().putIfAbsent(HttpConstants.EXTRA_PATH_INFO, "/" + subUriFragment);
     }
 
     abstract String expand(Map<String, String> variables);
 
-    abstract int match(String uriFragment, Map<String, String> variables);
+    abstract int match(String uriFragment, HttpResourceArguments variables);
 
     abstract String getToken();
 
     abstract char getFirstCharacter();
 
-    @SuppressWarnings("unchecked")
     private Node<DataType, InboundMsgType> getMatchingChildNode(Node<DataType, InboundMsgType> prospectiveChild,
             List<Node<DataType, InboundMsgType>> existingChildren) throws URITemplateException {
-        boolean isExpression = prospectiveChild instanceof Expression;
+        boolean dotSuffixExpression = prospectiveChild instanceof DotSuffixExpression;
+        boolean simpleStringExpression = prospectiveChild instanceof SimpleStringExpression;
         String prospectiveChildToken = prospectiveChild.getToken();
 
         for (Node<DataType, InboundMsgType> existingChild : existingChildren) {
-            if (isExpression && existingChild instanceof Expression) {
-                ((Expression) existingChild).variableList.add(new Variable(prospectiveChild.token));
-                existingChild.token = existingChild.token + "+" + prospectiveChild.token;
-                return existingChild;
+            if (dotSuffixExpression) {
+                if (existingChild instanceof DotSuffixExpression) {
+                    return getExistingChildNode(prospectiveChild, existingChild);
+                } else {
+                    continue;
+                }
+            }
+            if (simpleStringExpression && existingChild instanceof Expression
+                    && !(existingChild instanceof DotSuffixExpression)) {
+                return getExistingChildNode(prospectiveChild, existingChild);
             }
             if (existingChild.getToken().equals(prospectiveChildToken)) {
                 return existingChild;
@@ -150,12 +155,23 @@ public abstract class Node<DataType, InboundMsgType> {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
+    private Node<DataType, InboundMsgType> getExistingChildNode(Node<DataType, InboundMsgType> prospectiveChild,
+                                                                Node<DataType, InboundMsgType> existingChild)
+            throws URITemplateException {
+        ((Expression) existingChild).variableList.add(new Variable(prospectiveChild.token));
+        existingChild.token = existingChild.token + "+" + prospectiveChild.token;
+        return existingChild;
+    }
+
     private int getIntValue(Node node) {
         if (node instanceof Literal) {
             if (node.getToken().equals("*")) {
                 return 0;
             }
             return node.getToken().length() + 5;
+        } else if (node instanceof DotSuffixExpression) {
+            return 2;
         } else {
             return 1;
         }

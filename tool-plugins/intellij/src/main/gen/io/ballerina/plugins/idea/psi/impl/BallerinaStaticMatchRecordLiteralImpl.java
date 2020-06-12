@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import static io.ballerina.plugins.idea.psi.BallerinaTypes.*;
 import io.ballerina.plugins.idea.psi.*;
 
-public class BallerinaStaticMatchRecordLiteralImpl extends BallerinaStaticMatchLiteralsImpl implements BallerinaStaticMatchRecordLiteral {
+public class BallerinaStaticMatchRecordLiteralImpl extends BallerinaStaticMatchLiteralImpl implements BallerinaStaticMatchRecordLiteral {
 
   public BallerinaStaticMatchRecordLiteralImpl(@NotNull ASTNode node) {
     super(node);
@@ -44,7 +44,7 @@ public class BallerinaStaticMatchRecordLiteralImpl extends BallerinaStaticMatchL
   @Override
   @NotNull
   public BallerinaRecordLiteral getRecordLiteral() {
-    return notNullChild(PsiTreeUtil.getChildOfType(this, BallerinaRecordLiteral.class));
+    return findNotNullChildByClass(BallerinaRecordLiteral.class);
   }
 
 }

@@ -21,29 +21,29 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.InvalidProtocolBufferException;
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.connector.api.Annotation;
-import org.ballerinalang.connector.api.Resource;
-import org.ballerinalang.connector.api.Service;
-import org.ballerinalang.connector.api.Struct;
-import org.ballerinalang.connector.api.Value;
-import org.ballerinalang.model.types.BArrayType;
-import org.ballerinalang.model.types.BType;
-import org.ballerinalang.model.types.BTypes;
+import org.ballerinalang.jvm.BRuntime;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.types.AttachedFunction;
+import org.ballerinalang.jvm.types.BArrayType;
+import org.ballerinalang.jvm.types.BPackage;
+import org.ballerinalang.jvm.types.BRecordType;
+import org.ballerinalang.jvm.types.BStreamType;
+import org.ballerinalang.jvm.types.BType;
+import org.ballerinalang.jvm.types.BTypes;
+import org.ballerinalang.jvm.types.TypeFlags;
+import org.ballerinalang.jvm.values.MapValue;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.api.BString;
 import org.ballerinalang.net.grpc.exception.GrpcServerException;
 import org.ballerinalang.net.grpc.listener.ServerCallHandler;
 import org.ballerinalang.net.grpc.listener.StreamingServerCallHandler;
 import org.ballerinalang.net.grpc.listener.UnaryServerCallHandler;
 import org.ballerinalang.net.grpc.proto.definition.StandardDescriptorBuilder;
-import org.ballerinalang.util.codegen.ProgramFile;
-import org.ballerinalang.util.exceptions.BallerinaException;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.ballerinalang.net.grpc.GrpcConstants.EMPTY_DATATYPE_NAME;
+import static org.ballerinalang.net.grpc.GrpcConstants.PROTOCOL_PACKAGE_GRPC;
 import static org.ballerinalang.net.grpc.GrpcConstants.WRAPPER_BOOL_MESSAGE;
 import static org.ballerinalang.net.grpc.GrpcConstants.WRAPPER_BYTES_MESSAGE;
 import static org.ballerinalang.net.grpc.GrpcConstants.WRAPPER_DOUBLE_MESSAGE;
@@ -54,6 +54,7 @@ import static org.ballerinalang.net.grpc.GrpcConstants.WRAPPER_STRING_MESSAGE;
 import static org.ballerinalang.net.grpc.GrpcConstants.WRAPPER_UINT32_MESSAGE;
 import static org.ballerinalang.net.grpc.GrpcConstants.WRAPPER_UINT64_MESSAGE;
 import static org.ballerinalang.net.grpc.MessageUtils.setNestedMessages;
+import static org.ballerinalang.net.grpc.proto.ServiceProtoConstants.ANN_SERVICE_CONFIG_FQN;
 
 /**
  * This is the gRPC server implementation for registering service and start/stop server.
@@ -62,15 +63,38 @@ import static org.ballerinalang.net.grpc.MessageUtils.setNestedMessages;
  */
 public class ServicesBuilderUtils {
     
-    public static ServerServiceDefinition getServiceDefinition(Service service, Context context) throws
+    public static ServerServiceDefinition getServiceDefinition(BRuntime runtime, ObjectValue service,
+                                                               Object annotationData) throws
             GrpcServerException {
-        Descriptors.FileDescriptor fileDescriptor = getDescriptor(service);
-        Descriptors.ServiceDescriptor serviceDescriptor = fileDescriptor.findServiceByName(service.getName());
-        return getServiceDefinition(service, serviceDescriptor, context);
+        Descriptors.FileDescriptor fileDescriptor = getDescriptor(annotationData);
+        if (fileDescriptor == null) {
+            throw new GrpcServerException("Couldn't find the service descriptor.");
+        }
+        String serviceName = getServiceName(service);
+        Descriptors.ServiceDescriptor serviceDescriptor = fileDescriptor.findServiceByName(serviceName);
+        if (serviceDescriptor == null) {
+            throw new GrpcServerException("Couldn't find the service descriptor for the service: " + serviceName);
+        }
+        return getServiceDefinition(runtime, service, serviceDescriptor);
     }
-    
-    private static ServerServiceDefinition getServiceDefinition(Service service, Descriptors.ServiceDescriptor
-            serviceDescriptor, Context context) throws GrpcServerException {
+
+    private static String getServiceName(ObjectValue service) {
+        Object serviceConfigData = service.getType().getAnnotation(StringUtils.fromString(ANN_SERVICE_CONFIG_FQN));
+        if (serviceConfigData != null) {
+            MapValue configMap = (MapValue) serviceConfigData;
+            BString providedName = configMap.getStringValue(StringUtils.fromString("name"));
+            if (providedName != null && !providedName.getValue().isEmpty()) {
+                return providedName.getValue();
+            }
+        }
+        String serviceTypeName = service.getType().getName(); // typeName format: <name>$$<type>$$<version>
+        String[] splitValues = serviceTypeName.split("\\$\\$");
+        return splitValues[0];
+    }
+
+    private static ServerServiceDefinition getServiceDefinition(BRuntime runtime, ObjectValue service,
+                                                                Descriptors.ServiceDescriptor serviceDescriptor)
+            throws GrpcServerException {
         // Get full service name for the service definition. <package>.<service>
         final String serviceName = serviceDescriptor.getFullName();
         // Server Definition Builder for the service.
@@ -92,22 +116,24 @@ public class ServicesBuilderUtils {
 
             MethodDescriptor.MethodType methodType;
             ServerCallHandler serverCallHandler;
-            Map<String, Resource> resourceMap = new HashMap<>();
-            Resource mappedResource = null;
+            MethodDescriptor.Marshaller reqMarshaller = null;
+            ServiceResource mappedResource = null;
 
-            for (Resource resource : service.getResources()) {
-                if (methodDescriptor.getName().equals(resource.getName())) {
-                    mappedResource = resource;
+            for (AttachedFunction function : service.getType().getAttachedFunctions()) {
+                if (methodDescriptor.getName().equals(function.getName())) {
+                    mappedResource = new ServiceResource(runtime, service, function);
+                    reqMarshaller = ProtoUtils.marshaller(new MessageParser(requestDescriptor.getName(),
+                            getResourceInputParameterType(function)));
                 }
-                resourceMap.put(resource.getName(), resource);
             }
-
             if (methodDescriptor.toProto().getServerStreaming() && methodDescriptor.toProto().getClientStreaming()) {
                 methodType = MethodDescriptor.MethodType.BIDI_STREAMING;
-                serverCallHandler = new StreamingServerCallHandler(methodDescriptor, resourceMap);
+                serverCallHandler = new StreamingServerCallHandler(methodDescriptor, mappedResource,
+                        getBallerinaValueType(service.getType().getPackage(), requestDescriptor.getName()));
             } else if (methodDescriptor.toProto().getClientStreaming()) {
                 methodType = MethodDescriptor.MethodType.CLIENT_STREAMING;
-                serverCallHandler = new StreamingServerCallHandler(methodDescriptor, resourceMap);
+                serverCallHandler = new StreamingServerCallHandler(methodDescriptor, mappedResource,
+                        getBallerinaValueType(service.getType().getPackage(), requestDescriptor.getName()));
             } else if (methodDescriptor.toProto().getServerStreaming()) {
                 methodType = MethodDescriptor.MethodType.SERVER_STREAMING;
                 serverCallHandler = new UnaryServerCallHandler(methodDescriptor, mappedResource);
@@ -115,12 +141,13 @@ public class ServicesBuilderUtils {
                 methodType = MethodDescriptor.MethodType.UNARY;
                 serverCallHandler = new UnaryServerCallHandler(methodDescriptor, mappedResource);
             }
-            MethodDescriptor.Marshaller reqMarshaller = ProtoUtils.marshaller(new MessageParser(requestDescriptor
-                    .getName(), context.getProgramFile(), getBallerinaValueType(requestDescriptor.getName(), context
-                    .getProgramFile())));
+            if (reqMarshaller == null) {
+                reqMarshaller = ProtoUtils.marshaller(new MessageParser(requestDescriptor
+                        .getName(), getBallerinaValueType(service.getType().getPackage(),
+                        requestDescriptor.getName())));
+            }
             MethodDescriptor.Marshaller resMarshaller = ProtoUtils.marshaller(new MessageParser(responseDescriptor
-                    .getName(), context.getProgramFile(), getBallerinaValueType(responseDescriptor.getName(), context
-                    .getProgramFile())));
+                    .getName(), getBallerinaValueType(service.getType().getPackage(), responseDescriptor.getName())));
             MethodDescriptor.Builder methodBuilder = MethodDescriptor.newBuilder();
             MethodDescriptor grpcMethodDescriptor = methodBuilder.setType(methodType)
                     .setFullMethodName(methodName)
@@ -140,34 +167,33 @@ public class ServicesBuilderUtils {
      * Returns file descriptor for the service.
      * Reads file descriptor from internal annotation attached to the service at compile time.
      *
-     * @param service gRPC service.
+     * @param annotationData gRPC service annotation.
      * @return File Descriptor of the service.
      * @throws GrpcServerException cannot read service descriptor
      */
-    public static com.google.protobuf.Descriptors.FileDescriptor getDescriptor(
-            org.ballerinalang.connector.api.Service service) throws GrpcServerException {
+    @SuppressWarnings("unchecked")
+    private static com.google.protobuf.Descriptors.FileDescriptor getDescriptor(Object annotationData)
+            throws GrpcServerException {
+        if (annotationData == null) {
+            return null;
+        }
+
         try {
-            List<Annotation> annotationList = service.getAnnotationList("ballerina/grpc", "ServiceDescriptor");
-            if (annotationList == null || annotationList.size() != 1) {
-                throw new GrpcServerException("Couldn't find the service descriptor.");
-            }
-            Annotation descriptorAnn = annotationList.get(0);
-            Struct descriptorStruct = descriptorAnn.getValue();
-            if (descriptorStruct == null) {
-                throw new GrpcServerException("Couldn't find the service descriptor.");
-            }
-            String descriptorData = descriptorStruct.getStringField("descriptor");
-            Map<String, Value> descMap = descriptorStruct.getMapField("descMap");
+            MapValue<BString, Object> annotationMap = (MapValue) annotationData;
+            BString descriptorData = annotationMap.getStringValue(StringUtils.fromString("descriptor"));
+            MapValue<BString, BString> descMap = (MapValue<BString, BString>) annotationMap.getMapValue(
+                StringUtils.fromString("descMap"));
             return getFileDescriptor(descriptorData, descMap);
         } catch (IOException | Descriptors.DescriptorValidationException e) {
             throw new GrpcServerException("Error while reading the service proto descriptor. check the service " +
-                    "implementation. ", e);
+                                                  "implementation. ", e);
         }
     }
 
-    private static Descriptors.FileDescriptor getFileDescriptor(String descriptorData, Map<String, Value> descMap)
-            throws InvalidProtocolBufferException, Descriptors.DescriptorValidationException, GrpcServerException {
-        byte[] descriptor = hexStringToByteArray(descriptorData);
+    private static Descriptors.FileDescriptor getFileDescriptor(
+        BString descriptorData, MapValue<BString, BString> descMap) 
+        throws InvalidProtocolBufferException, Descriptors.DescriptorValidationException, GrpcServerException {
+        byte[] descriptor = hexStringToByteArray(descriptorData.getValue());
         if (descriptor.length == 0) {
             throw new GrpcServerException("Error while reading the service proto descriptor. input descriptor string " +
                     "is null.");
@@ -183,8 +209,8 @@ public class ServicesBuilderUtils {
         int i = 0;
         for (ByteString dependency : descriptorProto.getDependencyList().asByteStringList()) {
             String dependencyKey = dependency.toStringUtf8();
-            if (descMap.containsKey(dependencyKey)) {
-                fileDescriptors[i++] = getFileDescriptor(descMap.get(dependencyKey).getStringValue(), descMap);
+            if (descMap.containsKey(StringUtils.fromString(dependencyKey))) {
+                fileDescriptors[i++] = getFileDescriptor(descMap.get(StringUtils.fromString(dependencyKey)), descMap);
             } else if (descMap.size() == 0) {
                 Descriptors.FileDescriptor dependentDescriptor = StandardDescriptorBuilder.getFileDescriptor
                         (dependencyKey);
@@ -222,10 +248,9 @@ public class ServicesBuilderUtils {
      * Returns corresponding Ballerina type for the proto buffer type.
      *
      * @param protoType Protocol buffer type
-     * @param programFile   Ballerina Program File
      * @return Mapping BType of the proto type.
      */
-    static BType getBallerinaValueType(String protoType, ProgramFile programFile) throws BallerinaException {
+    static BType getBallerinaValueType(BPackage bPackage, String protoType) {
         if (protoType.equalsIgnoreCase(WRAPPER_DOUBLE_MESSAGE) || protoType
                 .equalsIgnoreCase(WRAPPER_FLOAT_MESSAGE)) {
             return BTypes.typeFloat;
@@ -243,11 +268,25 @@ public class ServicesBuilderUtils {
         } else if (protoType.equalsIgnoreCase(WRAPPER_BYTES_MESSAGE)) {
             return new BArrayType(BTypes.typeByte);
         } else {
-            if (!programFile.getEntryPackage().typeDefInfoMap.containsKey(protoType)) {
-                throw new BallerinaException("Error while retrieving Ballerina type for " + protoType);
-            }
-            return programFile.getEntryPackage().getStructInfo(protoType).getType();
+            return new BRecordType(protoType, bPackage, 0, true,
+                    TypeFlags.asMask(TypeFlags.ANYDATA, TypeFlags.PURETYPE));
         }
+    }
+
+    private static BType getResourceInputParameterType(AttachedFunction attachedFunction) {
+        BType[] inputParams = attachedFunction.type.getParameterType();
+        if (inputParams.length > 1) {
+            BType inputType = inputParams[1];
+            if (inputType != null && "Headers".equals(inputType.getName()) &&
+                    inputType.getPackage() != null && PROTOCOL_PACKAGE_GRPC.equals(inputType.getPackage().getName())) {
+                return BTypes.typeNull;
+            } else if (inputType instanceof BStreamType) {
+                return ((BStreamType) inputType).getConstrainedType();
+            } else {
+                return inputParams[1];
+            }
+        }
+        return BTypes.typeNull;
     }
 
 }

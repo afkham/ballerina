@@ -17,16 +17,23 @@
 */
 package org.ballerinalang.langserver.compiler.workspace;
 
+import io.ballerinalang.compiler.syntax.tree.SyntaxTree;
+import io.ballerinalang.compiler.text.TextDocuments;
+import org.ballerinalang.langserver.commons.workspace.LSDocumentIdentifier;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.LSCompilerUtil;
+import org.ballerinalang.langserver.compiler.common.LSDocumentIdentifierImpl;
 import org.ballerinalang.langserver.compiler.workspace.repository.LangServerFSProjectDirectory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.eclipse.lsp4j.CodeLens;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -40,8 +47,6 @@ import java.util.stream.Collectors;
  * in tool's workspace.
  */
 public class WorkspaceDocumentManagerImpl implements WorkspaceDocumentManager {
-
-    private static final Logger logger = LoggerFactory.getLogger(WorkspaceDocumentManagerImpl.class);
 
     private volatile Map<Path, DocumentPair> documentList = new ConcurrentHashMap<>();
 
@@ -68,29 +73,66 @@ public class WorkspaceDocumentManagerImpl implements WorkspaceDocumentManager {
      * {@inheritDoc}
      */
     @Override
-    public Optional<Lock> openFile(Path filePath, String content) throws WorkspaceDocumentException {
+    public void openFile(Path filePath, String content) throws WorkspaceDocumentException {
         if (isFileOpen(filePath)) {
             throw new WorkspaceDocumentException(
                     "File " + filePath.toString() + " is already opened in document manager."
             );
         }
-        Optional<Lock> lock = lockFile(filePath);
         documentList.put(filePath, new DocumentPair(new WorkspaceDocument(filePath, content)));
-        rescanProjectRoot(filePath);
-        return lock;
+        LSDocumentIdentifier document = new LSDocumentIdentifierImpl(filePath.toUri().toString());
+        if (document.isWithinProject()) {
+            rescanProjectRoot(filePath);
+        }
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Optional<Lock> updateFile(Path filePath, String updatedContent) throws WorkspaceDocumentException {
+    public void updateFile(Path filePath, String updatedContent) throws WorkspaceDocumentException {
         if (isFileOpen(filePath)) {
-            Optional<Lock> lock = lockFile(filePath);
             documentList.get(filePath).getDocument().ifPresent(document -> document.setContent(updatedContent));
-            return lock;
+        } else {
+            throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
         }
-        throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setCodeLenses(Path filePath, List<CodeLens> codeLens) throws WorkspaceDocumentException {
+        if (isFileOpen(filePath)) {
+            documentList.get(filePath).getDocument().ifPresent(document -> document.setCodeLenses(codeLens));
+        } else {
+            throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setPrunedContent(Path filePath, String prunedSource) throws WorkspaceDocumentException {
+        if (isFileOpen(filePath)) {
+            documentList.get(filePath).getDocument().ifPresent(document -> document.setPrunedContent(prunedSource));
+        } else {
+            throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void resetPrunedContent(Path filePath) throws WorkspaceDocumentException {
+
+        if (isFileOpen(filePath)) {
+            documentList.get(filePath).getDocument().ifPresent(WorkspaceDocument::resetPrunedContent);
+        } else {
+            throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
+        }
     }
 
     /**
@@ -107,10 +149,35 @@ public class WorkspaceDocumentManagerImpl implements WorkspaceDocumentManager {
             } finally {
                 lock.unlock();
             }
-            rescanProjectRoot(filePath);
+            // TODO: within the workspace document we need to keep the LSDocument
+            LSDocumentIdentifier document = new LSDocumentIdentifierImpl(filePath.toUri().toString());
+            if (document.isWithinProject()) {
+                rescanProjectRoot(filePath);
+            }
         } else {
             throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<CodeLens> getCodeLenses(Path filePath) {
+        if (isFileOpen(filePath) && documentList.get(filePath) != null) {
+            return documentList.get(filePath).getDocument().map(WorkspaceDocument::getCodeLenses).orElse(null);
+        }
+        return new ArrayList<>();
+    }
+
+    @Override
+    public LSDocumentIdentifier getLSDocument(Path filePath) throws WorkspaceDocumentException {
+        DocumentPair documentPair = documentList.get(filePath);
+        if (isFileOpen(filePath) && documentPair != null && documentPair.getDocument().isPresent()) {
+            return documentPair.getDocument().get().getLSDocument();
+        }
+        throw new WorkspaceDocumentException("Cannot find LSDocument for the give file path: ["
+                + filePath.toString() + "]");
     }
 
     /**
@@ -167,6 +234,29 @@ public class WorkspaceDocumentManagerImpl implements WorkspaceDocumentManager {
         documentList.clear();
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public SyntaxTree getTree(Path filePath) throws WorkspaceDocumentException {
+        if (isFileOpen(filePath) && documentList.get(filePath) != null) {
+            return documentList.get(filePath).getDocument().map(WorkspaceDocument::getTree).orElse(null);
+        }
+        return SyntaxTree.from(TextDocuments.from(readFromFileSystem(filePath)));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setTree(Path filePath, SyntaxTree newTree) throws WorkspaceDocumentException {
+        if (isFileOpen(filePath)) {
+            documentList.get(filePath).getDocument().ifPresent(document -> document.setTree(newTree));
+        } else {
+            throw new WorkspaceDocumentException("File " + filePath.toString() + " is not opened in document manager.");
+        }
+    }
+
     private String readFromFileSystem(Path filePath) throws WorkspaceDocumentException {
         try {
             if (Files.exists(filePath)) {
@@ -180,7 +270,7 @@ public class WorkspaceDocumentManagerImpl implements WorkspaceDocumentManager {
     }
 
     private void rescanProjectRoot(Path filePath) {
-        Path projectRoot = Paths.get(LSCompilerUtil.getSourceRoot(filePath));
+        Path projectRoot = Paths.get(LSCompilerUtil.getProjectRoot(filePath));
         LangServerFSProjectDirectory projectDirectory = LangServerFSProjectDirectory.getInstance(projectRoot, this);
         projectDirectory.rescanProjectRoot();
     }

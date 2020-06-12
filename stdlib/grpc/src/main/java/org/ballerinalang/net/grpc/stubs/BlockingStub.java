@@ -18,26 +18,26 @@
 package org.ballerinalang.net.grpc.stubs;
 
 import io.netty.handler.codec.http.HttpHeaders;
-import org.ballerinalang.connector.api.BLangConnectorSPIUtil;
-import org.ballerinalang.model.types.BTupleType;
-import org.ballerinalang.model.types.BTypes;
-import org.ballerinalang.model.values.BError;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BRefType;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.model.values.BValueArray;
+import org.ballerinalang.jvm.BallerinaValues;
+import org.ballerinalang.jvm.types.BTupleType;
+import org.ballerinalang.jvm.types.BTypes;
+import org.ballerinalang.jvm.values.ErrorValue;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.api.BArray;
+import org.ballerinalang.jvm.values.api.BValueCreator;
 import org.ballerinalang.net.grpc.ClientCall;
+import org.ballerinalang.net.grpc.DataContext;
 import org.ballerinalang.net.grpc.Message;
 import org.ballerinalang.net.grpc.MessageUtils;
 import org.ballerinalang.net.grpc.MethodDescriptor;
 import org.ballerinalang.net.grpc.Status;
-import org.ballerinalang.net.http.DataContext;
 import org.wso2.transport.http.netty.contract.HttpClientConnector;
 
 import java.util.Arrays;
 
+import static org.ballerinalang.net.grpc.GrpcConstants.HEADERS;
 import static org.ballerinalang.net.grpc.GrpcConstants.MESSAGE_HEADERS;
-import static org.ballerinalang.net.grpc.GrpcConstants.PROTOCOL_STRUCT_PACKAGE_GRPC;
+import static org.ballerinalang.net.grpc.GrpcConstants.PROTOCOL_GRPC_PKG_ID;
 
 /**
  * This class handles Blocking client connection.
@@ -45,8 +45,6 @@ import static org.ballerinalang.net.grpc.GrpcConstants.PROTOCOL_STRUCT_PACKAGE_G
  * @since 0.980.0
  */
 public class BlockingStub extends AbstractStub {
-
-    private static final BTupleType RESP_TUPLE_TYPE = new BTupleType(Arrays.asList(BTypes.typeAny, BTypes.typeAny));
 
     public BlockingStub(HttpClientConnector clientConnector, String url) {
         super(clientConnector, url);
@@ -58,17 +56,18 @@ public class BlockingStub extends AbstractStub {
      * @param request          request message.
      * @param methodDescriptor method descriptor
      * @param dataContext data context
+     * @throws Exception if an error occur while processing client call.
      */
     public void executeUnary(Message request, MethodDescriptor methodDescriptor,
-                                           DataContext dataContext) {
+                                           DataContext dataContext) throws Exception {
         ClientCall call = new ClientCall(getConnector(), createOutboundRequest(request
-                .getHeaders()), methodDescriptor);
+                .getHeaders()), methodDescriptor, dataContext);
         call.start(new CallBlockingListener(dataContext));
         try {
             call.sendMessage(request);
             call.halfClose();
         } catch (Exception e) {
-            throw cancelThrow(call, e);
+            cancelThrow(call, e);
         }
     }
 
@@ -101,33 +100,33 @@ public class BlockingStub extends AbstractStub {
 
         @Override
         public void onClose(Status status, HttpHeaders trailers) {
-            BError httpConnectorError = null;
-            BValueArray inboundResponse = null;
+            ErrorValue httpConnectorError = null;
+            BArray inboundResponse = null;
             if (status.isOk()) {
                 if (value == null) {
                     // No value received so mark the future as an error
                     httpConnectorError = MessageUtils.getConnectorError(Status.Code.INTERNAL.toStatus()
                                     .withDescription("No value received for unary call").asRuntimeException());
                 } else {
-                    BValue responseBValue = value.getbMessage();
+                    Object responseBValue = value.getbMessage();
                     // Set response headers, when response headers exists in the message context.
-                    BMap<String, BValue> headerStruct = BLangConnectorSPIUtil.createBStruct(dataContext.context
-                            .getProgramFile(), PROTOCOL_STRUCT_PACKAGE_GRPC, "Headers");
-                    headerStruct.addNativeData(MESSAGE_HEADERS, value.getHeaders());
-                    BValueArray contentTuple = new BValueArray(RESP_TUPLE_TYPE);
-                    contentTuple.add(0, (BRefType) responseBValue);
-                    contentTuple.add(1, headerStruct);
+                    ObjectValue headerObject = BallerinaValues.createObjectValue(PROTOCOL_GRPC_PKG_ID, HEADERS);
+                    headerObject.addNativeData(MESSAGE_HEADERS, value.getHeaders());
+                    BArray contentTuple = BValueCreator.createTupleValue(
+                            new BTupleType(Arrays.asList(BTypes.typeAnydata, headerObject.getType())));
+                    contentTuple.add(0, responseBValue);
+                    contentTuple.add(1, headerObject);
                     inboundResponse = contentTuple;
                 }
             } else {
                 httpConnectorError = MessageUtils.getConnectorError(status.asRuntimeException());
             }
             if (inboundResponse != null) {
-                dataContext.context.setReturnValues(inboundResponse);
+                dataContext.getCallback().setReturnValues(inboundResponse);
             } else {
-                dataContext.context.setReturnValues(httpConnectorError);
+                dataContext.getCallback().setReturnValues(httpConnectorError);
             }
-            dataContext.callback.notifySuccess();
+            dataContext.getCallback().notifySuccess();
         }
     }
 }

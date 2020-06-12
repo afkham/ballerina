@@ -17,9 +17,7 @@
 */
 package org.ballerinalang.model.values;
 
-import org.ballerinalang.bre.bvm.BVM;
 import org.ballerinalang.model.types.BType;
-import org.ballerinalang.util.exceptions.BLangFreezeException;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
 import java.io.IOException;
@@ -38,8 +36,6 @@ public interface BValue {
 
     BType getType();
 
-    void stamp(BType type);
-
     /**
      * Deep copy {@link BValue}.
      *
@@ -49,15 +45,6 @@ public interface BValue {
      */
     BValue copy(Map<BValue, BValue> refs);
 
-    /**
-     * Method to attempt freezing a {@link BValue}, to disallow further modification.
-     *
-     * @param freezeStatus  the {@link BVM.FreezeStatus} instance to keep track of the
-     *                      freeze result of this attempt
-     */
-    default void attemptFreeze(BVM.FreezeStatus freezeStatus) {
-        throw new BLangFreezeException("freeze not allowed on '" + getType() + "'");
-    }
 
     /**
      * Method to retrieve if the {@link BValue} is frozen, if applicable. Compile time checks ensure that the check
@@ -67,6 +54,16 @@ public interface BValue {
      */
     default boolean isFrozen() {
         return false;
+    }
+
+    /**
+     * Method to returns an integer representing the number of items that a value contains, where the meaning of item
+     * depends on the basic type of value.
+     *
+     * @return  Length of the given value
+     */
+    default long size() {
+        return -1;
     }
 
     /**

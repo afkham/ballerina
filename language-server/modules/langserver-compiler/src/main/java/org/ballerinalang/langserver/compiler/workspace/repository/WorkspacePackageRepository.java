@@ -1,7 +1,10 @@
 package org.ballerinalang.langserver.compiler.workspace.repository;
 
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentException;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
+import io.ballerinalang.compiler.syntax.tree.SyntaxTree;
+import io.ballerinalang.compiler.text.TextDocument;
+import io.ballerinalang.compiler.text.TextDocuments;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.repository.CompilerInput;
 import org.ballerinalang.repository.PackageRepository;
@@ -159,6 +162,7 @@ public class WorkspacePackageRepository extends GeneralFSPackageRepository {
             private String name;
 
             private byte[] code;
+            private final SyntaxTree tree;
 
             private WorkspaceCompilerInput(String name) {
                 this.name = name;
@@ -178,6 +182,8 @@ public class WorkspacePackageRepository extends GeneralFSPackageRepository {
                                 "': " + e.getMessage(), e);
                     }
                 }
+                TextDocument textDocument = TextDocuments.from(new String(this.code));
+                this.tree = SyntaxTree.from(textDocument);
             }
 
             @Override
@@ -188,6 +194,11 @@ public class WorkspacePackageRepository extends GeneralFSPackageRepository {
             @Override
             public byte[] getCode() {
                 return code.clone();
+            }
+
+            @Override
+            public SyntaxTree getTree() {
+                return this.tree;
             }
 
         }

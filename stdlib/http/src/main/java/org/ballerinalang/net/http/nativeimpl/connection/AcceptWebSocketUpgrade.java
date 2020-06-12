@@ -17,71 +17,106 @@
 package org.ballerinalang.net.http.nativeimpl.connection;
 
 import io.netty.handler.codec.http.DefaultHttpHeaders;
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.CallableUnitCallback;
-import org.ballerinalang.connector.api.BallerinaConnectorException;
-import org.ballerinalang.model.NativeCallableUnit;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BMap;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
+import org.ballerinalang.jvm.scheduling.Scheduler;
+import org.ballerinalang.jvm.values.MapValue;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.jvm.values.api.BString;
+import org.ballerinalang.jvm.values.connector.NonBlockingCallback;
 import org.ballerinalang.net.http.HttpConstants;
-import org.ballerinalang.net.http.WebSocketConnectionManager;
-import org.ballerinalang.net.http.WebSocketConstants;
-import org.ballerinalang.net.http.WebSocketService;
-import org.ballerinalang.net.http.WebSocketUtil;
+import org.ballerinalang.net.http.websocket.WebSocketConstants;
+import org.ballerinalang.net.http.websocket.WebSocketException;
+import org.ballerinalang.net.http.websocket.WebSocketUtil;
+import org.ballerinalang.net.http.websocket.server.WebSocketConnectionManager;
+import org.ballerinalang.net.http.websocket.server.WebSocketServerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.wso2.transport.http.netty.contract.websocket.ServerHandshakeFuture;
+import org.wso2.transport.http.netty.contract.websocket.ServerHandshakeListener;
+import org.wso2.transport.http.netty.contract.websocket.WebSocketConnection;
 import org.wso2.transport.http.netty.contract.websocket.WebSocketHandshaker;
 
 /**
- * {@code Get} is the GET action implementation of the HTTP Connector.
+ * {@code AcceptWebSocketUpgrade} is the AcceptWebSocketUpgrade action implementation of the HTTP Connector.
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "acceptWebSocketUpgrade",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = HttpConstants.CALLER,
-                             structPackage = "ballerina/http"),
-        args = {
-                @Argument(name = "headers", type = TypeKind.MAP)
-        },
-        isPublic = true
-)
-public class AcceptWebSocketUpgrade implements NativeCallableUnit {
+public class AcceptWebSocketUpgrade {
+    private static final Logger log = LoggerFactory.getLogger(AcceptWebSocketUpgrade.class);
 
-    @Override
-    public void execute(Context context, CallableUnitCallback callback) {
-        BMap<String, BValue> httpConnection = (BMap<String, BValue>) context.getRefArgument(0);
+    public static Object acceptWebSocketUpgrade(ObjectValue httpCaller,
+                                                MapValue<BString, BString> headers) {
+        NonBlockingCallback callback = new NonBlockingCallback(Scheduler.getStrand());
+        try {
+            WebSocketHandshaker webSocketHandshaker =
+                    (WebSocketHandshaker) httpCaller.getNativeData(WebSocketConstants.WEBSOCKET_HANDSHAKER);
+            WebSocketServerService webSocketService = (WebSocketServerService) httpCaller.getNativeData(
+                    WebSocketConstants.WEBSOCKET_SERVICE);
+            WebSocketConnectionManager connectionManager = (WebSocketConnectionManager) httpCaller
+                    .getNativeData(HttpConstants.NATIVE_DATA_WEBSOCKET_CONNECTION_MANAGER);
 
-        WebSocketHandshaker webSocketHandshaker =
-                (WebSocketHandshaker) httpConnection.getNativeData(WebSocketConstants.WEBSOCKET_MESSAGE);
-        WebSocketConnectionManager connectionManager = (WebSocketConnectionManager) httpConnection
-                .getNativeData(HttpConstants.NATIVE_DATA_WEBSOCKET_CONNECTION_MANAGER);
-        if (webSocketHandshaker == null) {
-            throw new BallerinaConnectorException("Not a WebSocket upgrade request. Cannot upgrade from HTTP to WS");
+            if (webSocketHandshaker == null || webSocketService == null || connectionManager == null) {
+                callback.notifyFailure(new WebSocketException(WebSocketConstants.ErrorCode.WsInvalidHandshakeError,
+                                                              "Not a WebSocket upgrade request. Cannot upgrade from " +
+                                                                      "HTTP to WS"));
+                return null;
+            }
+
+            ServerHandshakeFuture future = webSocketHandshaker.handshake(
+                    webSocketService.getNegotiableSubProtocols(), webSocketService.getIdleTimeoutInSeconds() * 1000,
+                    populateAndGetHttpHeaders(headers), webSocketService.getMaxFrameSize());
+            future.setHandshakeListener(
+                    new AcceptUpgradeHandshakeListener(webSocketService, connectionManager, callback));
+
+        } catch (Exception e) {
+            log.error("Error when upgrading to WebSocket", e);
+            callback.notifyFailure(WebSocketUtil.createErrorByType(e));
         }
-        if (connectionManager == null) {
-            throw new BallerinaConnectorException("Cannot accept a WebSocket upgrade without WebSocket " +
-                                                          "connection manager");
-        }
-
-        WebSocketService webSocketService = (WebSocketService) httpConnection.getNativeData(
-                WebSocketConstants.WEBSOCKET_SERVICE);
-
-        BMap<String, BString> headers = (BMap<String, BString>) context.getRefArgument(1);
-        DefaultHttpHeaders httpHeaders = new DefaultHttpHeaders();
-        String[] keys = headers.keys();
-        for (String key : keys) {
-            httpHeaders.add(key, headers.get(key));
-        }
-
-        WebSocketUtil.handleHandshake(webSocketService, connectionManager, httpHeaders, webSocketHandshaker, context,
-                                      callback);
+        return null;
     }
 
-    @Override
-    public boolean isBlocking() {
-        return false;
+    private static DefaultHttpHeaders populateAndGetHttpHeaders(MapValue<BString, BString> headers) {
+        DefaultHttpHeaders httpHeaders = new DefaultHttpHeaders();
+        BString[] keys = headers.getKeys();
+        for (BString key : keys) {
+            httpHeaders.add(key.toString(), headers.get(key).getValue());
+        }
+        return httpHeaders;
+    }
+
+
+    private AcceptWebSocketUpgrade() {
+    }
+
+    /**
+     * The ServerHandshakeListener that notifies the callback on success or failure. Dispatching of the onOpen resource
+     * is done after the successful completion of the upgrade resource.
+     */
+    private static class AcceptUpgradeHandshakeListener implements ServerHandshakeListener {
+        private final WebSocketServerService webSocketService;
+        private final WebSocketConnectionManager connectionManager;
+        private final NonBlockingCallback callback;
+
+        AcceptUpgradeHandshakeListener(
+                WebSocketServerService webSocketService, WebSocketConnectionManager connectionManager,
+                NonBlockingCallback callback) {
+            this.webSocketService = webSocketService;
+            this.connectionManager = connectionManager;
+            this.callback = callback;
+        }
+
+        @Override
+        public void onSuccess(WebSocketConnection webSocketConnection) {
+            ObjectValue webSocketEndpoint = WebSocketUtil.createAndPopulateWebSocketCaller(
+                    webSocketConnection, webSocketService, connectionManager);
+            callback.setReturnValues(webSocketEndpoint);
+            callback.notifySuccess();
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            String msg = "WebSocket handshake failed: ";
+            log.error(msg, throwable);
+            callback.notifyFailure(
+                    new WebSocketException(WebSocketConstants.ErrorCode.WsInvalidHandshakeError,
+                                           msg + throwable.getMessage()));
+        }
     }
 }

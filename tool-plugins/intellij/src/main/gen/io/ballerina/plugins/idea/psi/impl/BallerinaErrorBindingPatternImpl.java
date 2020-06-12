@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.util.PsiTreeUtil;
 import static io.ballerina.plugins.idea.psi.BallerinaTypes.*;
+import com.intellij.extapi.psi.ASTWrapperPsiElement;
 import io.ballerina.plugins.idea.psi.*;
 
-public class BallerinaErrorBindingPatternImpl extends BallerinaCompositeElementImpl implements BallerinaErrorBindingPattern {
+public class BallerinaErrorBindingPatternImpl extends ASTWrapperPsiElement implements BallerinaErrorBindingPattern {
 
   public BallerinaErrorBindingPatternImpl(@NotNull ASTNode node) {
     super(node);
@@ -42,33 +43,51 @@ public class BallerinaErrorBindingPatternImpl extends BallerinaCompositeElementI
   }
 
   @Override
-  @Nullable
-  public BallerinaRecordBindingPattern getRecordBindingPattern() {
-    return PsiTreeUtil.getChildOfType(this, BallerinaRecordBindingPattern.class);
+  @NotNull
+  public List<BallerinaErrorDetailBindingPattern> getErrorDetailBindingPatternList() {
+    return PsiTreeUtil.getChildrenOfTypeAsList(this, BallerinaErrorDetailBindingPattern.class);
   }
 
   @Override
   @Nullable
-  public PsiElement getComma() {
-    return findChildByType(COMMA);
+  public BallerinaErrorFieldBindingPatterns getErrorFieldBindingPatterns() {
+    return findChildByClass(BallerinaErrorFieldBindingPatterns.class);
   }
 
   @Override
   @Nullable
-  public PsiElement getLeftParenthesis() {
-    return findChildByType(LEFT_PARENTHESIS);
+  public BallerinaErrorRestBindingPattern getErrorRestBindingPattern() {
+    return findChildByClass(BallerinaErrorRestBindingPattern.class);
   }
 
   @Override
   @Nullable
-  public PsiElement getRightParenthesis() {
-    return findChildByType(RIGHT_PARENTHESIS);
+  public BallerinaTypeName getTypeName() {
+    return findChildByClass(BallerinaTypeName.class);
   }
 
   @Override
   @NotNull
+  public PsiElement getLeftParenthesis() {
+    return findNotNullChildByType(LEFT_PARENTHESIS);
+  }
+
+  @Override
+  @NotNull
+  public PsiElement getRightParenthesis() {
+    return findNotNullChildByType(RIGHT_PARENTHESIS);
+  }
+
+  @Override
+  @Nullable
   public PsiElement getError() {
-    return notNullChild(findChildByType(ERROR));
+    return findChildByType(ERROR);
+  }
+
+  @Override
+  @Nullable
+  public PsiElement getIdentifier() {
+    return findChildByType(IDENTIFIER);
   }
 
 }

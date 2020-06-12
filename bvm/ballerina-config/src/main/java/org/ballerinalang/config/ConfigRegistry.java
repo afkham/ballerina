@@ -29,8 +29,10 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -50,6 +52,8 @@ public class ConfigRegistry {
     private Map<String, Object> configEntries = new HashMap<>();
     private AESCipherTool cipherTool;
     private PrintStream stderr = System.err;
+
+    private boolean isInitialized;
 
     private ConfigRegistry() {
     }
@@ -90,6 +94,7 @@ public class ConfigRegistry {
         }
 
         addConfiguration("ballerina.source.root", System.getProperty("ballerina.source.root"));
+        isInitialized = true;
     }
 
     /**
@@ -204,11 +209,11 @@ public class ConfigRegistry {
             try {
                 value = configEntries.get(key);
                 if (value instanceof String) {
-                    return Boolean.parseBoolean((String) value);
+                    return Boolean.parseBoolean(resolveStringValue((String) value));
                 }
                 return (Boolean) value;
             } catch (ClassCastException e) {
-                throw new IllegalArgumentException(key + " does not map to a valid boolean");
+                throw new IllegalArgumentException("config key '" + key + "' does not map to a valid 'boolean'");
             }
         }
 
@@ -238,11 +243,11 @@ public class ConfigRegistry {
             try {
                 value = configEntries.get(key);
                 if (value instanceof String) {
-                    return Long.parseLong((String) value);
+                    return Long.parseLong(resolveStringValue((String) value));
                 }
                 return (Long) value;
             } catch (ClassCastException | NumberFormatException e) {
-                throw new IllegalArgumentException(key + " does not map to a valid int");
+                throw new IllegalArgumentException("config key '" + key + "' does not map to a valid 'int'");
             }
         }
 
@@ -272,13 +277,13 @@ public class ConfigRegistry {
             try {
                 value = configEntries.get(key);
                 if (value instanceof String) {
-                    return Double.parseDouble((String) value);
+                    return Double.parseDouble(resolveStringValue((String) value));
                 } else if (value instanceof Long) {
                     return (Long) value;
                 }
                 return (Double) value;
             } catch (ClassCastException | NumberFormatException e) {
-                throw new IllegalArgumentException(key + " does not map to a valid float");
+                throw new IllegalArgumentException("config key '" + key + "' does not map to a valid 'float'");
             }
         }
 
@@ -297,7 +302,7 @@ public class ConfigRegistry {
     }
 
     /**
-     * Retrieves the config value specified by the key as a float.
+     * Retrieves the config value specified by the key as a Map.
      *
      * @param key The key of the config entry
      * @return The associated config val
@@ -325,6 +330,34 @@ public class ConfigRegistry {
      */
     public Map<String, Object> getAsMap(String sectionHeader, String field) {
         return getAsMap(getConfigKey(sectionHeader, field));
+    }
+
+    /**
+     * Retrieves the config value specified by the key as a List.
+     *
+     * @param key The key of the config entry
+     * @return The associated config value
+     */
+    public List getAsArray(String key) {
+        if (key == null) {
+            return null;
+        }
+        Object value = configEntries.get(key);
+        if (value instanceof List) {
+            return (List) value;
+        }
+        return new ArrayList();
+    }
+
+    /**
+     * Retrieves the config value specified by the section header and the field.
+     *
+     * @param sectionHeader The header name
+     * @param field         The field in the section
+     * @return The associated config value if it exists
+     */
+    public List getAsArray(String sectionHeader, String field) {
+        return getAsArray(getConfigKey(sectionHeader, field));
     }
 
     /**
@@ -440,5 +473,13 @@ public class ConfigRegistry {
 
     private String getEnvVarKey(String configKey) {
         return configKey.replace('.', '_');
+    }
+
+    public boolean isInitialized() {
+        return isInitialized;
+    }
+
+    public void setInitialized(boolean initialized) {
+        isInitialized = initialized;
     }
 }

@@ -1,21 +1,21 @@
-import ballerina/h2;
 import ballerina/io;
 import ballerina/http;
 import ballerina/log;
-h2:InMemoryConfig conf = {
-    name: "testName",
-    username: "user",
-    password: "pwd"
-};
 
-h2:Client testDb = new h2:Client({
-        path: "testPath",
-        name: "hubDatabaseName",
-        username: "hubDatabaseUsername",
-        password: "hubDatabasePassword",
-        poolOptions: {
-            maximumPoolSize: 5
-        }});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 public function main(string... args) {
     int a = 10;
@@ -41,9 +41,9 @@ public function main(string... args) {
 }
 
 service sampleService on new http:Listener(8080) {
-    int serviceVar1 = 124;
 
-    string serviceVar2 = "Test String";
+
+
 
     resource function sampleResource(http:Caller caller, http:Request request) {
         worker w1 {
@@ -64,43 +64,29 @@ function divideNumbers(int a, int b) returns int|error {
     return a / b;
 }
 
-function initiateNestedTransactionInRemote(string nestingMethod) returns string {
+function initiateNestedTransactionInRemote(string nestingMethod) returns @tainted string {
    http:Client remoteEp = new("http://localhost:8889");
     string s = "";
     transaction {
         s += " in initiator-trx";
+        int transactionVar = 12;
         
-        // this call sends the transaction context with it
-        var resp = remoteEp->post("/nestedTrx", nestingMethod);
-        if (resp is http:Response) {
-            if (resp.statusCode == 500) {
-                s += " remote1-excepted";
-                var payload = resp.getTextPayload();
-                if (payload is string) {
-                    s += ":[" + untaint payload + "]";
-                }
-            } else {
-                var text = resp.getTextPayload();
-                if (text is string) {
-                    log:printInfo(text);
-                    s += " <" + untaint text + ">";
-                } else {
-                    s += " error-in-remote-response " + text.reason();
-                    log:printError(text.reason());
-                }
-            }
-        } else {
-            s += " remote call error: " + resp.reason();
-        }
+        io:println("within transaction");
     } onretry {
         s += " onretry";
+        int onRetryVar = 12;
         
+        io:println("within on retry");
     } committed {
         s += " committed";
-
+        int onCommitedVar = 12;
+        
+        io:println("within on commited");
     } aborted {
         s += " aborted";
-
+        int abortedVar = 12;
+        
+        io:println("within aborted");
     }
     return s;
 }

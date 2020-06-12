@@ -26,7 +26,7 @@ import org.wso2.ballerinalang.compiler.tree.BLangNodeVisitor;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
 
 /**
- * Implementation of {@link WorkerSendNode}.
+ * Models the async-send-action.
  *
  * @since 0.94
  */
@@ -37,6 +37,7 @@ public class BLangWorkerSend extends BLangStatement implements WorkerSendNode {
     public SymbolEnv env;
     public BLangExpression keyExpr;
     public boolean isChannel = false;
+    public BLangIdentifier currentWorker;
 
     @Override
     public BLangExpression getExpression() {

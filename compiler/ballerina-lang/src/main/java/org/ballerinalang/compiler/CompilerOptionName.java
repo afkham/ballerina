@@ -26,7 +26,11 @@ public enum CompilerOptionName {
 
     PROJECT_DIR("projectDirectory"),
 
+    SOURCE_TYPE("sourceType"),
+
     PRESERVE_WHITESPACE("preserveWhitespace"),
+
+    NEW_PARSER_ENABLED("newParserEnabled"),
 
     OFFLINE("offline"),
 
@@ -44,9 +48,17 @@ public enum CompilerOptionName {
 
     TARGET_BINARY_PATH("targetBinaryPath"),
 
+    BALO_GENERATION("genBalo"),
+
+    SKIP_MODULE_DEPENDENCIES("skipModuleDependencies"),
+
+    DUMP_BIR("dumpBIR"),
+
     LOCK_ENABLED("lockEnabled"),
 
-    EXPERIMENTAL_FEATURES_ENABLED("experimentalFeaturesEnabled");
+    EXPERIMENTAL_FEATURES_ENABLED("experimentalFeaturesEnabled"),
+
+    TOOLING_COMPILATION("toolingCompilation");
 
     public final String name;
 

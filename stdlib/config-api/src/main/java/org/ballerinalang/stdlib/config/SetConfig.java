@@ -18,51 +18,19 @@
 
 package org.ballerinalang.stdlib.config;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
 import org.ballerinalang.config.ConfigRegistry;
-import org.ballerinalang.model.types.BType;
-import org.ballerinalang.model.types.BTypes;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BBoolean;
-import org.ballerinalang.model.values.BFloat;
-import org.ballerinalang.model.values.BInteger;
-import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
+import org.ballerinalang.jvm.values.api.BString;
 
 /**
  * Extern function ballerina.config:setConfig.
  *
  * @since 0.966.0
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "config",
-        functionName = "setConfig",
-        args = {@Argument(name = "key", type = TypeKind.STRING),
-                @Argument(name = "value", type = TypeKind.UNION)},
-        isPublic = true
-)
-public class SetConfig extends BlockingNativeCallableUnit {
+public class SetConfig {
 
-    public static final ConfigRegistry CONFIG_REGISTRY = ConfigRegistry.getInstance();
+    private static final ConfigRegistry CONFIG_REGISTRY = ConfigRegistry.getInstance();
 
-    @Override
-    public void execute(Context context) {
-        String configKey = context.getStringArgument(0);
-        BValue configValue = context.getRefArgument(0);
-
-        BType type = configValue.getType();
-        if (type == BTypes.typeString) {
-            CONFIG_REGISTRY.addConfiguration(configKey, configValue.stringValue());
-        } else if (type == BTypes.typeInt) {
-            CONFIG_REGISTRY.addConfiguration(configKey, ((BInteger) configValue).intValue());
-        } else if (type == BTypes.typeFloat) {
-            CONFIG_REGISTRY.addConfiguration(configKey, ((BFloat) configValue).floatValue());
-        } else if (type == BTypes.typeBoolean) {
-            CONFIG_REGISTRY.addConfiguration(configKey, ((BBoolean) configValue).floatValue());
-        }
-
-        context.setReturnValues();
+    public static void setConfig(BString configKey, Object configValue) {
+        CONFIG_REGISTRY.addConfiguration(configKey.getValue(), configValue);
     }
 }

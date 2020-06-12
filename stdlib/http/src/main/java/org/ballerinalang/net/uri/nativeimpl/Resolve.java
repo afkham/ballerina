@@ -18,13 +18,8 @@
 
 package org.ballerinalang.net.uri.nativeimpl;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.ReturnType;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.values.api.BString;
 import org.ballerinalang.net.http.HttpUtil;
 
 import java.net.URI;
@@ -35,31 +30,20 @@ import java.net.URISyntaxException;
  *
  * @since 0.975.0
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "resolve",
-        args = {@Argument(name = "uri", type = TypeKind.STRING), @Argument(name = "path", type = TypeKind.STRING)},
-        returnType = {@ReturnType(type = TypeKind.STRING), @ReturnType(type = TypeKind.RECORD, structType = "Error")},
-        isPublic = true
-)
-public class Resolve extends BlockingNativeCallableUnit {
-    @Override
-    public void execute(Context context) {
-        String url = context.getStringArgument(0);
-        String path = context.getStringArgument(1);
+public class Resolve {
+    public static Object resolve(BString url, BString path) {
         URI uri;
         try {
-            uri = new URI(path);
+            uri = new URI(path.getValue());
             if (!uri.isAbsolute()) {
                 // Url is not absolute, we need to resolve it.
-                URI baseUri = new URI(url);
+                URI baseUri = new URI(url.getValue());
                 uri = baseUri.resolve(uri.normalize());
 
             }
-            context.setReturnValues(new BString(uri.toString()));
+            return StringUtils.fromString(uri.toString());
         } catch (URISyntaxException e) {
-            context.setReturnValues(HttpUtil.getError(context, "Error occurred while resolving uri. " + e
-                    .getMessage()));
+            return HttpUtil.createHttpError("error occurred while resolving URI. " + e.getMessage());
         }
     }
 }

@@ -72,12 +72,20 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                         && (next3Element == BallerinaTypes.RIGHT_BRACE || next3Element == BallerinaTypes.COMMA
                         || next3Element == BallerinaTypes.DOT)
                 )) {
+
+                    // This is added for following cases.
+                    // { name: "child" };
+                    // { name: "child", age:13 }
+                    if (next3Element == BallerinaTypes.RIGHT_BRACE || next3Element == BallerinaTypes.COMMA) {
+                        return false;
+                    }
+
                     // Note - Another raw lookup is added for situations like below. Second record key value
                     // pair does not get identified correctly otherwise.
                     // {sqlType:sql:Type.INTEGER, value:xmlDataArray};
                     IElementType rawLookup2;
                     do {
-                        rawLookup2 = builder.rawLookup(--steps);
+                        rawLookup2 = builder.rawLookup(steps--);
                         if (isWhiteSpaceOrComment(rawLookup2)) {
                             continue;
                         }
@@ -103,6 +111,8 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                                 && !(rawLookup == BallerinaTypes.LEFT_BRACE && rawLookup2 == BallerinaTypes.COLON)
                                 // Connection conn = new({initialContextFactory:config.initialContextFactory});
                                 && !(rawLookup == BallerinaTypes.LEFT_BRACE && rawLookup2 == BallerinaTypes.NEW)
+                                // Expression bodied function with record literal
+                                & !(rawLookup == BallerinaTypes.LEFT_BRACE && rawLookup2 == BallerinaTypes.EQUAL_GT)
                                 // {message:"Notification failed for topic [" + topic + "]",  cause:httpConnectorError }
                                 && !(rawLookup == BallerinaTypes.COMMA && rawLookup2 == BallerinaTypes.ADD)
                                 && !(rawLookup == BallerinaTypes.QUESTION_MARK
@@ -115,8 +125,21 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                                 && !(rawLookup == BallerinaTypes.LEFT_BRACE
                                 && rawLookup2 == BallerinaTypes.RIGHT_BRACKET)
                                 && !(rawLookup == BallerinaTypes.LEFT_BRACE && rawLookup2 == BallerinaTypes.RETURN)
-                                ) {
-                            return true;
+                                && !(rawLookup == BallerinaTypes.QUESTION_MARK
+                                && rawLookup2 == BallerinaTypes.QUESTION_MARK)
+                        ) {
+                            IElementType rawLookup3;
+                            do {
+                                rawLookup3 = builder.rawLookup(steps--);
+                                if (isWhiteSpaceOrComment(rawLookup3)) {
+                                    continue;
+                                }
+                                // Example - string a = b is string ? b : e;
+                                if ((rawLookup == BallerinaTypes.QUESTION_MARK && rawLookup3 == BallerinaTypes.IS)) {
+                                    return false;
+                                }
+                                return true;
+                            } while (rawLookup3 != null && isWhiteSpaceOrComment(rawLookup3));
                         } else {
                             LighterASTNode latestDoneMarker = builder.getLatestDoneMarker();
                             if (rawLookup == BallerinaTypes.COMMA && rawLookup2 == BallerinaTypes.COLON) {
@@ -137,7 +160,7 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                             } else if (rawLookup == BallerinaTypes.COMMA && rawLookup2 == BallerinaTypes.DOT) {
                                 // EmployeeSalary s = {id:e.id, salary:e.salary};
                                 if (latestDoneMarker != null
-                                        && latestDoneMarker.getTokenType() == BallerinaTypes.RECORD_KEY_VALUE) {
+                                        && latestDoneMarker.getTokenType() == BallerinaTypes.RECORD_FIELD) {
                                     return false;
                                 }
                                 // return (variable:^"person 1".^"first name", variable2:^"person 2".^"current age2");
@@ -148,7 +171,7 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                                     IElementType tokenType = latestDoneMarker.getTokenType();
                                     if (tokenType == BallerinaTypes.INVOCATION_ARG) {
                                         return true;
-                                    } else if (tokenType == BallerinaTypes.RECORD_KEY_VALUE) {
+                                    } else if (tokenType == BallerinaTypes.RECORD_FIELD) {
                                         return false;
                                     }
                                 }
@@ -158,7 +181,7 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                                     && rawLookup2 == BallerinaTypes.QUOTED_STRING_LITERAL) {
                                 if (latestDoneMarker != null) {
                                     IElementType tokenType = latestDoneMarker.getTokenType();
-                                    if (tokenType == BallerinaTypes.RECORD_KEY_VALUE) {
+                                    if (tokenType == BallerinaTypes.RECORD_FIELD) {
                                         return false;
                                     }
                                     return true;
@@ -169,13 +192,13 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                                     IElementType tokenType = latestDoneMarker.getTokenType();
                                     // io:println(jwtToken); as the first statement in a function.
                                     // runtime:sleepCurrentWorker(20); in the first statement as the second worker
-                                    if (tokenType == BallerinaTypes.CALLABLE_UNIT_SIGNATURE
+                                    if (tokenType == BallerinaTypes.FUNCTION_SIGNATURE
                                             || tokenType == BallerinaTypes.WORKER_DEFINITION
                                             || tokenType == BallerinaTypes.UNARY_EXPRESSION
                                             || tokenType == BallerinaTypes.VARIABLE_REFERENCE_EXPRESSION
                                             || tokenType == BallerinaTypes.SIMPLE_TYPE_NAME
                                             || tokenType == BallerinaTypes.INTEGER_RANGE_EXPRESSION
-                                            ) {
+                                    ) {
                                         return true;
                                     }
                                 }
@@ -185,6 +208,13 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                                     || rawLookup2 == BallerinaTypes.OCTAL_INTEGER_LITERAL
                                     || rawLookup2 == BallerinaTypes.BINARY_INTEGER_LITERAL)) {
                                 return true;
+                            } else if (rawLookup == BallerinaTypes.LEFT_BRACE &&
+                                    rawLookup2 == BallerinaTypes.EQUAL_GT) {
+                                // Eg:
+                                // function toEmployee(Person p) returns Employee => {
+                                //     name: p.fname
+                                // };
+                                return false;
                             } else if (rawLookup == BallerinaTypes.LINE_COMMENT &&
                                     rawLookup2 == BallerinaTypes.LINE_COMMENT) {
                                 if (next1Element == BallerinaTypes.COLON && next3Element == BallerinaTypes.COLON) {
@@ -207,7 +237,7 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                             } else if (rawLookup == BallerinaTypes.LINE_COMMENT && rawLookup2 == BallerinaTypes.COMMA) {
                                 if (next1Element == BallerinaTypes.COLON && next2Element == BallerinaTypes.IDENTIFIER) {
                                     IElementType tokenType = latestDoneMarker.getTokenType();
-                                    if (tokenType == BallerinaTypes.RECORD_KEY_VALUE) {
+                                    if (tokenType == BallerinaTypes.RECORD_FIELD) {
                                         return false;
                                     }
                                     return false;
@@ -220,7 +250,7 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
                     LighterASTNode latestDoneMarker = builder.getLatestDoneMarker();
                     // EmployeeSalary s = {id:e.id, salary:e.salary};
                     if (latestDoneMarker != null
-                            && latestDoneMarker.getTokenType() == BallerinaTypes.RECORD_KEY_VALUE) {
+                            && latestDoneMarker.getTokenType() == BallerinaTypes.RECORD_FIELD) {
                         return false;
                     }
                     return true;
@@ -261,7 +291,7 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
     }
 
     private static boolean isWhiteSpaceOrComment(IElementType rawLookup) {
-        return rawLookup == TokenType.WHITE_SPACE || rawLookup == BallerinaTypes.COMMENT;
+        return rawLookup == TokenType.WHITE_SPACE || rawLookup == BallerinaTypes.LINE_COMMENT;
     }
 
     public static boolean isNotAResourceDefinition(PsiBuilder builder, int level) {
@@ -291,5 +321,52 @@ public class BallerinaParserUtil extends GeneratedParserUtilBase {
     public static boolean shiftExprPredicate(PsiBuilder builder, int level) {
         IElementType next1Element = builder.lookAhead(-1);
         return next1Element != TokenType.WHITE_SPACE;
+    }
+
+    // Need to differentiate between nullable types and ternary expressions.
+    public static boolean nullableTypePredicate(PsiBuilder builder, int level) {
+        int steps = -1;
+        IElementType prev1Element;
+
+        do {
+            prev1Element = builder.rawLookup(steps--);
+            if (prev1Element == null || isWhiteSpaceOrComment(prev1Element)) {
+                continue;
+            }
+            IElementType prev2Element;
+            do {
+                prev2Element = builder.rawLookup(steps--);
+                if (prev2Element == null || isWhiteSpaceOrComment(prev2Element)) {
+                    continue;
+                }
+                //Eg: x is string ? 1 : 2;
+                if (prev2Element == BallerinaTypes.IS) {
+                    return false;
+                }
+                IElementType prev3Element;
+                do {
+                    prev3Element = builder.rawLookup(steps--);
+                    if (prev3Element == null || isWhiteSpaceOrComment(prev3Element)) {
+                        continue;
+                    }
+                    // Eg: x is () ? 1 : 2;
+                    if (prev3Element == BallerinaTypes.IS) {
+                        return false;
+                    }
+                    IElementType prev4Element;
+                    do {
+                        prev4Element = builder.rawLookup(steps--);
+                        if (prev4Element == null || isWhiteSpaceOrComment(prev4Element)) {
+                            continue;
+                        }
+                        // Eg: x is http:Error ? 1 : 2;
+                        if (prev4Element == BallerinaTypes.IS) {
+                            return false;
+                        }
+                    } while ((prev4Element != null && isWhiteSpaceOrComment(prev4Element)));
+                } while ((prev3Element != null && isWhiteSpaceOrComment(prev3Element)));
+            } while ((prev2Element != null && isWhiteSpaceOrComment(prev2Element)));
+        } while ((prev1Element != null && isWhiteSpaceOrComment(prev1Element)));
+        return true;
     }
 }

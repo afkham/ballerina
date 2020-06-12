@@ -20,12 +20,15 @@ package org.wso2.ballerinalang.compiler.semantics.model.types;
 
 import org.ballerinalang.model.types.FiniteType;
 import org.ballerinalang.model.types.TypeKind;
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
-import org.wso2.ballerinalang.compiler.util.TypeDescriptor;
 import org.wso2.ballerinalang.compiler.util.TypeTags;
+import org.wso2.ballerinalang.util.Flags;
 
+import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 
@@ -35,16 +38,26 @@ import java.util.StringJoiner;
  */
 public class BFiniteType extends BType implements FiniteType {
 
-    public Set<BLangExpression> valueSpace;
+    private Set<BLangExpression> valueSpace;
+    private boolean nullable = false;
+    private Optional<Boolean> isAnyData = Optional.empty();
+
 
     public BFiniteType(BTypeSymbol tsymbol) {
         super(TypeTags.FINITE, tsymbol);
         valueSpace = new LinkedHashSet<>();
+        this.flags |= Flags.READONLY;
+    }
+
+    public BFiniteType(BTypeSymbol tsymbol, Set<BLangExpression> valueSpace) {
+        super(TypeTags.FINITE, tsymbol);
+        this.valueSpace = valueSpace;
+        this.flags |= Flags.READONLY;
     }
 
     @Override
     public Set<BLangExpression> getValueSpace() {
-        return valueSpace;
+        return Collections.unmodifiableSet(valueSpace);
     }
 
     @Override
@@ -52,6 +65,10 @@ public class BFiniteType extends BType implements FiniteType {
         return TypeKind.FINITE;
     }
 
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
 
     @Override
     public <T, R> R accept(BTypeVisitor<T, R> visitor, T t) {
@@ -61,12 +78,44 @@ public class BFiniteType extends BType implements FiniteType {
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner("|");
-        this.valueSpace.forEach(value -> joiner.add(value.toString()));
+        for (BLangExpression value : this.valueSpace) {
+            if (value.type.tag == TypeTags.FLOAT) {
+                joiner.add(value.toString() + "f");
+            } else if (value.type.tag == TypeTags.DECIMAL) {
+                joiner.add(value.toString() + "d");
+            } else {
+                joiner.add(value.toString());
+            }
+        }
         return joiner.toString();
     }
 
     @Override
-    public String getDesc() {
-        return TypeDescriptor.SIG_FINITE + getQualifiedTypeName() + ";";
+    public boolean isNullable() {
+        return nullable;
+    }
+
+    @Override
+    public boolean isAnydata() {
+        if (this.isAnyData.isPresent()) {
+            return this.isAnyData.get();
+        }
+
+        for (BLangExpression value : this.valueSpace) {
+            if (!value.type.isAnydata()) {
+                this.isAnyData = Optional.of(false);
+                return false;
+            }
+        }
+
+        this.isAnyData = Optional.of(true);
+        return true;
+    }
+
+    public void addValue(BLangExpression value) {
+        this.valueSpace.add(value);
+        if (!nullable && value.type.isNullable()) {
+            nullable = true;
+        }
     }
 }

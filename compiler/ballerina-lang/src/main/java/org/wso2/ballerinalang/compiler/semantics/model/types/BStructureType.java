@@ -17,10 +17,10 @@
  */
 package org.wso2.ballerinalang.compiler.semantics.model.types;
 
+import org.wso2.ballerinalang.compiler.semantics.model.TypeVisitor;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BTypeSymbol;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
 
 /**
  * {@code BStructureType} represents structure type in Ballerina.
@@ -28,15 +28,25 @@ import java.util.List;
  * @since 0.971.0
  */
 public abstract class BStructureType extends BType {
-    public List<BField> fields;
+
+    public LinkedHashMap<String, BField> fields;
 
     public BStructureType(int tag, BTypeSymbol tSymbol) {
         super(tag, tSymbol);
-        this.fields = new ArrayList<>();
+        this.fields = new LinkedHashMap<>();
     }
 
-    public List<BField> getFields() {
+    public BStructureType(int tag, BTypeSymbol tSymbol, int flags) {
+        super(tag, tSymbol, flags);
+        this.fields = new LinkedHashMap<>();
+    }
+
+    public LinkedHashMap<String, BField> getFields() {
         return fields;
     }
 
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
 }

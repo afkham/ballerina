@@ -17,13 +17,13 @@
  */
 package org.ballerinalang.packerina;
 
-import org.ballerinalang.spi.EmbeddedExecutor;
+import org.ballerinalang.cli.module.Search;
+import org.ballerinalang.cli.module.exeptions.CommandException;
 import org.ballerinalang.toml.model.Proxy;
-import org.ballerinalang.util.EmbeddedExecutorProvider;
 import org.wso2.ballerinalang.util.RepoUtils;
 import org.wso2.ballerinalang.util.TomlParserUtils;
 
-import static org.ballerinalang.util.BLangConstants.MAIN_FUNCTION_NAME;
+import java.io.PrintStream;
 
 /**
  * This class provides util methods when searching for Ballerina modules in the central.
@@ -31,18 +31,30 @@ import static org.ballerinalang.util.BLangConstants.MAIN_FUNCTION_NAME;
  * @since 0.95.2
  */
 public class SearchUtils {
-    
+    private static final PrintStream ERROR_STREAM = System.err;
+
     /**
      * Search for modules in central.
      *
-     * @param argument arguments passed
+     * @param query search keyword.
      */
-    public static void searchInCentral(String argument) {
-        String query = "?q=" + argument;
-        EmbeddedExecutor executor = EmbeddedExecutorProvider.getInstance().getExecutor();
+    public static void searchInCentral(String query) {
         Proxy proxy = TomlParserUtils.readSettings().getProxy();
-        executor.executeFunction("packaging_search/packaging_search.balx", MAIN_FUNCTION_NAME,
-                RepoUtils.getRemoteRepoURL(), query, proxy.getHost(), proxy.getPort(), proxy.getUserName(),
-                proxy.getPassword(), RepoUtils.getTerminalWidth());
+        String urlWithModulePath = RepoUtils.getRemoteRepoURL() + "/modules/" + "?q=" + query;
+
+        try {
+            Search.execute(urlWithModulePath, proxy.getHost(), proxy.getPort(), proxy.getUserName(),
+                    proxy.getPassword(), RepoUtils.getTerminalWidth());
+        } catch (CommandException e) {
+            String errorMessage = e.getMessage();
+            if (null != errorMessage && !"".equals(errorMessage.trim())) {
+                // removing the error stack
+                if (errorMessage.contains("\n\tat")) {
+                    errorMessage = errorMessage.substring(0, errorMessage.indexOf("\n\tat"));
+                }
+
+                ERROR_STREAM.println(errorMessage);
+            }
+        }
     }
 }

@@ -17,5 +17,31 @@
   -->
 
 <FindBugsFilter>
-
+    <Match>
+        <Class name="org.ballerinalang.packerina.PushUtils"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+    <Match>
+        <Class name="org.ballerinalang.packerina.model.BaloToml"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+    <Match>
+        <Class name="org.ballerinalang.packerina.task.RunExecutableTask"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="org.ballerinalang.packerina.task.RunTestsTask"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="org.ballerinalang.packerina.JarResolverImpl"/>
+    </Match>
+    <Match>
+        <Class name="org.ballerinalang.packerina.task.CopyNativeLibTask"/>
+        <Bug pattern="UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR"/>
+    </Match>
+    <Match>
+        <Class name="org.ballerinalang.packerina.task.CreateExecutableTask$Copy"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
 </FindBugsFilter>

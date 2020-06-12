@@ -18,10 +18,7 @@
 
 package org.ballerinalang.model.values;
 
-import org.ballerinalang.bre.bvm.BVM;
 import org.ballerinalang.model.types.BType;
-import org.ballerinalang.model.types.BUnionType;
-import org.ballerinalang.model.types.TypeTags;
 
 import java.math.BigDecimal;
 
@@ -42,13 +39,13 @@ public abstract class BValueType implements BValue {
     public abstract long intValue();
 
     /**
-     * Returns the value of the specified number as an {@code byte},
+     * Returns the value of the specified number as a {@code byte},
      * which may involve rounding or truncation.
      *
      * @return  the numeric value represented by this object after conversion
      *          to type {@code byte}.
      */
-    public abstract byte byteValue();
+    public abstract long byteValue();
 
     /**
      * Returns the value of the specified number as a {@code float},
@@ -78,14 +75,6 @@ public abstract class BValueType implements BValue {
     /**
      * {@inheritDoc}
      */
-    @Override
-    public void attemptFreeze(BVM.FreezeStatus freezeStatus) {
-        // do nothing, since value types are always frozen
-    }
-
-    /**
-     * {@inheritDoc}
-     */
     public boolean isFrozen() {
         return true;
     }
@@ -102,23 +91,4 @@ public abstract class BValueType implements BValue {
 
 
     public abstract void setType(BType type);
-
-    @Override
-    public void stamp(BType type) {
-        if (type.getTag() == TypeTags.ANYDATA_TAG || type.getTag() == TypeTags.JSON_TAG) {
-            return;
-        }
-
-        if (type.getTag() == TypeTags.UNION_TAG) {
-            for (BType memberType : ((BUnionType) type).getMemberTypes()) {
-                if (BVM.checkIsLikeType(this, memberType)) {
-                    this.stamp(memberType);
-                    type = memberType;
-                    break;
-                }
-            }
-        }
-
-        this.setType(type);
-    }
 }

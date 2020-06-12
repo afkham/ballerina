@@ -16,12 +16,11 @@
 package org.ballerinalang.langserver.compiler;
 
 import org.ballerinalang.compiler.CompilerPhase;
-import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManagerImpl;
 import org.ballerinalang.langserver.compiler.workspace.repository.LSPathConverter;
 import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.repository.CompiledPackage;
-import org.ballerinalang.util.diagnostic.Diagnostic;
 import org.ballerinalang.util.diagnostic.DiagnosticListener;
 import org.wso2.ballerinalang.compiler.PackageCache;
 import org.wso2.ballerinalang.compiler.SourceDirectory;
@@ -35,14 +34,15 @@ import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
 import javax.annotation.Nullable;
 
 import static org.ballerinalang.compiler.CompilerOptionName.COMPILER_PHASE;
+import static org.ballerinalang.compiler.CompilerOptionName.NEW_PARSER_ENABLED;
 import static org.ballerinalang.compiler.CompilerOptionName.OFFLINE;
 import static org.ballerinalang.compiler.CompilerOptionName.PRESERVE_WHITESPACE;
 import static org.ballerinalang.compiler.CompilerOptionName.PROJECT_DIR;
@@ -53,6 +53,8 @@ import static org.ballerinalang.compiler.CompilerOptionName.PROJECT_DIR;
 public class LSContextManager {
     private static final LSContextManager INSTANCE = new LSContextManager();
     private static final String BUILT_IN_PACKAGES_PROJ_DIR = "$builtInPackagesProjectDir";
+    private static final int MAX_COMPILATION_COUNT = 200;
+    private static volatile int compilationCounter = 0;
 
     private final Map<String, CompilerContext> contextMap;
 
@@ -65,56 +67,36 @@ public class LSContextManager {
     }
 
     /**
-     * Returns a unique compiler context for the provided project directory path.
-     *
-     * Use this method if you already have the current project ID. Built packages for the project Id will be removed
-     * from the PackageCache from the compiler context.
-     *
-     * @param packageID  package ID
-     * @param projectDir project directory path
-     * @param documentManager {@link WorkspaceDocumentManager} Document Manager
-     * @return compiler context
-     */
-    public CompilerContext getCompilerContext(PackageID packageID, String projectDir,
-                                              WorkspaceDocumentManager documentManager) {
-        return getCompilerContext(packageID, projectDir, documentManager, true);
-    }
-
-    /**
-     * Returns a unique compiler context for the provided project directory path.
-     *
-     * Use this method if you don't have the current project ID.
-     *
-     * @param projectDir project directory path
-     * @param documentManager {@link WorkspaceDocumentManager} Document Manager
-     * @return compiler context
-     */
-    public CompilerContext getCompilerContext(String projectDir, WorkspaceDocumentManager documentManager) {
-        return getCompilerContext(null, projectDir, documentManager, true);
-    }
-
-    /**
      * Returns a unique compiler context for the project directory path.
      *
      * @param packageID         package ID or null
      * @param projectDir        project directory path
      * @param documentManager {@link WorkspaceDocumentManager} Document Manager
-     * @param createIfNotExists if true creates a new compiler context if not exists
      * @return compiler context
      */
     public CompilerContext getCompilerContext(@Nullable PackageID packageID, String projectDir,
-                                              WorkspaceDocumentManager documentManager, boolean createIfNotExists) {
+                                              WorkspaceDocumentManager documentManager) {
         CompilerContext compilerContext = contextMap.get(projectDir);
-        if (compilerContext == null && createIfNotExists) {
+
+        // TODO: Remove this fix once proper compiler fix is introduced
+        if (compilationCounter > MAX_COMPILATION_COUNT) {
+            compilerContext = null;
+            compilationCounter = 0;
+            LSClientLogger.logTrace("CompilationContext for {projectRoot: '" + projectDir +
+                                            "'}, has been reinitialized");
+        }
+
+        if (compilerContext == null) {
             synchronized (LSContextManager.class) {
                 compilerContext = contextMap.get(projectDir);
                 if (compilerContext == null) {
-                    compilerContext = createNewCompilerContext(projectDir, documentManager);
+                    compilerContext = this.createNewCompilerContext(projectDir, documentManager);
                     contextMap.put(projectDir, compilerContext);
                 }
             }
         }
         clearCurrentPackage(packageID, compilerContext);
+        compilationCounter++; // Not needed to be atomic since the if-check is a range
         return compilerContext;
     }
 
@@ -132,9 +114,8 @@ public class LSContextManager {
      * Remove a compiler context by project directory.
      *
      * @param projectDir        project directory
-     * @param compilerContext   compiler context
      */
-    public void removeCompilerContext(String projectDir, CompilerContext compilerContext) {
+    public void removeCompilerContext(String projectDir) {
         contextMap.remove(projectDir);
     }
 
@@ -143,16 +124,6 @@ public class LSContextManager {
      */
     public void clearAllContexts() {
         contextMap.clear();
-    }
-
-    /**
-     * Returns an unique temporary compiler context.
-     *
-     * @param documentManager {@link WorkspaceDocumentManager} Document Manager
-     * @return compiler context
-     */
-    public static CompilerContext createTempCompilerContext(WorkspaceDocumentManager documentManager) {
-        return createNewCompilerContext(null, documentManager);
     }
 
     /**
@@ -165,17 +136,16 @@ public class LSContextManager {
         return getCompilerContext(null, BUILT_IN_PACKAGES_PROJ_DIR, WorkspaceDocumentManagerImpl.getInstance());
     }
 
-    private static CompilerContext createNewCompilerContext(String projectDir,
-                                                            WorkspaceDocumentManager documentManager) {
+    public CompilerContext createNewCompilerContext(String projectDir, WorkspaceDocumentManager documentManager) {
         CompilerContext context = new CompilerContext();
         CompilerOptions options = CompilerOptions.getInstance(context);
         options.put(PROJECT_DIR, projectDir);
         options.put(COMPILER_PHASE, CompilerPhase.DESUGAR.toString());
-        options.put(PRESERVE_WHITESPACE, "false");
+        options.put(PRESERVE_WHITESPACE, Boolean.toString(true));
         options.put(OFFLINE, Boolean.toString(true));
+        options.put(NEW_PARSER_ENABLED, Boolean.toString(true));
         context.put(SourceDirectory.class, new NullSourceDirectory(Paths.get(projectDir), documentManager));
-        List<Diagnostic> balDiagnostics = new ArrayList<>();
-        CollectDiagnosticListener diagnosticListener = new CollectDiagnosticListener(balDiagnostics);
+        CollectDiagnosticListener diagnosticListener = new CollectDiagnosticListener();
         context.put(DiagnosticListener.class, diagnosticListener);
         return context;
     }

@@ -1,10 +1,9 @@
 {
-  "nodeType": "service",
+  "nodeType": "SERVICE",
   "nodeLine": "7",
   "expected": {
     "result": {
       "edit": {
-        "changes": {},
         "documentChanges": [
           {
             "edits": [

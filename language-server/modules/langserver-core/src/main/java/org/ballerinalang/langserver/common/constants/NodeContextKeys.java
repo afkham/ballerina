@@ -15,12 +15,9 @@
  */
 package org.ballerinalang.langserver.common.constants;
 
-import org.ballerinalang.langserver.compiler.LSContext;
-import org.ballerinalang.model.elements.PackageID;
-import org.eclipse.lsp4j.Location;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.wso2.ballerinalang.compiler.tree.BLangNode;
 
-import java.util.List;
 import java.util.Stack;
 
 /**
@@ -29,26 +26,12 @@ import java.util.Stack;
 public class NodeContextKeys {
     public static final LSContext.Key<BLangNode> NODE_KEY
             = new LSContext.Key<>();
-    public static final LSContext.Key<PackageID> PACKAGE_OF_NODE_KEY
-            = new LSContext.Key<>();
-    public static final LSContext.Key<String> NAME_OF_NODE_KEY
-            = new LSContext.Key<>();
-    public static final LSContext.Key<String> SYMBOL_KIND_OF_NODE_PARENT_KEY
-            = new LSContext.Key<>();
     public static final LSContext.Key<Object> PREVIOUSLY_VISITED_NODE_KEY
-            = new LSContext.Key<>();
-    public static final LSContext.Key<String> NODE_OWNER_KEY
-            = new LSContext.Key<>();
-    public static final LSContext.Key<PackageID> NODE_OWNER_PACKAGE_KEY
             = new LSContext.Key<>();
     public static final LSContext.Key<Stack<BLangNode>> NODE_STACK_KEY
             = new LSContext.Key<>();
-    public static final LSContext.Key<String> SYMBOL_KIND_OF_NODE_KEY
+    public static final LSContext.Key<String> NODE_NAME_KEY
             = new LSContext.Key<>();
-    public static final LSContext.Key<String> VAR_NAME_OF_NODE_KEY
-            = new LSContext.Key<>();
-    public static final LSContext.Key<List<Location>> REFERENCE_RESULTS_KEY
-            = new LSContext.Key<>();
-    public static final LSContext.Key<List<PackageID>> REFERENCE_PKG_IDS_KEY
+    public static final LSContext.Key<Integer> INVOCATION_TOKEN_TYPE_KEY
             = new LSContext.Key<>();
 }

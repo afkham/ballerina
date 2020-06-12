@@ -20,6 +20,7 @@ import org.ballerinalang.langserver.command.testgen.renderer.RendererOutput;
 import org.ballerinalang.langserver.command.testgen.renderer.TemplateBasedRendererOutput;
 import org.ballerinalang.langserver.command.testgen.template.AbstractTestTemplate;
 import org.ballerinalang.langserver.command.testgen.template.PlaceHolder;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.ballerinalang.net.http.HttpConstants;
 import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachment;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
@@ -41,12 +42,18 @@ public class HttpResourceTemplate extends AbstractTestTemplate {
     private final List<String[]> resourceMethods;
     private final String resourcePath;
     private final String serviceUriStrName;
+    private final String httpEndpoint;
 
-    public HttpResourceTemplate(String serviceUriStrName, String basePath, BLangFunction resource) {
-        super(null, null);
+    public HttpResourceTemplate(String serviceUriStrName, String basePath, BLangFunction resource,
+                                String httpEndpoint, LSContext context) {
+        super(null, null, context);
+        this.httpEndpoint = httpEndpoint;
         this.serviceUriStrName = serviceUriStrName;
         this.resourceMethods = new ArrayList<>();
         String resourceName = resource.name.value;
+
+        // Add default method
+        resourceMethods.add(new String[]{resourceName, "get"});
 
         // Resource path
         String tempResourcePath = basePath + "/" + resourceName;
@@ -56,13 +63,14 @@ public class HttpResourceTemplate extends AbstractTestTemplate {
         if (annAttachments.size() > 0) {
             for (BLangAnnotationAttachment annotation : annAttachments) {
                 List<String> methods = searchArrayField(HttpConstants.ANN_RESOURCE_ATTR_METHODS, annotation);
-                methods.forEach(resourceMethod -> resourceMethods.add(new String[]{resourceName, resourceMethod}));
+                if (!methods.isEmpty()) {
+                    // has method annotation
+                    resourceMethods.clear();
+                    methods.forEach(resourceMethod -> resourceMethods.add(new String[]{resourceName, resourceMethod}));
+                }
                 Optional<String> annotPath = searchStringField(HttpConstants.ANN_RESOURCE_ATTR_PATH, annotation);
                 tempResourcePath = basePath + annotPath.filter(path -> (!"/".equals(path))).orElse("");
             }
-        } else {
-            // Or else, add default resource method
-            resourceMethods.add(new String[]{resourceName, "get"});
         }
 
         // Remove path variables
@@ -101,6 +109,7 @@ public class HttpResourceTemplate extends AbstractTestTemplate {
             resourceOutput.put(PlaceHolder.OTHER.get("resourcePath"), resourcePath);
             resourceOutput.put(PlaceHolder.OTHER.get("additionalParams"), additionalParams);
             resourceOutput.put(PlaceHolder.OTHER.get("serviceUriStrName"), serviceUriStrName);
+            resourceOutput.put(PlaceHolder.OTHER.get("endpointName"), httpEndpoint);
             methods.append(resourceOutput.getRenderedContent());
         }
         rendererOutput.append(PlaceHolder.OTHER.get("resources"), methods.toString());

@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import java.util.List;
 import org.jetbrains.annotations.*;
 import com.intellij.psi.PsiElement;
 
-public interface BallerinaStatement extends BallerinaCompositeElement {
+public interface BallerinaStatement extends PsiElement {
 
   @Nullable
   BallerinaAbortStatement getAbortStatement();
@@ -48,16 +48,19 @@ public interface BallerinaStatement extends BallerinaCompositeElement {
   BallerinaForeachStatement getForeachStatement();
 
   @Nullable
-  BallerinaForeverStatement getForeverStatement();
-
-  @Nullable
   BallerinaForkJoinStatement getForkJoinStatement();
 
   @Nullable
   BallerinaIfElseStatement getIfElseStatement();
 
   @Nullable
+  BallerinaListDestructuringStatement getListDestructuringStatement();
+
+  @Nullable
   BallerinaLockStatement getLockStatement();
+
+  @Nullable
+  BallerinaMatchStatement getMatchStatement();
 
   @Nullable
   BallerinaNamespaceDeclarationStatement getNamespaceDeclarationStatement();
@@ -73,9 +76,6 @@ public interface BallerinaStatement extends BallerinaCompositeElement {
 
   @Nullable
   BallerinaReturnStatement getReturnStatement();
-
-  @Nullable
-  BallerinaStreamingQueryStatement getStreamingQueryStatement();
 
   @Nullable
   BallerinaThrowStatement getThrowStatement();
@@ -94,11 +94,5 @@ public interface BallerinaStatement extends BallerinaCompositeElement {
 
   @Nullable
   BallerinaWorkerSendAsyncStatement getWorkerSendAsyncStatement();
-
-  @Nullable
-  BallerinaMatchStatement getMatchStatement();
-
-  @Nullable
-  BallerinaTupleDestructuringStatement getTupleDestructuringStatement();
 
 }

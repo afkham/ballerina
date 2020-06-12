@@ -17,19 +17,48 @@
 */
 package org.ballerinalang.langserver.compiler.workspace;
 
+import io.ballerinalang.compiler.syntax.tree.SyntaxTree;
+import io.ballerinalang.compiler.text.TextDocuments;
+import org.ballerinalang.langserver.commons.workspace.LSDocumentIdentifier;
+import org.ballerinalang.langserver.compiler.common.LSDocumentIdentifierImpl;
+import org.eclipse.lsp4j.CodeLens;
+
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents a document open in workspace.
  */
 public class WorkspaceDocument {
-
+    /* Tracking code lenses sent to client, to make-use in compilation failures */
+    private List<CodeLens> codeLenses;
     private Path path;
     private String content;
+    private String prunedContent;
+    private boolean usePrunedSource;
+    private LSDocumentIdentifier lsDocument;
+    private SyntaxTree tree;
 
-    public WorkspaceDocument(Path path, String content) {
+    public WorkspaceDocument(Path path, String content, boolean isTempFile) {
         this.path = path;
         this.content = content;
+        setTree(SyntaxTree.from(TextDocuments.from(this.content)));
+        this.codeLenses = new ArrayList<>();
+        this.usePrunedSource = false;
+        lsDocument = isTempFile ? null : new LSDocumentIdentifierImpl(path.toUri().toString());
+    }
+
+    public WorkspaceDocument(Path path, String content) {
+        this(path, content, false);
+    }
+
+    public List<CodeLens> getCodeLenses() {
+        return codeLenses;
+    }
+
+    public void setCodeLenses(List<CodeLens> codeLenses) {
+        this.codeLenses = codeLenses;
     }
 
     public Path getPath() {
@@ -41,15 +70,52 @@ public class WorkspaceDocument {
     }
 
     public String getContent() {
+        /*
+        If the pruned source flag is true, return the pruned source. After single access, the pruned source will be 
+        stale, and hence set to null. If a certain operation need to use the pruned source, then the operation set the
+        pruned source within the operation as well as rhe flag
+         */
+        if (this.usePrunedSource) {
+            return this.prunedContent;
+        }
         return content;
     }
 
     public void setContent(String content) {
         this.content = content;
+        // TODO: Fix this, each time creates a new tree
+        setTree(SyntaxTree.from(TextDocuments.from(this.content)));
+    }
+
+    public void setPrunedContent(String prunedContent) {
+        this.prunedContent = prunedContent;
+        this.usePrunedSource = true;
+    }
+
+    public SyntaxTree getTree() {
+        if (this.usePrunedSource) {
+            return SyntaxTree.from(TextDocuments.from(this.prunedContent));
+        }
+        return this.tree;
+    }
+
+    public void setTree(SyntaxTree tree) {
+        this.tree = tree;
+    }
+
+    public void resetPrunedContent() {
+
+        this.prunedContent = null;
+        this.usePrunedSource = false;
+    }
+
+    public LSDocumentIdentifier getLSDocument() {
+        return lsDocument;
     }
 
     @Override
     public String toString() {
-        return "{" + "path:" + this.path + ", content:" + this.content + "}";
+        String cont = (this.usePrunedSource) ? prunedContent : this.content;
+        return "{" + "path:" + this.path + ", content:" + cont + "}";
     }
 }

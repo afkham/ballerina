@@ -16,8 +16,8 @@
 package org.ballerinalang.langserver.completions.util.positioning.resolvers;
 
 import org.ballerinalang.langserver.common.utils.CommonUtil;
+import org.ballerinalang.langserver.commons.LSContext;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
-import org.ballerinalang.langserver.compiler.LSContext;
 import org.ballerinalang.langserver.completions.TreeVisitor;
 import org.ballerinalang.model.tree.Node;
 import org.eclipse.lsp4j.Position;
@@ -53,12 +53,12 @@ public class ServiceScopeResolver extends CursorPositionResolver {
         int nodeSCol = zeroBasedPo.sCol;
 
         if (line < nodeSLine
-                || (line == nodeSLine && col < nodeSCol)
+                || (line == nodeSLine && col <= nodeSCol)
                 || this.isWithinScopeAfterLastChildNode(node, treeVisitor, line, col)) {
-            Map<Name, Scope.ScopeEntry> visibleSymbolEntries =
+            Map<Name, List<Scope.ScopeEntry>> visibleSymbolEntries =
                     treeVisitor.resolveAllVisibleSymbols(treeVisitor.getSymbolEnv());
             treeVisitor.populateSymbols(visibleSymbolEntries, treeVisitor.getSymbolEnv());
-            treeVisitor.setNextNode(bSymbol);
+            treeVisitor.setNextNode(bSymbol, node);
             treeVisitor.forceTerminateVisitor();
             return true;
         }
@@ -76,6 +76,8 @@ public class ServiceScopeResolver extends CursorPositionResolver {
      */
     private boolean isWithinScopeAfterLastChildNode(Node node, TreeVisitor treeVisitor, int curLine, int curCol) {
         BLangObjectTypeNode bLangService = (BLangObjectTypeNode) treeVisitor.getBlockOwnerStack().peek();
+        DiagnosticPos serviceNodePos = CommonUtil.toZeroBasedPosition(bLangService.getPosition());
+        DiagnosticPos nodePos = CommonUtil.toZeroBasedPosition((DiagnosticPos) node.getPosition());
         List<BLangFunction> serviceFunctions = bLangService.getFunctions();
         List<BLangSimpleVariable> serviceFields = bLangService.getFields().stream()
                 .map(simpleVar -> (BLangSimpleVariable) simpleVar)
@@ -83,23 +85,17 @@ public class ServiceScopeResolver extends CursorPositionResolver {
         List<BLangNode> serviceContent = new ArrayList<>(serviceFunctions);
         serviceContent.addAll(serviceFields);
         serviceContent.sort(new CommonUtil.BLangNodeComparator());
-
-        int serviceEndLine = bLangService.pos.getEndLine();
-        int serviceEndCol = bLangService.pos.getEndColumn();
-        int nodeEndLine = node.getPosition().getEndLine();
-        int nodeEndCol = node.getPosition().getEndColumn();
+        
+        int serviceEndLine = serviceNodePos.getEndLine();
+        int serviceEndCol = serviceNodePos.getEndColumn();
+        int nodeEndLine = nodePos.getEndLine();
+        int nodeEndCol = nodePos.getEndColumn();
         boolean isLastChildNode;
 
         isLastChildNode = !serviceContent.isEmpty() && serviceContent.indexOf(node) == (serviceContent.size() - 1);
 
-        boolean isWithinScope =  (isLastChildNode
+        return (isLastChildNode
                 && (curLine < serviceEndLine || (curLine == serviceEndLine && curCol < serviceEndCol))
                 && (nodeEndLine < curLine || (nodeEndLine == curLine && nodeEndCol < curCol)));
-
-        if (isWithinScope) {
-            treeVisitor.setPreviousNode((BLangNode) node);
-        }
-
-        return isWithinScope;
     }
 }

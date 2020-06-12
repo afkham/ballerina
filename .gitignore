@@ -1,6 +1,10 @@
 *.class
 *.log
 
+# Ballerina 
+Ballerina.lock
+
+
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
@@ -27,6 +31,15 @@ results
 /composer/modules/web/dist-electron/
 velocity.log
 /composer/modules/web/dist-electron
+extractedDistribution
+misc/testerina/modules/report-tools/node_modules/
+
+# gradle
+.gradle
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
 
 # mac
 .DS_Store

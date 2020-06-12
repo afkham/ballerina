@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ * Copyright (c) 2019, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  * WSO2 Inc. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,79 +18,50 @@
 
 package org.ballerinalang.stdlib.crypto.nativeimpl;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.model.values.BString;
-import org.ballerinalang.natives.annotations.Argument;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.ReturnType;
-import org.ballerinalang.util.exceptions.BallerinaException;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.values.ArrayValue;
+import org.ballerinalang.jvm.values.ArrayValueImpl;
+import org.ballerinalang.jvm.values.api.BString;
+import org.ballerinalang.stdlib.crypto.CryptoUtils;
 
-import java.io.UnsupportedEncodingException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
 
 /**
- * Extern function ballerina.crypto:getHash.
+ * Extern functions ballerina hashing algorithms.
  *
- * @since 0.8.0
+ * @since 0.990.3
  */
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "crypto",
-        functionName = "hash",
-        args = {@Argument(name = "baseString", type = TypeKind.STRING),
-                @Argument(name = "algorithm", type = TypeKind.STRING)},
-        returnType = {@ReturnType(type = TypeKind.STRING)},
-        isPublic = true)
-public class Hash extends BlockingNativeCallableUnit {
+public class Hash {
 
-    /**
-     * Hashes the string contents (assumed to be UTF-8) using the SHA-256 algorithm.
-     */
-    @Override
-    public void execute(Context context) {
-        String baseString = context.getStringArgument(0);
-        BString algorithm = (BString) context.getNullableRefArgument(0);
-        String hashAlgorithm;
+    public static BString crc32b(ArrayValue input) {
+        Checksum checksum = new CRC32();
+        byte[] bytes = input.getBytes();
+        long checksumVal;
 
-        //todo document the supported algorithm
-        switch (algorithm.stringValue()) {
-            case "SHA1":
-                hashAlgorithm = "SHA-1";
-                break;
-            case "SHA256":
-                hashAlgorithm = "SHA-256";
-                break;
-            case "MD5":
-                hashAlgorithm = "MD5";
-                break;
-            default:
-                throw new BallerinaException("Unsupported algorithm " + algorithm + " for HMAC calculation");
-        }
-
-        String result;
-        try {
-            MessageDigest messageDigest;
-            messageDigest = MessageDigest.getInstance(hashAlgorithm);
-            messageDigest.update(baseString.getBytes("UTF-8"));
-            byte[] bytes = messageDigest.digest();
-
-            final char[] hexArray = "0123456789ABCDEF".toCharArray();
-            char[] hexChars = new char[bytes.length * 2];
-
-            for (int j = 0; j < bytes.length; j++) {
-                final int byteVal = bytes[j] & 0xFF;
-                hexChars[j * 2] = hexArray[byteVal >>> 4];
-                hexChars[j * 2 + 1] = hexArray[byteVal & 0x0F];
-            }
-            result = new String(hexChars);
-        } catch (NoSuchAlgorithmException e) {
-            throw new BallerinaException(
-                    "Error while calculating HMAC for " + algorithm + ": " + e.getMessage(), context);
-        } catch (UnsupportedEncodingException e) {
-            throw new BallerinaException("Error while encoding" + e.getMessage(), context);
-        }
-        context.setReturnValues(new BString(result));
+        checksum.update(bytes, 0, bytes.length);
+        checksumVal = checksum.getValue();
+        return StringUtils.fromString(Long.toHexString(checksumVal));
     }
+
+    public static ArrayValue hashMd5(ArrayValue inputValue) {
+        return new ArrayValueImpl(CryptoUtils.hash("MD5", inputValue.getBytes()));
+    }
+
+    public static ArrayValue hashSha1(ArrayValue inputValue) {
+        return new ArrayValueImpl(CryptoUtils.hash("SHA-1", inputValue.getBytes()));
+    }
+
+    public static ArrayValue hashSha256(ArrayValue inputValue) {
+        return new ArrayValueImpl(CryptoUtils.hash("SHA-256", inputValue.getBytes()));
+    }
+
+    public static ArrayValue hashSha384(ArrayValue inputValue) {
+        return new ArrayValueImpl(CryptoUtils.hash("SHA-384", inputValue.getBytes()));
+    }
+
+    public static ArrayValue hashSha512(ArrayValue inputValue) {
+        return new ArrayValueImpl(CryptoUtils.hash("SHA-512", inputValue.getBytes()));
+    }
+
 }

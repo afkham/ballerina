@@ -17,17 +17,8 @@
  */
 package org.ballerinalang.bre;
 
-import org.ballerinalang.bre.bvm.StackFrame;
-import org.ballerinalang.bre.bvm.Strand;
-import org.ballerinalang.bre.old.WorkerData;
-import org.ballerinalang.bre.old.WorkerExecutionContext;
 import org.ballerinalang.model.values.BError;
 import org.ballerinalang.model.values.BValue;
-import org.ballerinalang.util.codegen.CallableUnitInfo;
-import org.ballerinalang.util.codegen.ProgramFile;
-import org.ballerinalang.util.codegen.ServiceInfo;
-import org.ballerinalang.util.debugger.DebugContext;
-import org.ballerinalang.util.transactions.TransactionLocalContext;
 
 import java.util.Map;
 
@@ -38,40 +29,17 @@ import java.util.Map;
  */
 public interface Context {
 
-    //TODO remove below method - rajith
-    WorkerExecutionContext getParentWorkerExecutionContext();
-
-    Strand getStrand();
-
-    CallableUnitInfo getCallableUnitInfo();
-
-    WorkerData getLocalWorkerData();
-
-    StackFrame getDataFrame();
-
-    DebugContext getDebugContext();
-
-    void setDebugContext(DebugContext debugContext);
-
     Object getProperty(String key);
 
     Map<String, Object> getProperties();
 
     void setProperty(String key, Object value);
 
-    ServiceInfo getServiceInfo();
-
-    void setServiceInfo(ServiceInfo serviceInfo);
-
     boolean isInTransaction();
 
     BError getError();
 
     void setError(BError error);
-
-    ProgramFile getProgramFile();
-
-    TransactionLocalContext getLocalTransactionInfo();
 
     long getIntArgument(int index);
 

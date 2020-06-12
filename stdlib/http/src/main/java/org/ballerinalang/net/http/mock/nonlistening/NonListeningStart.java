@@ -18,30 +18,23 @@
 
 package org.ballerinalang.net.http.mock.nonlistening;
 
-import org.ballerinalang.bre.Context;
-import org.ballerinalang.model.types.TypeKind;
-import org.ballerinalang.natives.annotations.BallerinaFunction;
-import org.ballerinalang.natives.annotations.Receiver;
+import org.ballerinalang.jvm.values.ObjectValue;
+import org.ballerinalang.net.http.HTTPServicesRegistry;
+import org.ballerinalang.net.http.HttpConstants;
 
-import static org.ballerinalang.net.http.HttpConstants.MOCK_LISTENER_ENDPOINT;
+import static org.ballerinalang.net.http.HttpConstants.SERVICE_ENDPOINT_CONFIG;
 
 /**
- * Get the ID of the connection.
+ * Start the HTTP mock listener instance.
  *
  * @since 0.966
  */
-
-@BallerinaFunction(
-        orgName = "ballerina", packageName = "http",
-        functionName = "start",
-        receiver = @Receiver(type = TypeKind.OBJECT, structType = MOCK_LISTENER_ENDPOINT,
-                structPackage = "ballerina.http"),
-        isPublic = true
-)
 public class NonListeningStart extends org.ballerinalang.net.http.serviceendpoint.Start {
-
-    @Override
-    public void execute(Context context) {
-        // don't want to open a port to listen, hence nothing to do
+    public static Object start(ObjectValue listener) {
+        HTTPServicesRegistry httpServicesRegistry = getHttpServicesRegistry(listener);
+        MockHTTPConnectorListener httpListener = MockHTTPConnectorListener.getInstance();
+        httpListener.setHttpServicesRegistry(((Long) listener.get(HttpConstants.ENDPOINT_CONFIG_PORT)).intValue(),
+                                             httpServicesRegistry, listener.getMapValue(SERVICE_ENDPOINT_CONFIG));
+        return null;
     }
 }

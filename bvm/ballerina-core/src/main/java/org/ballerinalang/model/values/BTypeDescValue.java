@@ -57,11 +57,6 @@ public class BTypeDescValue implements BRefType<BType> {
     }
 
     @Override
-    public void stamp(BType type) {
-
-    }
-
-    @Override
     public BValue copy(Map<BValue, BValue> refs) {
         return new BTypeDescValue(typeValue);
     }
